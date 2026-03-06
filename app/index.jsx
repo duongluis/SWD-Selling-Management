@@ -1,8 +1,10 @@
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Dimensions, Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Colors from "../constant/Colors";
 
 export default function Index() {
+
+  const { height, width } = Dimensions.get('window');
 
   // const router = useRouter();
   // const { userDetail, setUserDetail } = useContext(UserDetailContext);
@@ -28,7 +30,7 @@ export default function Index() {
   //         const result = await getDoc(doc(db, 'users', user.email));
   //         if (isMounted) {
   //           setUserDetail(result.data());
-            
+
   //           if (router.canGoBack()) {
   //             router.replace('/tabs/home');
   //           } else {
@@ -64,78 +66,64 @@ export default function Index() {
 
 
   return (
-    <View
+    <ImageBackground
+      source={require('./../assets/images/background_img.png')}
       style={{
-        backgroundColor: Colors.White
+        resizeMode: 'cover',
+        flex: 1,
+        height: height,
+        width: width
       }}>
 
-      <Image 
-      // source={require('./../assets/images/LDcode.png')}
-        style={{
-          width: '100%',
-          height: 300,
-          marginTop: 70
-        }} />
+      <View
+        style={[styles.logo]}>
+        <Image
+          source={require('./../assets/images/logo-dark.png')}
+          style={{
+            height: 500,
+            width: '100%',
+            resizeMode: 'center'
+          }}
+        />
+      </View>
 
       <View style={{
         padding: 25,
-        backgroundColor: Colors.Default,
         height: '100%',
         borderTopLeftRadius: 35,
         borderTopRightRadius: 35
       }}>
-
-        <Text style={{
-          fontSize: 25,
-          fontFamily: 'outfit-bold',
-          color: Colors.White,
-          textAlign: 'center'
-        }}>Chào mừng đến với LDCode</Text>
-
-        <Text style={{
-          paddingTop: 100,
-          fontSize: 25,
-          fontFamily: 'outfit-bold',
-          color: Colors.White,
-          textAlign: 'center',
-          marginBottom: 50
-        }}>Vui lòng nhấn nút bên dưới để bắt đầu </Text>
-
         <TouchableOpacity style={styles.button}
-          onPress={() => {
-            console.log("Move to Sign In screen")
-            router.push('/auth/signUp')
-          }}>
-          <Text style={[styles.buttonText, {
-            color: Colors.Default,
-          }]}>Bắt đầu</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.button, {
-
-          backgroundColor: Colors.Default,
-          borderWidth: 1,
-          borderColor: Colors.White
-        }]}
-          onPress={() => router.push('/auth/signIn')}
-        >
-          <Text style={[styles.buttonText, { color: Colors.White }]}>Bạn đã từng sử dụng app trước đây?</Text>
+          // onPress={() => {
+          //   console.log("Move to Sign In screen")
+          //   router.push('/auth/signUp')
+          // }}
+          >
+          <Text style={[styles.buttonText
+          ]}>Bắt đầu</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
     padding: 15,
-    backgroundColor: Colors.White,
     marginTop: 20,
     borderRadius: 10
   },
   buttonText: {
     fontSize: 30,
     fontWeight: 'bold',
-    textAlign: 'center'
+    textAlign: 'center',
+    color:Colors.White
+  },
+  logo: {
+    marginTop: 50,
+    height: 500,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   }
 })
