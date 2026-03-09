@@ -1,97 +1,102 @@
 import { Ionicons } from "@expo/vector-icons";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import Colors from "../../constant/Colors";
 
-export default function resetPassword() {
-return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <button style={styles.backButton}>
-            <Ionicons  name="chevron-back-circle-outline" size={24}/>
-        </button>
-      </div>
+export default function ResetPassword() {
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton}>
+          <Ionicons name="chevron-back-circle-outline" size={24} />
+        </TouchableOpacity>
+      </View>
 
-      <div style={styles.icon}>
-        <Ionicons name="lock-closed-outline" size={24} color={Colors.Blue}/>
-      </div>
+      <View style={styles.icon}>
+        <Ionicons name="lock-closed-outline" size={40} color={Colors.Blue} />
+      </View>
 
-      <h2 style={styles.title}>Reset Password</h2>
-      <p style={styles.subtitle}>
+      <Text style={styles.title}>Reset Password</Text>
+      <Text style={styles.subtitle}>
         Enter your email address and we will send you a link to reset your password.
-      </p>
+      </Text>
 
-      <div style={styles.formGroup}>
-        <label>Email Address</label>
-        <input type="email" placeholder="name@company.com" style={styles.input} />
-      </div>
+      <View style={styles.formGroup}>
+        <Text>Email Address</Text>
+        <TextInput
+          placeholder="name@company.com"
+          style={styles.input}
+          keyboardType="email-address"
+        />
+      </View>
 
-      <button style={styles.resetButton}>Send Reset Link</button>
+      <TouchableOpacity style={styles.resetButton}>
+        <Text style={{ color: "#fff" }}>Send Reset Link</Text>
+      </TouchableOpacity>
 
-      <a href="./signIn" style={styles.link}>Back to Login</a>
-    </div>
+      <TouchableOpacity>
+        <Text style={styles.link}>Back to Login</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
-    width: "350px",
-    margin: "50px auto",
-    padding: "20px",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    fontFamily: "Arial, sans-serif"
+    width: 350,
+    marginTop: 50,
+    alignSelf: "center",
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
   },
   header: {
-    display: "flex",
-    justifyContent: "flex-start", // đẩy nút về sát trái
-    marginBottom: "10px"
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    marginBottom: 10,
   },
   backButton: {
-    background: "none",
-    border: "none",
-    fontSize: "20px",
-    cursor: "pointer"
+    padding: 5,
   },
   icon: {
-    fontSize: "40px",
-    textAlign: "center",
-    marginBottom: "15px"
+    alignItems: "center",
+    marginBottom: 15,
   },
   title: {
     textAlign: "center",
-    marginBottom: "10px"
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
   },
   subtitle: {
-    fontSize: "14px",
+    fontSize: 14,
     color: "#555",
     textAlign: "center",
-    marginBottom: "20px"
+    marginBottom: 20,
   },
   formGroup: {
-    marginBottom: "15px"
+    marginBottom: 15,
   },
   input: {
     width: "100%",
-    padding: "10px",
-    marginTop: "5px",
-    borderRadius: "4px",
-    border: "1px solid #ccc"
+    padding: 10,
+    marginTop: 5,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#ccc",
   },
   resetButton: {
     width: "100%",
-    padding: "10px",
+    padding: 10,
     backgroundColor: "#007bff",
-    color: "#fff",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    marginTop: "10px"
+    borderRadius: 4,
+    alignItems: "center",
+    marginTop: 10,
   },
   link: {
-    display: "block",
-    marginTop: "20px",
-    fontSize: "12px",
+    marginTop: 20,
+    fontSize: 12,
     color: "#007bff",
-    textDecoration: "none",
-    textAlign: "center"
-  }
-};
+    textAlign: "center",
+  },
+});

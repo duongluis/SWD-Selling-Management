@@ -1,125 +1,153 @@
-import { TouchableOpacity } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 export default function SignUp() {
- return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>Tạo tài khoản</h2>
-      <p style={styles.subtitle}>Gia nhập vào cộng đồng của chúng tôi ngay hôm nay.</p>
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Tạo tài khoản</Text>
+      <Text style={styles.subtitle}>
+        Gia nhập vào cộng đồng của chúng tôi ngay hôm nay.
+      </Text>
 
-      <div style={styles.formGroup}>
-        <label>Tên đăng nhập</label>
-        <input type="text" placeholder="Vui lòng nhập họ tên" style={styles.input} />
-      </div>
+      <View style={styles.formGroup}>
+        <Text>Tên đăng nhập</Text>
+        <TextInput
+          placeholder="Vui lòng nhập họ tên"
+          style={styles.input}
+        />
+      </View>
 
-      <div style={styles.formGroup}>
-        <label>Địa chỉ gmail</label>
-        <input type="email" placeholder="name@company.com" style={styles.input} />
-      </div>
+      <View style={styles.formGroup}>
+        <Text>Địa chỉ gmail</Text>
+        <TextInput
+          placeholder="name@company.com"
+          style={styles.input}
+        />
+      </View>
 
-      <div style={styles.formGroup}>
-        <label>Mật khẩu</label>
-        <input type="password" placeholder="Tạo mật khẩu" style={styles.input} />
-      </div>
+      <View style={styles.formGroup}>
+        <Text>Mật khẩu</Text>
+        <TextInput
+          placeholder="Tạo mật khẩu"
+          secureTextEntry
+          style={styles.input}
+        />
+      </View>
 
-      <div style={styles.formGroup}>
-        <label>Xác nhận mật khẩu</label>
-        <input type="password" placeholder="Xác nhận lại mật khẩu" style={styles.input} />
-      </div>
+      <View style={styles.formGroup}>
+        <Text>Xác nhận mật khẩu</Text>
+        <TextInput
+          placeholder="Xác nhận lại mật khẩu"
+          secureTextEntry
+          style={styles.input}
+        />
+      </View>
 
-      <div style={styles.checkbox}>
-        <input type="checkbox" id="terms" />
-        <label htmlFor="terms">
-          Tôi đồng ý với <a href="https://swd.vn/pages/chinh-sach-bao-mat-thong-tin-ca-nhan">Điều khoản</a> và <a href="https://swd.vn/pages/chinh-sach-bao-mat-thong-tin-ca-nhan">Chính sách bảo mật</a> của doanh nghiệp
-        </label>
-      </div>
+      <View style={styles.checkbox}>
+        <TouchableOpacity>
+          <Text style={styles.link}>
+            Tôi đồng ý với Điều khoản và Chính sách bảo mật
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      <button style={styles.signUpButton}>Đăng ký</button>
+      <TouchableOpacity style={styles.signUpButton}>
+        <Text style={{ color: "#fff" }}>Đăng ký</Text>
+      </TouchableOpacity>
 
-      <div style={styles.or}>Hoặc tiếp tục đăng ký với</div>
-      <div style={styles.socialButtons}>
-        <TouchableOpacity onPress={()=>{
-          console.log("Sign In with Google");
-          
-        }} style={styles.social}>Google</TouchableOpacity>
-        <button style={styles.social}>iOS</button>
-      </div>
+      <Text style={styles.or}>Hoặc tiếp tục đăng ký với</Text>
+      <View style={styles.socialButtons}>
+        <TouchableOpacity
+          onPress={() => {
+            console.log("Sign In with Google");
+          }}
+          style={styles.social}
+        >
+          <Text>Google</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.social}>
+          <Text>iOS</Text>
+        </TouchableOpacity>
+      </View>
 
-      <p style={styles.login}>
-        Bạn đã có tài khoản? <a href="./signIn" style={styles.link}>Đăng nhập</a>
-      </p>
-    </div>
+      <Text style={styles.login}>
+        Bạn đã có tài khoản? <Text style={styles.link}>Đăng nhập</Text>
+      </Text>
+    </View>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
-    width: "350px",
-    margin: "50px auto",
-    padding: "20px",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    textAlign: "center",
-    fontFamily: "Arial, sans-serif"
+    width: 350,
+    marginTop: 50,
+    alignSelf: "center",
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    alignItems: "center",
   },
   title: {
-    marginBottom: "10px"
+    marginBottom: 10,
+    fontSize: 20,
+    fontWeight: "bold",
   },
   subtitle: {
-    fontSize: "14px",
+    fontSize: 14,
     color: "#555",
-    marginBottom: "20px"
+    marginBottom: 20,
+    textAlign: "center",
   },
   formGroup: {
-    marginBottom: "15px",
-    textAlign: "left",
-    paddingRight: "15px",
+    marginBottom: 15,
+    alignSelf: "stretch",
   },
   input: {
     width: "100%",
-    padding: "10px",
-    marginTop: "5px",
-    borderRadius: "4px",
-    border: "1px solid #ccc"
+    padding: 10,
+    marginTop: 5,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#ccc",
   },
   checkbox: {
-    fontSize: "12px",
-    textAlign: "left",
-    marginBottom: "15px"
+    marginBottom: 15,
+    alignSelf: "flex-start",
   },
   signUpButton: {
     width: "100%",
-    padding: "10px",
+    padding: 10,
     backgroundColor: "#007bff",
-    color: "#fff",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    marginTop: "10px"
+    borderRadius: 4,
+    alignItems: "center",
+    marginTop: 10,
   },
   or: {
-    margin: "20px 0",
-    fontSize: "12px",
-    color: "#888"
+    marginVertical: 20,
+    fontSize: 12,
+    color: "#888",
   },
   socialButtons: {
-    display: "flex",
+    flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: "20px"
+    marginBottom: 20,
+    width: "100%",
   },
   social: {
     flex: 1,
-    margin: "0 5px",
-    padding: "10px",
-    border: "1px solid #ccc",
-    borderRadius: "4px",
-    cursor: "pointer"
+    marginHorizontal: 5,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 4,
+    alignItems: "center",
   },
   login: {
-    fontSize: "12px",
-    color: "#555"
+    fontSize: 12,
+    color: "#555",
   },
   link: {
     color: "#007bff",
-    textDecoration: "none"
-  }
-};
+    fontSize: 12,
+  },
+});
