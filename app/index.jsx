@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import React from 'react';
 import { Dimensions, Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Colors from "../constant/Colors";
@@ -94,13 +95,12 @@ export default function Index() {
         borderTopRightRadius: 35
       }}>
         <TouchableOpacity style={styles.button}
-          // onPress={() => {
-          //   console.log("Move to Sign In screen")
-          //   router.push('/auth/signUp')
-          // }}
+          onPress={() => {
+            console.log("Move to Sign In screen")
+            router.push('/auth/signIn')
+          }}
           >
-          <Text style={[styles.buttonText
-          ]}>Bắt đầu</Text>
+          <Text style={[styles.buttonText]}>Bắt đầu</Text>
         </TouchableOpacity>
       </View>
     </ImageBackground>
