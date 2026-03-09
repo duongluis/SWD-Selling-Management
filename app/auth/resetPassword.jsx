@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import Colors from "../../constant/Colors";
 
@@ -33,7 +34,9 @@ export default function ResetPassword() {
         <Text style={{ color: "#fff" }}>Send Reset Link</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity>
+      <TouchableOpacity onPress={()=>{
+        router.push('/auth/signIn')
+      }}>
         <Text style={styles.link}>Back to Login</Text>
       </TouchableOpacity>
     </View>

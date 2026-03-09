@@ -1,11 +1,13 @@
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { router } from "expo-router";
+import { Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import Colors from "../../constant/Colors";
 
 export default function SignUp() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Tạo tài khoản</Text>
       <Text style={styles.subtitle}>
-        Gia nhập vào cộng đồng của chúng tôi ngay hôm nay.
+        Để gia nhập vào cộng đồng của chúng tôi
       </Text>
 
       <View style={styles.formGroup}>
@@ -13,6 +15,7 @@ export default function SignUp() {
         <TextInput
           placeholder="Vui lòng nhập họ tên"
           style={styles.input}
+          placeholderTextColor={Colors.LightGray}
         />
       </View>
 
@@ -21,6 +24,7 @@ export default function SignUp() {
         <TextInput
           placeholder="name@company.com"
           style={styles.input}
+          placeholderTextColor={Colors.LightGray}
         />
       </View>
 
@@ -30,6 +34,7 @@ export default function SignUp() {
           placeholder="Tạo mật khẩu"
           secureTextEntry
           style={styles.input}
+          placeholderTextColor={Colors.LightGray}
         />
       </View>
 
@@ -39,15 +44,36 @@ export default function SignUp() {
           placeholder="Xác nhận lại mật khẩu"
           secureTextEntry
           style={styles.input}
+          placeholderTextColor={Colors.LightGray}
         />
       </View>
 
-      <View style={styles.checkbox}>
-        <TouchableOpacity>
-          <Text style={styles.link}>
-            Tôi đồng ý với Điều khoản và Chính sách bảo mật
+      {/* CheckBox */}
+
+      <View style={styles.checkbox}></View>
+      <View style={styles.agreememt}>
+        <Text>Khi bấm đăng ký, bạn đồng ý với{' '}
+          <TouchableOpacity
+            onPress={() => {
+              Linking.openURL('https://swd.vn/pages/chinh-sach-bao-mat-thong-tin-ca-nhan')
+
+            }}>
+            <Text style={styles.link}>
+              Điều khoản
+            </Text>
+          </TouchableOpacity>
+          <Text>
+            {' '} và {' '}
           </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              Linking.openURL('https://swd.vn/pages/chinh-sach-bao-mat-thong-tin-ca-nhan')
+            }}>
+            <Text style={styles.link}>
+              Chính sách bảo mật
+            </Text>
+          </TouchableOpacity>
+        </Text>
       </View>
 
       <TouchableOpacity style={styles.signUpButton}>
@@ -68,10 +94,15 @@ export default function SignUp() {
           <Text>iOS</Text>
         </TouchableOpacity>
       </View>
-
       <Text style={styles.login}>
-        Bạn đã có tài khoản? <Text style={styles.link}>Đăng nhập</Text>
+        Bạn đã có tài khoản?
+        <TouchableOpacity onPress={() => {
+          router.push('/auth/signIn')
+        }}>
+          <Text style={styles.link}> Đăng nhập</Text>
+        </TouchableOpacity>
       </Text>
+
     </View>
   );
 }
@@ -83,7 +114,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     padding: 20,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: Colors.White,
     borderRadius: 8,
     alignItems: "center",
   },
@@ -149,5 +180,9 @@ const styles = StyleSheet.create({
   link: {
     color: "#007bff",
     fontSize: 12,
+  },
+  agreememt:{
+    fontSize:12,
+    flexDirection:"row"
   },
 });

@@ -1,7 +1,14 @@
-import React from 'react';
+import Colors from "@/constant/Colors";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from 'expo-router';
+import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function SignIn() {
+
+  const [showIcon, setShowIcon] = useState(false)
+  const [password, setPassword] =  useState("");
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Đăng nhập</Text>
@@ -11,21 +18,48 @@ export default function SignIn() {
 
       <View style={styles.formGroup}>
         <Text>Gmail / Tên đăng nhập</Text>
-        <TextInput
-          placeholder="Nhập gmail hoặc tên đăng nhập"
-          style={styles.input}
-        />
+        <View style={[styles.box, { flexDirection: "row" }]}>
+          <View>
+            <Ionicons name="person-outline" size={15} color={Colors.LightGray} style={{ margin: 10 }} />
+          </View>
+          <TextInput
+            style={styles.input}
+            placeholder="Nhập gmail hoặc tên đăng nhập"
+            placeholderTextColor={Colors.LightGray}
+          />
+
+        </View>
       </View>
 
       <View style={styles.formGroup}>
         <Text>Mật khẩu</Text>
-        <TextInput
-          placeholder="Nhập mật khẩu"
-          secureTextEntry
-          style={styles.input}
-        />
-        <TouchableOpacity>
-          <Text style={styles.link}>Quên mật khẩu?</Text>
+        <View style={[styles.box, { flexDirection: "row" }]}>
+
+          <Ionicons name="lock-closed-outline" size={20} color={Colors.LightGray} style={{ margin: 10 }} />
+
+          <TextInput
+            style={styles.input}
+            value={password}
+            placeholder="Nhập mật khẩu"
+            secureTextEntry={!showIcon}
+            placeholderTextColor={Colors.LightGray}
+          />
+          <TouchableOpacity onPress={() => setShowIcon(!showIcon)}>
+
+            {!showIcon ? (
+              <Ionicons name="eye-off-outline" size={20} color={Colors.LightGray} style={{ margin: 10 }} />
+            ) : (
+              <Ionicons name="eye-outline" size={20} color={Colors.LightGray} style={{ margin: 10 }} />
+            )}
+
+          </TouchableOpacity>
+
+        </View>
+        <TouchableOpacity
+          onPress={() => {
+            router.push('/auth/resetPassword')
+          }}>
+          <Text style={[styles.link, { textAlign: "right" }]}>Quên mật khẩu?</Text>
         </TouchableOpacity>
       </View>
 
@@ -45,7 +79,11 @@ export default function SignIn() {
 
       <Text style={styles.signup}>
         Bạn chưa có tài khoản?{' '}
-        <Text style={styles.link}>Đăng ký ngay</Text>
+        <TouchableOpacity onPress={() => {
+          router.push('/auth/signUp')
+        }}>
+          <Text style={styles.link}>Đăng ký ngay</Text>
+        </TouchableOpacity>
       </Text>
     </View>
   );
@@ -77,10 +115,16 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     alignSelf: 'stretch',
   },
-  input: {
+  box: {
     width: '100%',
-    padding: 10,
+    padding: 5,
     marginTop: 5,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  input: {
+    width: '80%',
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#ccc',
