@@ -1,104 +1,125 @@
 import React from 'react';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function SignIn() {
   return (
-      <div style={styles.container}>
-      <h2 style={styles.title}>Đăng nhập</h2>
-      <p style={styles.subtitle}>
+    <View style={styles.container}>
+      <Text style={styles.title}>Đăng nhập</Text>
+      <Text style={styles.subtitle}>
         Vui lòng đăng nhập để truy cập tài khoản doanh nghiệp
-      </p>
+      </Text>
 
-      <div style={styles.formGroup}>
-        <label>Gmail / Tên đăng nhập</label>
-        <input type="text" placeholder="Nhập gmail hoặc tên đăng nhập" style={styles.input} />
-      </div>
+      <View style={styles.formGroup}>
+        <Text>Gmail / Tên đăng nhập</Text>
+        <TextInput
+          placeholder="Nhập gmail hoặc tên đăng nhập"
+          style={styles.input}
+        />
+      </View>
 
-      <div style={styles.formGroup}>
-        <label>Mật khẩu</label>
-        
-        <input type="password" placeholder="Nhập mật khẩu" style={styles.input} />
-        <a href="./resetPassword" style={styles.link}>Quên mật khẩu?</a>
-      </div>
+      <View style={styles.formGroup}>
+        <Text>Mật khẩu</Text>
+        <TextInput
+          placeholder="Nhập mật khẩu"
+          secureTextEntry
+          style={styles.input}
+        />
+        <TouchableOpacity>
+          <Text style={styles.link}>Quên mật khẩu?</Text>
+        </TouchableOpacity>
+      </View>
 
-      <button style={styles.loginButton}>Đăng nhập</button>
+      <TouchableOpacity style={styles.loginButton}>
+        <Text style={{ color: '#fff' }}>Đăng nhập</Text>
+      </TouchableOpacity>
 
-      <div style={styles.or}>Tiếp tục với</div>
-      <div style={styles.socialButtons}>
-        <button style={styles.social}>Google</button>
-        <button style={styles.social}>iOS</button>
-      </div>
+      <Text style={styles.or}>Tiếp tục với</Text>
+      <View style={styles.socialButtons}>
+        <TouchableOpacity style={styles.social}>
+          <Text>Google</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.social}>
+          <Text>iOS</Text>
+        </TouchableOpacity>
+      </View>
 
-      <p style={styles.signup}>
-        Bạn chưa có tài khoản? <a href="./signUp" style={styles.link}>Đăng ký ngay</a>
-      </p>
-    </div>
+      <Text style={styles.signup}>
+        Bạn chưa có tài khoản?{' '}
+        <Text style={styles.link}>Đăng ký ngay</Text>
+      </Text>
+    </View>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
-    width: "350px",
-    margin: "50px auto",
-    padding: "20px",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    textAlign: "center",
-    fontFamily: "Arial, sans-serif"
+    width: 350,
+    marginTop: 50,
+    alignSelf: 'center',
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    alignItems: 'center',
   },
   title: {
-    marginBottom: "10px"
+    marginBottom: 10,
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   subtitle: {
-    fontSize: "14px",
-    color: "#555",
-    marginBottom: "20px"
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 20,
+    textAlign: 'center',
   },
   formGroup: {
-    marginBottom: "15px",
-    textAlign: "left"
+    marginBottom: 15,
+    alignSelf: 'stretch',
   },
   input: {
-    width: "100%",
-    padding: "10px",
-    marginTop: "5px",
-    borderRadius: "4px",
-    border: "1px solid #ccc"
+    width: '100%',
+    padding: 10,
+    marginTop: 5,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#ccc',
   },
   link: {
-    fontSize: "12px",
-    color: "#007bff",
-    textDecoration: "none"
+    fontSize: 12,
+    color: '#007bff',
+    marginTop: 5,
   },
   loginButton: {
-    width: "100%",
-    padding: "10px",
-    backgroundColor: "#007bff",
-    color: "#fff",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    marginTop: "10px"
+    width: '100%',
+    padding: 10,
+    backgroundColor: '#007bff',
+    borderRadius: 4,
+    alignItems: 'center',
+    marginTop: 10,
   },
   or: {
-    margin: "20px 0",
-    fontSize: "12px",
-    color: "#888"
+    marginVertical: 20,
+    fontSize: 12,
+    color: '#888',
   },
   socialButtons: {
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: "20px"
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    width: '100%',
   },
   social: {
     flex: 1,
-    margin: "0 5px",
-    padding: "10px",
-    border: "1px solid #ccc",
-    borderRadius: "4px",
-    cursor: "pointer"
+    marginHorizontal: 5,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 4,
+    alignItems: 'center',
   },
   signup: {
-    fontSize: "12px",
-    color: "#555"
-  }
-};
+    fontSize: 12,
+    color: '#555',
+  },
+});
