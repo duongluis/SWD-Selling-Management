@@ -7,7 +7,7 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 export default function SignIn() {
 
   const [showIcon, setShowIcon] = useState(false)
-  const [password, setPassword] =  useState("");
+  const [password, setPassword] = useState("");
 
   return (
     <View style={styles.container}>
@@ -24,7 +24,7 @@ export default function SignIn() {
           </View>
           <TextInput
             style={styles.input}
-            placeholder="Nhập gmail hoặc tên đăng nhập"
+            placeholder=" Nhập gmail hoặc tên đăng nhập"
             placeholderTextColor={Colors.LightGray}
           />
 
@@ -33,12 +33,13 @@ export default function SignIn() {
 
       <View style={styles.formGroup}>
         <Text>Mật khẩu</Text>
-        <View style={[styles.box, { flexDirection: "row" }]}>
+        <View style={[styles.box,]}>
 
           <Ionicons name="lock-closed-outline" size={20} color={Colors.LightGray} style={{ margin: 10 }} />
 
           <TextInput
             style={styles.input}
+            onChangeText={setPassword}
             value={password}
             placeholder="Nhập mật khẩu"
             secureTextEntry={!showIcon}
@@ -46,28 +47,37 @@ export default function SignIn() {
           />
           <TouchableOpacity onPress={() => setShowIcon(!showIcon)}>
 
-            {!showIcon ? (
-              <Ionicons name="eye-off-outline" size={20} color={Colors.LightGray} style={{ margin: 10 }} />
-            ) : (
-              <Ionicons name="eye-outline" size={20} color={Colors.LightGray} style={{ margin: 10 }} />
-            )}
-
+              <Ionicons name={showIcon?"eye-off-outline":"eye-outline"} size={20} color={Colors.LightGray} style={{ margin: 10 }} />
+           
           </TouchableOpacity>
 
         </View>
         <TouchableOpacity
+          style={{
+            padding:5,
+            // marginStart: 200,
+            alignSelf: 'flex-end',
+            // borderColor: Colors.Black,
+            // borderWidth: 1,
+            display:"inline",
+            // alignItems:"center"
+          }}
           onPress={() => {
             router.push('/auth/resetPassword')
           }}>
-          <Text style={[styles.link, { textAlign: "right" }]}>Quên mật khẩu?</Text>
+          <Text style={[
+            styles.link,
+            //  { textAlign: "right",display:"inline" }
+             
+             ]}>Quên mật khẩu?</Text>
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.loginButton}>
-        <Text style={{ color: '#fff' }}>Đăng nhập</Text>
+        <Text style={{ color: '#fff',alignContent:"center" }}>Đăng nhập</Text>
       </TouchableOpacity>
 
-      <Text style={styles.or}>Tiếp tục với</Text>
+      <Text style={styles.or}>---------------Tiếp tục với---------------</Text>
       <View style={styles.socialButtons}>
         <TouchableOpacity style={styles.social}>
           <Text>Google</Text>
@@ -122,12 +132,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#ccc',
+    flexDirection:"row",
   },
   input: {
     width: '80%',
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#ccc',
+    // borderRadius: 4,
+    // borderWidth: 1,
+    // borderColor: '#ccc',
   },
   link: {
     fontSize: 12,
@@ -136,7 +147,10 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     width: '100%',
+    margin: 10,
     padding: 10,
+    paddingEnd:10,
+    paddingBottom:10,
     backgroundColor: '#007bff',
     borderRadius: 4,
     alignItems: 'center',

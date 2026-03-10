@@ -7,7 +7,9 @@ export default function ResetPassword() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton}>
+        <TouchableOpacity style={styles.backButton} onPress={()=>{
+          router.back();
+        }}>
           <Ionicons name="chevron-back-circle-outline" size={24} />
         </TouchableOpacity>
       </View>

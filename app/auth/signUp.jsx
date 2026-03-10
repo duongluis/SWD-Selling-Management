@@ -1,8 +1,28 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useState } from "react";
 import { Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import Colors from "../../constant/Colors";
 
 export default function SignUp() {
+  const [agree, setAgree] = useState(false)
+  const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('')
+  const [gmail, setGmail] = useState('')
+  const [rePassword, setRePassword] = useState('')
+
+  function checkPassword() {
+    if (!agree || password == '' || rePassword == '' || username == '' || gmail == '')
+      console.log("denied");
+    else {
+      if (password == rePassword) {
+        console.log("accept");
+      } else {
+        console.log("reject");
+      }
+    }
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Tạo tài khoản</Text>
@@ -15,6 +35,8 @@ export default function SignUp() {
         <TextInput
           placeholder="Vui lòng nhập họ tên"
           style={styles.input}
+          value={username}
+          onChangeText={setUsername}
           placeholderTextColor={Colors.LightGray}
         />
       </View>
@@ -24,6 +46,8 @@ export default function SignUp() {
         <TextInput
           placeholder="name@company.com"
           style={styles.input}
+          value={gmail}
+          onChangeText={setGmail}
           placeholderTextColor={Colors.LightGray}
         />
       </View>
@@ -34,6 +58,8 @@ export default function SignUp() {
           placeholder="Tạo mật khẩu"
           secureTextEntry
           style={styles.input}
+          value={password}
+          onChangeText={setPassword}
           placeholderTextColor={Colors.LightGray}
         />
       </View>
@@ -44,15 +70,24 @@ export default function SignUp() {
           placeholder="Xác nhận lại mật khẩu"
           secureTextEntry
           style={styles.input}
+          value={rePassword}
+          onChangeText={setRePassword}
           placeholderTextColor={Colors.LightGray}
         />
       </View>
 
       {/* CheckBox */}
+      <View>
+        <Text style={styles.agreememt} >
+          <TouchableOpacity
+            style={{ display: "inline", }}
+            onPress={() => {
+              setAgree(!agree)
+            }}>
+            <Ionicons name={agree === true ? "checkbox-outline" : "square-outline"} size={20} />
+          </TouchableOpacity>
 
-      <View style={styles.checkbox}></View>
-      <View style={styles.agreememt}>
-        <Text>Khi bấm đăng ký, bạn đồng ý với{' '}
+          {' '}Bạn đồng ý với{' '}
           <TouchableOpacity
             onPress={() => {
               Linking.openURL('https://swd.vn/pages/chinh-sach-bao-mat-thong-tin-ca-nhan')
@@ -62,9 +97,7 @@ export default function SignUp() {
               Điều khoản
             </Text>
           </TouchableOpacity>
-          <Text>
-            {' '} và {' '}
-          </Text>
+             {' '}và{' '} 
           <TouchableOpacity
             onPress={() => {
               Linking.openURL('https://swd.vn/pages/chinh-sach-bao-mat-thong-tin-ca-nhan')
@@ -76,11 +109,16 @@ export default function SignUp() {
         </Text>
       </View>
 
-      <TouchableOpacity style={styles.signUpButton}>
+      <TouchableOpacity
+        style={styles.signUpButton}
+        onPress={() => {
+          
+          checkPassword()
+        }}>
         <Text style={{ color: "#fff" }}>Đăng ký</Text>
       </TouchableOpacity>
 
-      <Text style={styles.or}>Hoặc tiếp tục đăng ký với</Text>
+      <Text style={styles.or}>-------Hoặc tiếp tục đăng ký với-------</Text>
       <View style={styles.socialButtons}>
         <TouchableOpacity
           onPress={() => {
@@ -181,8 +219,9 @@ const styles = StyleSheet.create({
     color: "#007bff",
     fontSize: 12,
   },
-  agreememt:{
-    fontSize:12,
-    flexDirection:"row"
+  agreememt: {
+    fontSize: 12,
+    flexDirection: "row",
+    alignItems:"center",
   },
 });
