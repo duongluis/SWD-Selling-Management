@@ -36,11 +36,17 @@ export default function homeView() {
       <View style={styles.quickActions}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsRow}>
-          {['New Order', 'Customer', 'Reports', 'Staff'].map(action => (
-            <TouchableOpacity key={action} style={styles.actionButton}>
-              <Ionicons name='person-add-outline' size={15}/>
-            </TouchableOpacity>,
-            <Text style={styles.actionText}>{action}</Text>
+          {[{ name: 'New Order', icon: 'cart-outline' },
+          { name: 'Add Customer', icon: 'person-add-outline' },
+          { name: 'Report', icon: 'podium-outline' },
+          { name: 'Staff', icon: 'person-add-outline' }
+          ].map(action => (
+            <View>
+              <TouchableOpacity key={action} style={styles.actionButton}>
+                <Ionicons name={action.icon} size={15} style={{color:Colors.LightBlue}} />
+              </TouchableOpacity>
+              <Text style={styles.actionText}>{action.name}</Text>
+            </View>
           ))}
         </View>
       </View>
@@ -120,17 +126,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     // flexWrap: 'wrap',
     marginTop: 8,
+    height:100,
     flex: 1
   },
   actionButton: {
-    backgroundColor: Colors.LightGray,
+    backgroundColor: Colors.White,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 6,
-    margin: 4
+    margin: 4,
+    padding:10,
   },
   actionText: {
-    color: Colors.White,
+    color: Colors.Black,
     fontWeight: '600'
   },
 
