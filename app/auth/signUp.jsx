@@ -17,6 +17,7 @@ export default function SignUp() {
     else {
       if (password == rePassword) {
         console.log("accept");
+        router.push('/auth/signIn');
       } else {
         console.log("reject");
       }

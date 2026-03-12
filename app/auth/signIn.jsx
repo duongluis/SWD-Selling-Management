@@ -9,6 +9,13 @@ export default function SignIn() {
   const [showIcon, setShowIcon] = useState(false)
   const [password, setPassword] = useState("");
 
+  function signInByClick() {
+    
+    console.log("Đăng nhập thành công")
+    router.replace('../(tabs)/home')
+
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Đăng nhập</Text>
@@ -73,7 +80,11 @@ export default function SignIn() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.loginButton}>
+      <TouchableOpacity 
+      style={styles.loginButton}
+      onPress={()=>{
+        signInByClick()
+      }}>
         <Text style={{ color: '#fff',alignContent:"center" }}>Đăng nhập</Text>
       </TouchableOpacity>
 

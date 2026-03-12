@@ -6,5 +6,6 @@ export default {
     Blue:'#0686c7',
     LightBlue: '#00a1e5',
     Green:'#23b5a0',
+    BlueSky:'#eff6fe',
     
 }

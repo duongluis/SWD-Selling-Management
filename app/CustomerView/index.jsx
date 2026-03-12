@@ -1,9 +1,9 @@
 import { Text, View } from 'react-native'
 
-export default function laderboard() {
+export default function customerView() {
   return (
     <View>
-      <Text>laderboard</Text>
+      <Text>customerView</Text>
     </View>
   )
 }
