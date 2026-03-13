@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
-import { Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import Colors from "../../constant/Colors";
+import { useContext, useState } from "react";
+import { Alert, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { auth } from '../../config/firebaseConfig';
+import Colors from '../../constant/Colors';
+import UserDetailContext from '../../context/UserDetailContext';
 
 export default function SignUp() {
   const [agree, setAgree] = useState(false)
@@ -11,15 +13,35 @@ export default function SignUp() {
   const [gmail, setGmail] = useState('')
   const [rePassword, setRePassword] = useState('')
 
-  function checkPassword() {
+  const { userDetail, setUserDetail } = useContext(UserDetailContext)
+
+  const CreateAccount = () => {
+    createUserWithEmailAndPassword(auth, gmail, password)
+      .then(async (resp) => {
+        const user = resp.user;
+        if (CheckPassword()) {
+          await SaveUser(user);
+        } else {
+          Alert.alert("Vui lòng nhập đầy đủ thông tin người dùng");
+        }
+      })
+      .catch(e => {
+        Alert.alert("Bạn chưa đăng ký thành công, vui lòng kiểm tra thông tin và thử lại")
+      })
+  }
+
+  const SaveUser = async (user) =>{
+    console.log("Done Sign Up")
+  }
+
+  const CheckPassword = () => {
     if (!agree || password == '' || rePassword == '' || username == '' || gmail == '')
-      console.log("denied");
+      return;
     else {
       if (password == rePassword) {
-        console.log("accept");
-        router.push('/auth/signIn');
+       return true;
       } else {
-        console.log("reject");
+        return false;
       }
     }
   }
@@ -98,7 +120,7 @@ export default function SignUp() {
               Điều khoản
             </Text>
           </TouchableOpacity>
-             {' '}và{' '} 
+          {' '}và{' '}
           <TouchableOpacity
             onPress={() => {
               Linking.openURL('https://swd.vn/pages/chinh-sach-bao-mat-thong-tin-ca-nhan')
@@ -113,8 +135,9 @@ export default function SignUp() {
       <TouchableOpacity
         style={styles.signUpButton}
         onPress={() => {
-          
-          checkPassword()
+
+          CreateAccount()
+
         }}>
         <Text style={{ color: "#fff" }}>Đăng ký</Text>
       </TouchableOpacity>
@@ -223,6 +246,6 @@ const styles = StyleSheet.create({
   agreememt: {
     fontSize: 12,
     flexDirection: "row",
-    alignItems:"center",
+    alignItems: "center",
   },
 });
