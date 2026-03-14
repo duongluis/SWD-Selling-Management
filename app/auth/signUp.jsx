@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useContext, useState } from "react";
+import { useRouter } from "expo-router";
+import { useState } from "react";
 import { Alert, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { auth } from '../../config/firebaseConfig';
+import auth from '../../config/firebaseConfig';
 import Colors from '../../constant/Colors';
-import UserDetailContext from '../../context/UserDetailContext';
 
 export default function SignUp() {
   const [agree, setAgree] = useState(false)
@@ -12,12 +11,14 @@ export default function SignUp() {
   const [username, setUsername] = useState('')
   const [gmail, setGmail] = useState('')
   const [rePassword, setRePassword] = useState('')
+  const router= useRouter()
 
-  const { userDetail, setUserDetail } = useContext(UserDetailContext)
+  // const { userDetail, setUserDetail } = useContext(UserDetailContext)
 
   const CreateAccount = () => {
     createUserWithEmailAndPassword(auth, gmail, password)
       .then(async (resp) => {
+        console.log(resp);
         const user = resp.user;
         if (CheckPassword()) {
           await SaveUser(user);
@@ -59,7 +60,7 @@ export default function SignUp() {
           placeholder="Vui lòng nhập họ tên"
           style={styles.input}
           value={username}
-          onChangeText={setUsername}
+          onChangeText={(value)=>setUsername(value)}
           placeholderTextColor={Colors.LightGray}
         />
       </View>
@@ -70,7 +71,7 @@ export default function SignUp() {
           placeholder="name@company.com"
           style={styles.input}
           value={gmail}
-          onChangeText={setGmail}
+          onChangeText={(value)=>setGmail(value)}
           placeholderTextColor={Colors.LightGray}
         />
       </View>
@@ -79,10 +80,9 @@ export default function SignUp() {
         <Text>Mật khẩu</Text>
         <TextInput
           placeholder="Tạo mật khẩu"
-          secureTextEntry
           style={styles.input}
           value={password}
-          onChangeText={setPassword}
+          onChangeText={(value)=>setPassword(value)}
           placeholderTextColor={Colors.LightGray}
         />
       </View>
@@ -91,10 +91,9 @@ export default function SignUp() {
         <Text>Xác nhận mật khẩu</Text>
         <TextInput
           placeholder="Xác nhận lại mật khẩu"
-          secureTextEntry
           style={styles.input}
           value={rePassword}
-          onChangeText={setRePassword}
+          onChangeText={(value)=>setRePassword(value)}
           placeholderTextColor={Colors.LightGray}
         />
       </View>

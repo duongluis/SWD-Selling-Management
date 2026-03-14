@@ -6,4 +6,6 @@ const config = getDefaultConfig(__dirname)
 module.exports = withNativeWind(config, { input: './global.css' })
 
 config.resolver.sourceExts.push("js", "json", "ts", "tsx", "cjs");
+
+config.resolver.unstable_enablePackageExports = false;
 module.exports = config;
