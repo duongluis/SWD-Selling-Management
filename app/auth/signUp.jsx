@@ -1,8 +1,11 @@
+import { UserDetailContext } from "@/context/UserDetailContext";
 import { Ionicons } from "@expo/vector-icons";
+import { createUserWithEmailAndPassword } from "@firebase/auth";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { doc, setDoc } from "firebase/firestore";
+import { useContext, useState } from "react";
 import { Alert, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import auth from '../../config/firebaseConfig';
+import auth, { db } from "../../config/firebaseConfig";
 import Colors from '../../constant/Colors';
 
 export default function SignUp() {
@@ -13,7 +16,7 @@ export default function SignUp() {
   const [rePassword, setRePassword] = useState('')
   const router= useRouter()
 
-  // const { userDetail, setUserDetail } = useContext(UserDetailContext)
+  const { userDetail, setUserDetail } = useContext(UserDetailContext)
 
   const CreateAccount = () => {
     createUserWithEmailAndPassword(auth, gmail, password)
@@ -31,9 +34,24 @@ export default function SignUp() {
       })
   }
 
-  const SaveUser = async (user) =>{
-    console.log("Done Sign Up")
-  }
+    const SaveUser = async (user) => {
+        const courses = []
+        const data = {
+            name: username,
+            email: gmail,
+            password: password,
+            member: false,
+            uid: user?.uid,
+            courses: courses
+        }
+
+        await setDoc(doc(db, 'users', gmail), data)
+
+        // console.log("user detail : ", data);
+        setUserDetail(data);
+
+        // router.push('/auth/signIn')
+    }
 
   const CheckPassword = () => {
     if (!agree || password == '' || rePassword == '' || username == '' || gmail == '')
@@ -102,7 +120,7 @@ export default function SignUp() {
       <View>
         <Text style={styles.agreememt} >
           <TouchableOpacity
-            style={{ display: "inline", }}
+            style={{ display: "contents",} }
             onPress={() => {
               setAgree(!agree)
             }}>
