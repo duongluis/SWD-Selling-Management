@@ -8,4 +8,4 @@ config.resolver.resolverMainFields = ['react-native', 'browser', 'main'];
 config.resolver.sourceExts.push("js", "json", "ts", "tsx", "cjs");
 
 config.resolver.unstable_enablePackageExports = false;
-module.exports = config;
+// module.exports = config;

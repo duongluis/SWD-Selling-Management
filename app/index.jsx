@@ -11,7 +11,7 @@ import {
 import Colors from '../constant/Colors';
 
 export default function Index() {
-  const { height, width } = Dimensions.get('window');
+  const { height, width } = Dimensions.get('screen');
 
   return (
     <ImageBackground
