@@ -1,19 +1,29 @@
+import auth from "@/config/firebaseConfig";
 import Colors from "@/constant/Colors";
 import { Ionicons } from "@expo/vector-icons";
+import { signInWithEmailAndPassword } from "@firebase/auth";
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function SignIn() {
 
   const [showIcon, setShowIcon] = useState(false)
+  const [gmail, setGmail] = useState("")
   const [password, setPassword] = useState("");
 
   function signInByClick() {
-    
-    console.log("Đăng nhập thành công")
-    router.replace('../(tabs)/home')
+    signInWithEmailAndPassword(auth, gmail, password)
+      .then(async (res) => {
+        console.log("Đăng nhập thành công")
+        console.log(res)
+        router.replace('../(tabs)/home')
 
+      })
+      .catch((e) => {
+        Alert.alert(e)
+        console.log(e)
+      })
   }
 
   return (
@@ -33,6 +43,8 @@ export default function SignIn() {
             style={styles.input}
             placeholder=" Nhập gmail hoặc tên đăng nhập"
             placeholderTextColor={Colors.LightGray}
+            value={gmail}
+            onChangeText={(value) => setGmail(value)}
           />
 
         </View>
@@ -54,19 +66,19 @@ export default function SignIn() {
           />
           <TouchableOpacity onPress={() => setShowIcon(!showIcon)}>
 
-              <Ionicons name={showIcon?"eye-off-outline":"eye-outline"} size={20} color={Colors.LightGray} style={{ margin: 10 }} />
-           
+            <Ionicons name={showIcon ? "eye-off-outline" : "eye-outline"} size={20} color={Colors.LightGray} style={{ margin: 10 }} />
+
           </TouchableOpacity>
 
         </View>
         <TouchableOpacity
           style={{
-            padding:5,
+            padding: 5,
             // marginStart: 200,
             alignSelf: 'flex-end',
             // borderColor: Colors.Black,
             // borderWidth: 1,
-            display:"inline",
+            display: "inline",
             // alignItems:"center"
           }}
           onPress={() => {
@@ -75,17 +87,17 @@ export default function SignIn() {
           <Text style={[
             styles.link,
             //  { textAlign: "right",display:"inline" }
-             
-             ]}>Quên mật khẩu?</Text>
+
+          ]}>Quên mật khẩu?</Text>
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity 
-      style={styles.loginButton}
-      onPress={()=>{
-        signInByClick()
-      }}>
-        <Text style={{ color: '#fff',alignContent:"center" }}>Đăng nhập</Text>
+      <TouchableOpacity
+        style={styles.loginButton}
+        onPress={() => {
+          signInByClick()
+        }}>
+        <Text style={{ color: '#fff', alignContent: "center" }}>Đăng nhập</Text>
       </TouchableOpacity>
 
       <Text style={styles.or}>---------------Tiếp tục với---------------</Text>
@@ -143,7 +155,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#ccc',
-    flexDirection:"row",
+    flexDirection: "row",
   },
   input: {
     width: '80%',
@@ -160,8 +172,8 @@ const styles = StyleSheet.create({
     width: '100%',
     margin: 10,
     padding: 10,
-    paddingEnd:10,
-    paddingBottom:10,
+    paddingEnd: 10,
+    paddingBottom: 10,
     backgroundColor: '#007bff',
     borderRadius: 4,
     alignItems: 'center',

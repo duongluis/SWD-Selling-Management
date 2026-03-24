@@ -1,13 +1,28 @@
 import { Ionicons } from "@expo/vector-icons";
+import { sendPasswordResetEmail } from "@firebase/auth";
 import { router } from "expo-router";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useState } from "react";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import auth from "../../config/firebaseConfig";
 import Colors from "../../constant/Colors";
 
 export default function ResetPassword() {
+
+  const [gmail, setGmail] = useState("")
+  const sendResetLink = async () => {
+    sendPasswordResetEmail(auth, gmail)
+    .then( ()=>{
+      Alert.alert("Vui lòng kiểm tra gmail để lấy mã. ")
+  })
+    .catch((e) => {
+      console.log(e)
+    })
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={()=>{
+        <TouchableOpacity style={styles.backButton} onPress={() => {
           router.back();
         }}>
           <Ionicons name="chevron-back-circle-outline" size={24} />
@@ -29,6 +44,8 @@ export default function ResetPassword() {
           placeholder="name@company.com"
           style={styles.input}
           keyboardType="email-address"
+          value={gmail}
+          onChangeText={(value) => setGmail(value)}
         />
       </View>
 
@@ -36,7 +53,7 @@ export default function ResetPassword() {
         <Text style={{ color: "#fff" }}>Send Reset Link</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={()=>{
+      <TouchableOpacity onPress={() => {
         router.push('/auth/signIn')
       }}>
         <Text style={styles.link}>Back to Login</Text>

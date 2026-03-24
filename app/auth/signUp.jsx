@@ -14,51 +14,57 @@ export default function SignUp() {
   const [username, setUsername] = useState('')
   const [gmail, setGmail] = useState('')
   const [rePassword, setRePassword] = useState('')
-  const router= useRouter()
+  const router = useRouter()
 
   const { userDetail, setUserDetail } = useContext(UserDetailContext)
 
-  const CreateAccount = () => {
+  const CreateAccount = async () => {
     createUserWithEmailAndPassword(auth, gmail, password)
       .then(async (resp) => {
-        console.log(resp);
+        console.log(resp.user);
         const user = resp.user;
         if (CheckPassword()) {
           await SaveUser(user);
+          router.push('/auth/signIn')
         } else {
           Alert.alert("Vui lòng nhập đầy đủ thông tin người dùng");
         }
       })
       .catch(e => {
-        Alert.alert("Bạn chưa đăng ký thành công, vui lòng kiểm tra thông tin và thử lại")
+        // Alert.alert("Bạn chưa đăng ký thành công, vui lòng kiểm tra thông tin và thử lại")
+        Alert.alert(e)
+        console.log(e)
       })
   }
 
-    const SaveUser = async (user) => {
-        const courses = []
-        const data = {
-            name: username,
-            email: gmail,
-            password: password,
-            member: false,
-            uid: user?.uid,
-            courses: courses
-        }
-
-        await setDoc(doc(db, 'users', gmail), data)
-
-        // console.log("user detail : ", data);
-        setUserDetail(data);
-
-        // router.push('/auth/signIn')
+  const SaveUser = async (user) => {
+    const customer = []
+    const data = {
+      name: username,
+      email: gmail,
+      password: password,
+      point: 0,
+      // uid: user?.uid,
+      customer: customer
     }
+
+    await setDoc(doc(db, 'users', gmail), data)
+
+    console.log("Luu tai khoan vao db ");
+
+    // console.log("user detail : ", data);
+    setUserDetail(data);
+
+    console.log("Luu tai khoan vao local storage")
+    // router.push('/auth/signIn')
+  }
 
   const CheckPassword = () => {
     if (!agree || password == '' || rePassword == '' || username == '' || gmail == '')
       return;
     else {
       if (password == rePassword) {
-       return true;
+        return true;
       } else {
         return false;
       }
@@ -78,7 +84,7 @@ export default function SignUp() {
           placeholder="Vui lòng nhập họ tên"
           style={styles.input}
           value={username}
-          onChangeText={(value)=>setUsername(value)}
+          onChangeText={(value) => setUsername(value)}
           placeholderTextColor={Colors.LightGray}
         />
       </View>
@@ -89,7 +95,7 @@ export default function SignUp() {
           placeholder="name@company.com"
           style={styles.input}
           value={gmail}
-          onChangeText={(value)=>setGmail(value)}
+          onChangeText={(value) => setGmail(value)}
           placeholderTextColor={Colors.LightGray}
         />
       </View>
@@ -100,7 +106,7 @@ export default function SignUp() {
           placeholder="Tạo mật khẩu"
           style={styles.input}
           value={password}
-          onChangeText={(value)=>setPassword(value)}
+          onChangeText={(value) => setPassword(value)}
           placeholderTextColor={Colors.LightGray}
         />
       </View>
@@ -111,7 +117,7 @@ export default function SignUp() {
           placeholder="Xác nhận lại mật khẩu"
           style={styles.input}
           value={rePassword}
-          onChangeText={(value)=>setRePassword(value)}
+          onChangeText={(value) => setRePassword(value)}
           placeholderTextColor={Colors.LightGray}
         />
       </View>
@@ -120,7 +126,7 @@ export default function SignUp() {
       <View>
         <Text style={styles.agreememt} >
           <TouchableOpacity
-            style={{ display: "contents",} }
+            style={{ display: "contents", }}
             onPress={() => {
               setAgree(!agree)
             }}>

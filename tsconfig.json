@@ -14,12 +14,12 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
-    "app/_layout.tsx",
+    "app/_layout.jsx",
     "app/index.jsx",
-    "app/auth/signIn.tsx",
+    "app/auth/signIn.jsx",
     "app/(tabs)/order.tsx",
     "app/(tabs)/customer.tsx",
     "app/(tabs)/*.jsx",
     "nativewind-env.d.ts"
-  ]
+, "app/auth/signUp.jsx"  ]
 }
