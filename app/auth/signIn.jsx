@@ -1,9 +1,11 @@
-import auth from "@/config/firebaseConfig";
+import auth, { db } from "@/config/firebaseConfig";
 import Colors from "@/constant/Colors";
+import { UserDetailContext } from "@/context/UserDetailContext";
 import { Ionicons } from "@expo/vector-icons";
 import { signInWithEmailAndPassword } from "@firebase/auth";
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { doc, getDoc } from "firebase/firestore";
+import { useContext, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function SignIn() {
@@ -11,19 +13,33 @@ export default function SignIn() {
   const [showIcon, setShowIcon] = useState(false)
   const [gmail, setGmail] = useState("")
   const [password, setPassword] = useState("");
+  const { userDetail, setUserDetail } = useContext(UserDetailContext)
 
-  function signInByClick() {
-    signInWithEmailAndPassword(auth, gmail, password)
-      .then(async (res) => {
+
+  const signInByClick = async () => {
+
+    try {
+      const res = await signInWithEmailAndPassword(auth, gmail, password)
+
+      if (res.user) {
         console.log("Đăng nhập thành công")
-        console.log(res)
+        console.log("res", res)
+
+
+        const result = await getDoc(doc(db, "users", "nhan vien"))
+        setUserDetail(result.data())
+
         router.replace('../(tabs)/home')
 
-      })
-      .catch((e) => {
-        Alert.alert(e)
-        console.log(e)
-      })
+      }
+      else {
+        console.log("Loi dang nhap")
+      }
+    }
+    catch (e) {
+      Alert.alert(e.message)
+      console.log(e)
+    }
   }
 
   return (

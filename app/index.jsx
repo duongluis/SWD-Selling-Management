@@ -13,6 +13,8 @@ import Colors from '../constant/Colors';
 export default function Index() {
   const { height, width } = Dimensions.get('screen');
 
+  
+
   return (
     <ImageBackground
       source={require('./../assets/images/background_img.png')}
