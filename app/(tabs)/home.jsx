@@ -41,9 +41,12 @@ export default function homeView() {
           { name: 'Report', icon: 'podium-outline' },
           { name: 'Staff', icon: 'person-add-outline' }
           ].map(action => (
-            <View>
-              <TouchableOpacity key={action} style={styles.actionButton}>
-                <Ionicons name={action.icon} size={15} style={{color:Colors.LightBlue}} />
+            <View
+              key={action.name}
+              style={{ alignItems: 'center', flex: 1 }} 
+            >
+              <TouchableOpacity style={styles.actionButton}>
+                <Ionicons name={action.icon} size={22} style={{ color: Colors.LightBlue }} />
               </TouchableOpacity>
               <Text style={styles.actionText}>{action.name}</Text>
             </View>
@@ -122,24 +125,25 @@ const styles = StyleSheet.create({
     marginBottom: 20
   },
   actionsRow: {
-    width: Dimensions.get('screen').width,
     flexDirection: 'row',
-    // flexWrap: 'wrap',
+    justifyContent: 'space-between',
     marginTop: 8,
-    height:100,
-    flex: 1
   },
   actionButton: {
     backgroundColor: Colors.White,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    padding: 16,
     borderRadius: 6,
-    margin: 4,
-    padding:10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 56,
+    height: 56,
   },
   actionText: {
     color: Colors.Black,
-    fontWeight: '600'
+    fontWeight: '600',
+    textAlign: 'center',
+    fontSize: 10,
+    marginTop: 4,
   },
 
   activities: {

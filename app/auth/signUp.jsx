@@ -14,27 +14,32 @@ export default function SignUp() {
   const [username, setUsername] = useState('')
   const [gmail, setGmail] = useState('')
   const [rePassword, setRePassword] = useState('')
+  const [member, setMember] = useState('nhan vien')
   const router = useRouter()
 
   const { userDetail, setUserDetail } = useContext(UserDetailContext)
 
   const CreateAccount = async () => {
-    createUserWithEmailAndPassword(auth, gmail, password)
-      .then(async (resp) => {
-        console.log(resp.user);
+    if (CheckPassword()) {
+      try {
+        const resp = createUserWithEmailAndPassword(auth, gmail, password)
         const user = resp.user;
-        if (CheckPassword()) {
-          await SaveUser(user);
-          router.push('/auth/signIn')
-        } else {
-          Alert.alert("Vui lòng nhập đầy đủ thông tin người dùng");
-        }
-      })
-      .catch(e => {
+
+
+        console.log(resp.user)
+        await SaveUser(user);
+        router.push('/auth/signIn')
+
+      }
+      catch (e) {
         // Alert.alert("Bạn chưa đăng ký thành công, vui lòng kiểm tra thông tin và thử lại")
-        Alert.alert(e)
-        console.log(e)
-      })
+        Alert.alert(e.message)
+        console.log(e.message)
+      }
+    }
+    else {
+      Alert.alert("Vui lòng nhập đầy đủ thông tin người dùng");
+    }
   }
 
   const SaveUser = async (user) => {
@@ -42,13 +47,15 @@ export default function SignUp() {
     const data = {
       name: username,
       email: gmail,
-      password: password,
       point: 0,
       // uid: user?.uid,
+      member: member,
       customer: customer
     }
 
-    await setDoc(doc(db, 'users', gmail), data)
+    console.log("Du lieu truoc khi luu : " + data)
+
+    await setDoc(doc(db, 'users', member), data)
 
     console.log("Luu tai khoan vao db ");
 
@@ -60,16 +67,21 @@ export default function SignUp() {
   }
 
   const CheckPassword = () => {
-    if (!agree || password == '' || rePassword == '' || username == '' || gmail == '')
-      return;
+    if (!agree || password == '' || rePassword == '' || username == '' || gmail == '') {
+      console.log("khong duoc de trong cac truong " + agree);
+      return false;
+    }
     else {
       if (password == rePassword) {
         return true;
       } else {
+
+        console.log("Sai mat khau ");
         return false;
       }
     }
   }
+
 
   return (
     <View style={styles.container}>

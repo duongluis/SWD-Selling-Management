@@ -36,5 +36,5 @@ if (Platform.OS === 'web') {
 
 export const analytics = isSupported().then(yes => yes ? getAnalytics(app) : null);
 
-export const db = getFirestore(app,"default");
+export const db = getFirestore(app);
 export default auth;

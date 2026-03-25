@@ -43,7 +43,7 @@ export default function TabLayout() {
             </View>
 
             <View style={styles.tabBar}>
-                {tabs.map((tab, indesx) => (
+                {tabs.map((tab, index) => (
                     <TouchableOpacity
                         key={tab.key}
                         style={[

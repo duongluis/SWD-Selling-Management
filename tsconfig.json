@@ -17,9 +17,9 @@
     "app/_layout.jsx",
     "app/index.jsx",
     "app/auth/signIn.jsx",
-    "app/(tabs)/order.tsx",
-    "app/(tabs)/customer.tsx",
+    "app/(tabs)/order.jsx",
+    "app/(tabs)/customer.jsx",
     "app/(tabs)/*.jsx",
     "nativewind-env.d.ts"
-, "app/auth/signUp.jsx"  ]
+, "app/auth/signUp.jsx", "app/auth/resetPassword.jsx"  ]
 }
