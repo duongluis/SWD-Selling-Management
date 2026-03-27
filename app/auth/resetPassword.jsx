@@ -35,7 +35,7 @@ export default function ResetPassword() {
 
       <Text style={styles.title}>Reset Password</Text>
       <Text style={styles.subtitle}>
-        Enter your email address and we will send you a link to reset your password.
+        Nhập địa chỉ email để chúng tôi gửi cho bạn thư xác nhận đặt lại mật khẩu
       </Text>
 
       <View style={styles.formGroup}>

@@ -1,5 +1,7 @@
+import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useContext, useEffect, useState } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -11,48 +13,75 @@ import {
   View,
 } from 'react-native';
 
-const recentActivity = [
-  { id: '1', name: 'Alice Johnson', activity: 'Emailed 2 hours ago', icon: 'mail-outline', iconColor: '#2196F3', iconBg: '#E3F2FD' },
-  { id: '2', name: 'Bob Smith', activity: 'Called yesterday', icon: 'call-outline', iconColor: '#4CAF50', iconBg: '#E8F5E9' },
-];
-
-const allCustomers = [
-  { id: '3', name: 'Charlie Davis', activity: 'Meeting scheduled (Oct 24)', icon: 'calendar-outline', iconColor: '#FF9800', iconBg: '#FFF3E0' },
-  { id: '4', name: 'Diana Prince', activity: 'New lead from web (Oct 22)', icon: 'globe-outline', iconColor: '#9C27B0', iconBg: '#F3E5F5' },
-  { id: '5', name: 'Ethan Hunt', activity: 'Invoice sent (Oct 20)', icon: 'document-text-outline', iconColor: '#2196F3', iconBg: '#E3F2FD' },
-  { id: '6', name: 'Fiona L.', activity: 'Pending follow-up (Oct 18)', icon: 'time-outline', iconColor: '#F44336', iconBg: '#FFEBEE' },
-  { id: '7', name: 'George King', activity: 'Subscription active (Oct 15)', icon: 'checkmark-circle-outline', iconColor: '#4CAF50', iconBg: '#E8F5E9' },
-];
-
 function getInitials(name) {
+  if (!name) return '?';
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
 const avatarColors = ['#2196F3', '#9C27B0', '#FF9800', '#4CAF50', '#F44336', '#00BCD4', '#795548'];
 
 export default function CustomerView() {
+  const router = useRouter();
+  const { userDetail } = useContext(UserDetailContext);
   const [search, setSearch] = useState('');
 
-  const filteredRecent = recentActivity.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase())
+  useEffect(() =>{
+    console.log("userDetail o phan customer: ",userDetail)
+  },[])
+  
+  // Lấy danh sách khách hàng từ context
+  const customerList = userDetail?.customer || [];
+
+  // 2 khách hàng mới nhất (sort theo createdAt)
+const recentCustomers = [...customerList]
+  .filter(c => c && c.name)                        
+  .sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+    const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+    return dateB - dateA;
+  })
+  .slice(0, 2);
+
+  // Tất cả trừ 2 recent
+  const recentIds = new Set(recentCustomers.map(c => c.id));
+  const otherCustomers = customerList.filter(c => !recentIds.has(c.id));
+
+  // Filter theo search
+  const filteredRecent = recentCustomers.filter(c =>
+    c.name?.toLowerCase().includes(search.toLowerCase())
   );
-  const filteredAll = allCustomers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase())
+  const filteredAll = otherCustomers.filter(c =>
+    c.name?.toLowerCase().includes(search.toLowerCase())
   );
 
   const renderCustomer = ({ item, index }) => (
-    <TouchableOpacity style={styles.customerCard} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={styles.customerCard}
+      activeOpacity={0.7}
+      onPress={() => router.push({
+        pathname: '/customerDetail/' + (item.id ?? index),
+        params: { customerParam: JSON.stringify(item) }
+      })}
+    >
       <View style={[styles.avatarCircle, { backgroundColor: avatarColors[index % avatarColors.length] }]}>
         <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
       </View>
       <View style={styles.customerInfo}>
         <Text style={styles.name}>{item.name}</Text>
         <View style={styles.activityRow}>
-          <View style={[styles.activityIconWrap, { backgroundColor: item.iconBg }]}>
-            <Ionicons name={item.icon} size={12} color={item.iconColor} />
+          <View style={[styles.activityIconWrap, { backgroundColor: '#E3F2FD' }]}>
+            <Ionicons name="call-outline" size={12} color="#2196F3" />
           </View>
-          <Text style={styles.activity}>{item.activity}</Text>
+          <Text style={styles.activity}>{item.phone || 'Chưa có SĐT'}</Text>
         </View>
+        {item.email ? (
+          <View style={[styles.activityRow, { marginTop: 3 }]}>
+            <View style={[styles.activityIconWrap, { backgroundColor: '#F3E5F5' }]}>
+              <Ionicons name="mail-outline" size={12} color="#9C27B0" />
+            </View>
+            <Text style={styles.activity} numberOfLines={1}>{item.email}</Text>
+          </View>
+        ) : null}
       </View>
       <Ionicons name="chevron-forward" size={16} color="#C5C5C5" />
     </TouchableOpacity>
@@ -68,11 +97,14 @@ export default function CustomerView() {
           <Text style={styles.title}>Customers</Text>
         </View>
         <View style={styles.icons}>
-          <TouchableOpacity style={styles.iconButton}>
-            <Ionicons name="filter-outline" size={20} color="#333" />
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push('/addCustomer')}
+          >
+            <Ionicons name="person-add-outline" size={20} color="#2196F3" />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.iconButton, { marginLeft: 8 }]}>
-            <Ionicons name="settings-outline" size={20} color="#333" />
+            <Ionicons name="filter-outline" size={20} color="#333" />
           </TouchableOpacity>
         </View>
       </View>
@@ -82,7 +114,7 @@ export default function CustomerView() {
         <Ionicons name="search-outline" size={18} color="#9E9E9E" style={styles.searchIcon} />
         <TextInput
           style={styles.searchBar}
-          placeholder="Search customers..."
+          placeholder="Tìm khách hàng..."
           placeholderTextColor="#B0B0B0"
           value={search}
           onChangeText={setSearch}
@@ -100,34 +132,31 @@ export default function CustomerView() {
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Ionicons name="people-outline" size={18} color="#2196F3" />
-            <Text style={styles.statNumber}>{allCustomers.length + recentActivity.length}</Text>
-            <Text style={styles.statLabel}>TOTAL</Text>
+            <Text style={styles.statNumber}>{customerList.length}</Text>
+            <Text style={styles.statLabel}>TỔNG</Text>
           </View>
           <View style={[styles.statBox, { marginHorizontal: 12 }]}>
             <Ionicons name="pulse-outline" size={18} color="#4CAF50" />
-            <Text style={styles.statNumber}>{recentActivity.length}</Text>
-            <Text style={styles.statLabel}>ACTIVE</Text>
+            <Text style={styles.statNumber}>{recentCustomers.length}</Text>
+            <Text style={styles.statLabel}>MỚI NHẤT</Text>
           </View>
           <View style={styles.statBox}>
             <Ionicons name="time-outline" size={18} color="#FF9800" />
-            <Text style={styles.statNumber}>1</Text>
-            <Text style={styles.statLabel}>PENDING</Text>
+            <Text style={styles.statNumber}>{otherCustomers.length}</Text>
+            <Text style={styles.statLabel}>CÒN LẠI</Text>
           </View>
         </View>
 
-        {/* Recent Activity */}
+        {/* Recent — 2 khách hàng mới nhất */}
         {filteredRecent.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>RECENT ACTIVITY</Text>
-              <TouchableOpacity>
-                <Text style={styles.viewAll}>View All</Text>
-              </TouchableOpacity>
+              <Text style={styles.sectionTitle}>MỚI THÊM GẦN ĐÂY</Text>
             </View>
             <FlatList
               data={filteredRecent}
               renderItem={({ item, index }) => renderCustomer({ item, index })}
-              keyExtractor={item => item.id}
+              keyExtractor={(item, index) => item.id ?? index.toString()}
               scrollEnabled={false}
             />
           </View>
@@ -137,23 +166,40 @@ export default function CustomerView() {
         {filteredAll.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>ALL CUSTOMERS</Text>
-              <Text style={styles.countBadge}>{filteredAll.length}</Text>
+              <Text style={styles.sectionTitle}>TẤT CẢ KHÁCH HÀNG</Text>
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>{filteredAll.length}</Text>
+              </View>
             </View>
             <FlatList
               data={filteredAll}
               renderItem={({ item, index }) => renderCustomer({ item, index: index + 2 })}
-              keyExtractor={item => item.id}
+              keyExtractor={(item, index) => item.id ?? index.toString()}
               scrollEnabled={false}
             />
           </View>
         )}
 
-        {/* Empty state */}
-        {filteredRecent.length === 0 && filteredAll.length === 0 && (
+        {/* Empty state — chưa có khách hàng nào */}
+        {customerList.length === 0 && (
+          <View style={styles.emptyState}>
+            <Ionicons name="people-outline" size={48} color="#C5C5C5" />
+            <Text style={styles.emptyText}>Chưa có khách hàng nào</Text>
+            <TouchableOpacity
+              style={styles.addBtn}
+              onPress={() => router.push('/addCustomer')}
+            >
+              <Ionicons name="person-add-outline" size={16} color="#fff" />
+              <Text style={styles.addBtnText}>Thêm khách hàng</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Empty state — tìm không thấy */}
+        {customerList.length > 0 && filteredRecent.length === 0 && filteredAll.length === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="search-outline" size={48} color="#C5C5C5" />
-            <Text style={styles.emptyText}>No customers found</Text>
+            <Text style={styles.emptyText}>Không tìm thấy khách hàng</Text>
           </View>
         )}
 
@@ -168,11 +214,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F7FA',
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 30,
     width: Dimensions.get('screen').width,
   },
-
-  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -205,8 +249,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-
-  // Search
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -228,8 +270,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1A1A2E',
   },
-
-  // Stats
   statsRow: {
     flexDirection: 'row',
     marginBottom: 20,
@@ -258,8 +298,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 2,
   },
-
-  // Section
   section: {
     marginBottom: 20,
   },
@@ -275,23 +313,17 @@ const styles = StyleSheet.create({
     color: '#9E9E9E',
     letterSpacing: 1,
   },
-  viewAll: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#2196F3',
-  },
   countBadge: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#fff',
     backgroundColor: '#2196F3',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
-    overflow: 'hidden',
   },
-
-  // Customer Card
+  countBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
   customerCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -344,17 +376,31 @@ const styles = StyleSheet.create({
     color: '#9E9E9E',
     flex: 1,
   },
-
-  // Empty state
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
+    gap: 10,
   },
   emptyText: {
     fontSize: 14,
     color: '#B0B0B0',
-    marginTop: 12,
+    marginTop: 4,
     fontWeight: '500',
+  },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 6,
+    marginTop: 8,
+  },
+  addBtnText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });

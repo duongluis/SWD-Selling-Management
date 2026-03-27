@@ -16,10 +16,10 @@ export default function HomeView() {
   },[])
 
   const quickActions = [
-    { name: 'New Order', icon: 'cart-outline' },
-    { name: 'Customer', icon: 'person-add-outline' },
-    { name: 'Report', icon: 'podium-outline' },
-    { name: 'Staff', icon: 'people-outline' },
+    { name: 'New Order', icon: 'cart-outline', action: () => {console.log("Hello World")}},
+    { name: 'Customer', icon: 'person-add-outline', action: () => {router.push("/addCustomer")} },
+    { name: 'Report', icon: 'podium-outline', action: () => {console.log("Hello World")} },
+    { name: 'Staff', icon: 'people-outline', action: () => {console.log("Hello World")}},
   ];
 
   const recentActivities = [
@@ -108,8 +108,10 @@ export default function HomeView() {
         <View style={styles.actionsRow}>
           {quickActions.map((action) => (
             <View key={action.name} style={styles.actionItem}>
-              <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name={action.icon} size={22} color={Colors.LightBlue ?? '#4FC3F7'} />
+              <TouchableOpacity style={styles.actionButton}
+               onPress = {action.action}
+               >
+                <Ionicons name={action.icon} size={22} color={Colors.LightBlue ?? '#4FC3F7'} />            
               </TouchableOpacity>
               <Text style={styles.actionText}>{action.name}</Text>
             </View>
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F7FA',
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 30,
   },
 
   // Header

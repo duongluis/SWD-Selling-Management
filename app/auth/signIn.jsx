@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import { doc, getDoc } from "firebase/firestore";
 import { useContext, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { getFirebaseErrorMessage } from '../../components/Main/getFirebaseErrorMessage';
 
 export default function SignIn() {
 
@@ -37,7 +38,8 @@ export default function SignIn() {
       }
     }
     catch (e) {
-      Alert.alert(e.message)
+      const message = getFirebaseErrorMessage(e); 
+      Alert.alert(message)
       console.log(e)
     }
   }
@@ -82,7 +84,7 @@ export default function SignIn() {
           />
           <TouchableOpacity onPress={() => setShowIcon(!showIcon)}>
 
-            <Ionicons name={showIcon ? "eye-off-outline" : "eye-outline"} size={20} color={Colors.LightGray} style={{ margin: 10 }} />
+            <Ionicons name={showIcon ? "eye-off-outline" : "eye-outline"} size={20} color={Colors.LightGray} style={{ marginRight: 10, marginTop:10, marginBottom:10 }} />
 
           </TouchableOpacity>
 

@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F7FA',
     width: Dimensions.get('screen').width,
-    paddingTop: 16,
+    paddingTop: 30,
   },
 
   // Header

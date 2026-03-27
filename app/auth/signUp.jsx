@@ -1,9 +1,9 @@
-import { UserDetailContext } from "@/context/UserDetailContext";
+import { getFirebaseErrorMessage } from "@/components/Main/getFirebaseErrorMessage";
 import { Ionicons } from "@expo/vector-icons";
 import { createUserWithEmailAndPassword } from "@firebase/auth";
 import { useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
-import { useContext, useState } from "react";
+import { useState } from "react";
 import { Alert, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import auth, { db } from "../../config/firebaseConfig";
 import Colors from '../../constant/Colors';
@@ -17,24 +17,23 @@ export default function SignUp() {
   const [member, setMember] = useState('nhan vien')
   const router = useRouter()
 
-  const { userDetail, setUserDetail } = useContext(UserDetailContext)
+  // const { userDetail, setUserDetail } = useContext(UserDetailContext)
 
   const CreateAccount = async () => {
     if (CheckPassword()) {
       try {
-        const resp = createUserWithEmailAndPassword(auth, gmail, password)
+        const resp = await createUserWithEmailAndPassword(auth, gmail, password)
         const user = resp.user;
 
-
         console.log(resp.user)
-        await SaveUser(user);
+        SaveUser(user)
         router.push('/auth/signIn')
 
       }
       catch (e) {
-        // Alert.alert("Bạn chưa đăng ký thành công, vui lòng kiểm tra thông tin và thử lại")
-        Alert.alert(e.message)
-        console.log(e.message)
+        const message = getFirebaseErrorMessage(e)
+        Alert.alert(message)
+        console.log(message)
       }
     }
     else {
@@ -53,17 +52,11 @@ export default function SignUp() {
       customer: customer
     }
 
-    console.log("Du lieu truoc khi luu : " + data)
+    await setDoc(doc(db, 'users', data.email), data)
 
-    await setDoc(doc(db, 'users', member), data)
+    // setUserDetail(data);
 
-    console.log("Luu tai khoan vao db ");
 
-    // console.log("user detail : ", data);
-    setUserDetail(data);
-
-    console.log("Luu tai khoan vao local storage")
-    // router.push('/auth/signIn')
   }
 
   const CheckPassword = () => {

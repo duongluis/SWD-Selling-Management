@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F7FA',
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 30,
     width: Dimensions.get('screen').width,
   },
 
