@@ -1,11 +1,10 @@
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useContext, useEffect, useState } from 'react';
+import { useContext, useState } from 'react';
 import {
   Dimensions,
   FlatList,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,76 +12,57 @@ import {
   View,
 } from 'react-native';
 
+const avatarColors = ['#2196F3', '#9C27B0', '#FF9800', '#4CAF50', '#F44336', '#00BCD4', '#795548'];
+
 function getInitials(name) {
   if (!name) return '?';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  return name.trim().split(/\s+/).filter(n => n.length > 0).map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
-
-const avatarColors = ['#2196F3', '#9C27B0', '#FF9800', '#4CAF50', '#F44336', '#00BCD4', '#795548'];
 
 export default function CustomerView() {
   const router = useRouter();
   const { userDetail } = useContext(UserDetailContext);
   const [search, setSearch] = useState('');
 
-  useEffect(() =>{
-    console.log("userDetail o phan customer: ",userDetail)
-  },[])
-  
-  // Lấy danh sách khách hàng từ context
   const customerList = userDetail?.customer || [];
 
-  // 2 khách hàng mới nhất (sort theo createdAt)
-const recentCustomers = [...customerList]
-  .filter(c => c && c.name)                        
-  .sort((a, b) => {
-    const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-    const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
-    return dateB - dateA;
-  })
-  .slice(0, 2);
+  const filteredList = search.trim() === ''
+    ? customerList
+    : customerList.filter(c =>
+        (c.name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (c.phone || '').includes(search)
+      );
 
-  // Tất cả trừ 2 recent
-  const recentIds = new Set(recentCustomers.map(c => c.id));
-  const otherCustomers = customerList.filter(c => !recentIds.has(c.id));
-
-  // Filter theo search
-  const filteredRecent = recentCustomers.filter(c =>
-    c.name?.toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredAll = otherCustomers.filter(c =>
-    c.name?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const renderCustomer = ({ item, index }) => (
+  const renderItem = ({ item, index }) => (
     <TouchableOpacity
-      style={styles.customerCard}
-      activeOpacity={0.7}
+      style={styles.card}
+      activeOpacity={0.75}
       onPress={() => router.push({
-        pathname: '/customerDetail/' + (item.id ?? index),
-        params: { customerParam: JSON.stringify(item) }
+        pathname: '/CustomerView/[customerID]',
+        params: { customerid: item?.id, customerParam: JSON.stringify(item) }
       })}
     >
-      <View style={[styles.avatarCircle, { backgroundColor: avatarColors[index % avatarColors.length] }]}>
+      {/* Avatar */}
+      <View style={[styles.avatar, { backgroundColor: avatarColors[index % avatarColors.length] }]}>
         <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
       </View>
-      <View style={styles.customerInfo}>
-        <Text style={styles.name}>{item.name}</Text>
-        <View style={styles.activityRow}>
-          <View style={[styles.activityIconWrap, { backgroundColor: '#E3F2FD' }]}>
-            <Ionicons name="call-outline" size={12} color="#2196F3" />
-          </View>
-          <Text style={styles.activity}>{item.phone || 'Chưa có SĐT'}</Text>
+
+      {/* Info */}
+      <View style={styles.cardInfo}>
+        <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.cardMeta}>
+          <Ionicons name="call-outline" size={12} color="#9E9E9E" />
+          <Text style={styles.cardMetaText}>{item.phone || 'Chưa có SĐT'}</Text>
+          {item.address ? (
+            <>
+              <Text style={styles.dot}>•</Text>
+              <Ionicons name="location-outline" size={12} color="#9E9E9E" />
+              <Text style={styles.cardMetaText} numberOfLines={1}>{item.address}</Text>
+            </>
+          ) : null}
         </View>
-        {item.email ? (
-          <View style={[styles.activityRow, { marginTop: 3 }]}>
-            <View style={[styles.activityIconWrap, { backgroundColor: '#F3E5F5' }]}>
-              <Ionicons name="mail-outline" size={12} color="#9C27B0" />
-            </View>
-            <Text style={styles.activity} numberOfLines={1}>{item.email}</Text>
-          </View>
-        ) : null}
       </View>
+
       <Ionicons name="chevron-forward" size={16} color="#C5C5C5" />
     </TouchableOpacity>
   );
@@ -93,28 +73,47 @@ const recentCustomers = [...customerList]
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.dashboardLabel}>MANAGEMENT</Text>
-          <Text style={styles.title}>Customers</Text>
+          <Text style={styles.label}>MANAGEMENT</Text>
+          <Text style={styles.title}>Khách hàng</Text>
         </View>
-        <View style={styles.icons}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => router.push('/addCustomer')}
-          >
-            <Ionicons name="person-add-outline" size={20} color="#2196F3" />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.iconButton, { marginLeft: 8 }]}>
-            <Ionicons name="filter-outline" size={20} color="#333" />
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={() => router.push('/addCustomer')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="person-add-outline" size={18} color="#fff" />
+          <Text style={styles.addBtnText}>Thêm mới</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Stats Card */}
+      <View style={styles.statsCard}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{customerList.length}</Text>
+          <Text style={styles.statLabel}>Tổng KH</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>
+            {customerList.filter(c => c.createdAt && new Date(c.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length}
+          </Text>
+          <Text style={styles.statLabel}>Tuần này</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>
+            {customerList.filter(c => c.createdAt && new Date(c.createdAt) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length}
+          </Text>
+          <Text style={styles.statLabel}>Tháng này</Text>
         </View>
       </View>
 
-      {/* Search Bar */}
+      {/* Search */}
       <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={18} color="#9E9E9E" style={styles.searchIcon} />
+        <Ionicons name="search-outline" size={18} color="#9E9E9E" />
         <TextInput
-          style={styles.searchBar}
-          placeholder="Tìm khách hàng..."
+          style={styles.searchInput}
+          placeholder="Tìm theo tên hoặc SĐT..."
           placeholderTextColor="#B0B0B0"
           value={search}
           onChangeText={setSearch}
@@ -126,85 +125,45 @@ const recentCustomers = [...customerList]
         )}
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-
-        {/* Stats Summary */}
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Ionicons name="people-outline" size={18} color="#2196F3" />
-            <Text style={styles.statNumber}>{customerList.length}</Text>
-            <Text style={styles.statLabel}>TỔNG</Text>
-          </View>
-          <View style={[styles.statBox, { marginHorizontal: 12 }]}>
-            <Ionicons name="pulse-outline" size={18} color="#4CAF50" />
-            <Text style={styles.statNumber}>{recentCustomers.length}</Text>
-            <Text style={styles.statLabel}>MỚI NHẤT</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Ionicons name="time-outline" size={18} color="#FF9800" />
-            <Text style={styles.statNumber}>{otherCustomers.length}</Text>
-            <Text style={styles.statLabel}>CÒN LẠI</Text>
+      {/* Section label */}
+      {filteredList.length > 0 && (
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>
+            {search ? `Kết quả (${filteredList.length})` : 'TẤT CẢ KHÁCH HÀNG'}
+          </Text>
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>{filteredList.length}</Text>
           </View>
         </View>
+      )}
 
-        {/* Recent — 2 khách hàng mới nhất */}
-        {filteredRecent.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>MỚI THÊM GẦN ĐÂY</Text>
+      {/* List */}
+      <FlatList
+        data={filteredList}
+        renderItem={renderItem}
+        keyExtractor={(item, index) => item?.id?.toString() || index.toString()}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={filteredList.length === 0 ? styles.emptyContainer : { gap: 10, paddingBottom: 24 }}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="people-outline" size={40} color="#2196F3" />
             </View>
-            <FlatList
-              data={filteredRecent}
-              renderItem={({ item, index }) => renderCustomer({ item, index })}
-              keyExtractor={(item, index) => item.id ?? index.toString()}
-              scrollEnabled={false}
-            />
+            <Text style={styles.emptyTitle}>
+              {search ? 'Không tìm thấy khách hàng' : 'Chưa có khách hàng nào'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {search ? 'Thử tìm với từ khóa khác' : 'Bấm "Thêm mới" để tạo khách hàng đầu tiên'}
+            </Text>
+            {!search && (
+              <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/addCustomer')}>
+                <Ionicons name="person-add-outline" size={16} color="#fff" />
+                <Text style={styles.emptyBtnText}>Thêm khách hàng</Text>
+              </TouchableOpacity>
+            )}
           </View>
-        )}
-
-        {/* All Customers */}
-        {filteredAll.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>TẤT CẢ KHÁCH HÀNG</Text>
-              <View style={styles.countBadge}>
-                <Text style={styles.countBadgeText}>{filteredAll.length}</Text>
-              </View>
-            </View>
-            <FlatList
-              data={filteredAll}
-              renderItem={({ item, index }) => renderCustomer({ item, index: index + 2 })}
-              keyExtractor={(item, index) => item.id ?? index.toString()}
-              scrollEnabled={false}
-            />
-          </View>
-        )}
-
-        {/* Empty state — chưa có khách hàng nào */}
-        {customerList.length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="people-outline" size={48} color="#C5C5C5" />
-            <Text style={styles.emptyText}>Chưa có khách hàng nào</Text>
-            <TouchableOpacity
-              style={styles.addBtn}
-              onPress={() => router.push('/addCustomer')}
-            >
-              <Ionicons name="person-add-outline" size={16} color="#fff" />
-              <Text style={styles.addBtnText}>Thêm khách hàng</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Empty state — tìm không thấy */}
-        {customerList.length > 0 && filteredRecent.length === 0 && filteredAll.length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="search-outline" size={48} color="#C5C5C5" />
-            <Text style={styles.emptyText}>Không tìm thấy khách hàng</Text>
-          </View>
-        )}
-
-        <View style={{ height: 24 }} />
-      </ScrollView>
+        }
+      />
     </View>
   );
 }
@@ -217,38 +176,81 @@ const styles = StyleSheet.create({
     paddingTop: 30,
     width: Dimensions.get('screen').width,
   },
+
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
-  dashboardLabel: {
+  label: {
     fontSize: 10,
     fontWeight: '600',
     color: '#9E9E9E',
     letterSpacing: 1,
   },
   title: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1A1A2E',
+  },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 6,
+    shadowColor: '#2196F3',
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  addBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
+  // Stats Card
+  statsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statNumber: {
     fontSize: 22,
     fontWeight: '800',
     color: '#1A1A2E',
   },
-  icons: {
-    flexDirection: 'row',
+  statLabel: {
+    fontSize: 11,
+    color: '#9E9E9E',
+    fontWeight: '600',
+    marginTop: 2,
   },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#F0F0F0',
   },
+
+  // Search
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -257,138 +259,124 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 16,
+    gap: 8,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchBar: {
+  searchInput: {
     flex: 1,
     fontSize: 14,
     color: '#1A1A2E',
   },
-  statsRow: {
+
+  // Section
+  sectionRow: {
     flexDirection: 'row',
-    marginBottom: 20,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: '#fff',
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'flex-start',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#1A1A2E',
-    marginTop: 6,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#9E9E9E',
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#9E9E9E',
     letterSpacing: 1,
   },
   countBadge: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#E3F2FD',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
   },
-  countBadgeText: {
-    fontSize: 12,
+  countText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#fff',
+    color: '#2196F3',
   },
-  customerCard: {
+
+  // Card
+  card: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
     shadowColor: '#000',
     shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 1,
   },
-  avatarCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   avatarText: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
+    fontWeight: '800',
+    fontSize: 16,
   },
-  customerInfo: {
+  cardInfo: {
     flex: 1,
+    gap: 5,
   },
-  name: {
-    fontSize: 14,
+  cardName: {
+    fontSize: 15,
     fontWeight: '700',
     color: '#1A1A2E',
-    marginBottom: 4,
   },
-  activityRow: {
+  cardMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    flexWrap: 'wrap',
   },
-  activityIconWrap: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 4,
-  },
-  activity: {
+  cardMetaText: {
     fontSize: 12,
     color: '#9E9E9E',
-    flex: 1,
   },
-  emptyState: {
+  dot: {
+    fontSize: 10,
+    color: '#C5C5C5',
+  },
+
+  // Empty
+  emptyContainer: {
+    flexGrow: 1,
+  },
+  empty: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
-    gap: 10,
+    gap: 8,
   },
-  emptyText: {
-    fontSize: 14,
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E3F2FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#555',
+  },
+  emptySubtitle: {
+    fontSize: 13,
     color: '#B0B0B0',
-    marginTop: 4,
-    fontWeight: '500',
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
-  addBtn: {
+  emptyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#2196F3',
@@ -398,9 +386,9 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 8,
   },
-  addBtnText: {
+  emptyBtnText: {
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 13,
   },
 });

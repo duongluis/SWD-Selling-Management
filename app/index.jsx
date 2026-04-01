@@ -48,7 +48,7 @@ export default function Index() {
           style={styles.button}
           onPress={() => {
             console.log('Move to Sign In screen');
-            router.push('/auth/signIn');
+            router.replace('/auth/signIn');
           }}
         >
           <Text style={styles.buttonText}>Bắt đầu</Text>

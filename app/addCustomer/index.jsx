@@ -1,9 +1,10 @@
 import { UserDetailContext } from "@/context/UserDetailContext";
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { doc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
 import { useContext, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,43 +18,64 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../../config/firebaseConfig';
 
-
 export default function addCustomer() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { userDetail, setUserDetail } = useContext(UserDetailContext);
 
-  const { userDetail, setUserDetail } = useContext(UserDetailContext)
   const [form, setForm] = useState({
     name: '',
     phone: '',
     email: '',
     address: '',
     note: '',
-    agency: userDetail.gmail
   });
 
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
-
-  const newCustomer = {
-    ...form,
-    id: Date.now().toString(), // id unique cho mỗi khách hàng
-    createdAt: new Date().toISOString(),
-  };
-
   const handleSave = async () => {
-    console.log('Lưu khách hàng:', form);
-    await updateDoc(doc(db, 'customers', form.agency), form)
-    await updateDoc(doc(db, 'users', userDetail.gmail), {
-      customer: arrayUnion(newCustomer)
-    });
-    await setUserDetail(prev => ({
-      ...prev,
-      customer: [...(prev.customer || []), form.name]
-    }));
-    router.back()
+    // Validate
+    if (!form.name || !form.phone) {
+      Alert.alert('Thông báo', 'Vui lòng nhập họ tên và số điện thoại');
+      return;
+    }
+
+    try {
+      // ✅ Định nghĩa trong handleSave để lấy form mới nhất
+      const newCustomer = {
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email?.trim() || '',
+        address: form.address?.trim() || '',
+        note: form.note?.trim() || '',
+      };
+
+      console.log('uid:', userDetail?.uid);
+      console.log('newCustomer:', JSON.stringify(newCustomer));
+
+      // ✅ Dùng uid làm document ID
+      await updateDoc(doc(db, 'users', userDetail.email), {
+        customer: arrayUnion(newCustomer),
+      });
+
+      // ✅ Cập nhật context ngay để UI phản ánh liền
+      setUserDetail(prev => ({
+        ...prev,
+        customer: [...(prev.customer || []), newCustomer],
+      }));
+
+      Alert.alert('Thành công', 'Đã lưu khách hàng!', [
+        { text: 'OK', onPress: () => router.back() }
+      ]);
+
+    } catch (e) {
+      console.error('❌ Lỗi:', e.code, e.message);
+      Alert.alert('Lỗi', e.message);
+    }
   };
 
   return (
@@ -72,14 +94,13 @@ export default function addCustomer() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Personal Info Section */}
+          {/* Thông tin cá nhân */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="person-circle-outline" size={20} color="#2196F3" />
@@ -87,7 +108,7 @@ export default function addCustomer() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Họ và tên</Text>
+              <Text style={styles.label}>Họ và tên <Text style={styles.required}>*</Text></Text>
               <TextInput
                 style={styles.input}
                 placeholder="Nguyễn Văn A"
@@ -98,7 +119,7 @@ export default function addCustomer() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Số điện thoại</Text>
+              <Text style={styles.label}>Số điện thoại <Text style={styles.required}>*</Text></Text>
               <TextInput
                 style={styles.input}
                 placeholder="0901 234 567"
@@ -123,7 +144,7 @@ export default function addCustomer() {
             </View>
           </View>
 
-          {/* Address & Note Section */}
+          {/* Địa chỉ & Ghi chú */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="location-outline" size={20} color="#2196F3" />
@@ -151,7 +172,6 @@ export default function addCustomer() {
                 numberOfLines={4}
                 textAlignVertical="top"
                 value={form.note}
-                focusable="true"
                 onChangeText={v => handleChange('note', v)}
               />
             </View>
@@ -179,8 +199,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F7FA',
   },
-
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -201,14 +219,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1A1A2E',
   },
-
-  // Scroll
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
   },
-
-  // Section Card
   section: {
     backgroundColor: '#fff',
     borderRadius: 16,
@@ -231,8 +245,6 @@ const styles = StyleSheet.create({
     color: '#1A1A2E',
     marginLeft: 6,
   },
-
-  // Input
   inputGroup: {
     marginBottom: 14,
   },
@@ -242,6 +254,9 @@ const styles = StyleSheet.create({
     color: '#9E9E9E',
     marginBottom: 6,
     letterSpacing: 0.3,
+  },
+  required: {
+    color: '#F44336',
   },
   input: {
     backgroundColor: '#F5F7FA',
@@ -264,8 +279,6 @@ const styles = StyleSheet.create({
     borderColor: '#EBEBEB',
     minHeight: 100,
   },
-
-  // Buttons
   saveBtn: {
     backgroundColor: '#2196F3',
     borderRadius: 14,

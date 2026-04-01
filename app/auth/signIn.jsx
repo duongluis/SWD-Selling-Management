@@ -27,7 +27,7 @@ export default function SignIn() {
         console.log("res", res)
 
 
-        const result = await getDoc(doc(db, "users", "nhan vien"))
+        const result = await getDoc(doc(db, "users", gmail))
         setUserDetail(result.data())
 
         router.replace('../(tabs)/home')
