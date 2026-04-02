@@ -1,36 +1,32 @@
-import { Ionicons } from "@expo/vector-icons";
-import { sendPasswordResetEmail } from "@firebase/auth";
-import { router } from "expo-router";
-import { useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import auth from "../../config/firebaseConfig";
-import Colors from "../../constant/Colors";
+import Colors from '@/constant/Colors';
+import { Ionicons } from '@expo/vector-icons';
+import { sendPasswordResetEmail } from '@firebase/auth';
+import { router } from 'expo-router';
+import { useState } from 'react';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import auth from '../../config/firebaseConfig';
 
 export default function ResetPassword() {
+  const [gmail, setGmail] = useState('');
 
-  const [gmail, setGmail] = useState("")
   const sendResetLink = async () => {
-    sendPasswordResetEmail(auth, gmail)
-    .then( ()=>{
-      Alert.alert("Vui lòng kiểm tra gmail để lấy mã. ")
-  })
-    .catch((e) => {
-      console.log(e)
-    })
-  }
+    try {
+      await sendPasswordResetEmail(auth, gmail);
+      Alert.alert('Thông báo', 'Vui lòng kiểm tra gmail để lấy link đặt lại mật khẩu.');
+    } catch (e) {
+      console.log(e);
+      Alert.alert('Lỗi', e.message);
+    }
+  };
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => {
-          router.back();
-        }}>
-          <Ionicons name="chevron-back-circle-outline" size={24} />
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <Ionicons name="chevron-back-circle-outline" size={28} color={Colors.TextPrimary} />
+      </TouchableOpacity>
 
       <View style={styles.icon}>
-        <Ionicons name="lock-closed-outline" size={40} color={Colors.Blue} />
+        <Ionicons name="lock-closed-outline" size={44} color={Colors.Blue} />
       </View>
 
       <Text style={styles.title}>Reset Password</Text>
@@ -39,23 +35,23 @@ export default function ResetPassword() {
       </Text>
 
       <View style={styles.formGroup}>
-        <Text>Email Address</Text>
+        <Text style={styles.label}>Email Address</Text>
         <TextInput
           placeholder="name@company.com"
+          placeholderTextColor={Colors.LightGray}
           style={styles.input}
           keyboardType="email-address"
+          autoCapitalize="none"
           value={gmail}
-          onChangeText={(value) => setGmail(value)}
+          onChangeText={setGmail}
         />
       </View>
 
-      <TouchableOpacity style={styles.resetButton}>
-        <Text style={{ color: "#fff" }}>Send Reset Link</Text>
+      <TouchableOpacity style={styles.resetButton} onPress={sendResetLink}>
+        <Text style={styles.resetButtonText}>Send Reset Link</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => {
-        router.push('/auth/signIn')
-      }}>
+      <TouchableOpacity onPress={() => router.push('/auth/signIn')}>
         <Text style={styles.link}>Back to Login</Text>
       </TouchableOpacity>
     </View>
@@ -63,62 +59,15 @@ export default function ResetPassword() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    width: 350,
-    marginTop: 50,
-    alignSelf: "center",
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    marginBottom: 10,
-  },
-  backButton: {
-    padding: 5,
-  },
-  icon: {
-    alignItems: "center",
-    marginBottom: 15,
-  },
-  title: {
-    textAlign: "center",
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#555",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  formGroup: {
-    marginBottom: 15,
-  },
-  input: {
-    width: "100%",
-    padding: 10,
-    marginTop: 5,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "#ccc",
-  },
-  resetButton: {
-    width: "100%",
-    padding: 10,
-    backgroundColor: "#007bff",
-    borderRadius: 4,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  link: {
-    marginTop: 20,
-    fontSize: 12,
-    color: "#007bff",
-    textAlign: "center",
-  },
+  container:       { width: 350, marginTop: 50, alignSelf: 'center', padding: 20, borderWidth: 1, borderColor: Colors.Border, borderRadius: 12, backgroundColor: Colors.White },
+  backButton:      { marginBottom: 10 },
+  icon:            { alignItems: 'center', marginBottom: 16 },
+  title:           { textAlign: 'center', fontSize: 22, fontWeight: '800', color: Colors.TextPrimary, marginBottom: 10 },
+  subtitle:        { fontSize: 14, color: Colors.TextSecondary, textAlign: 'center', marginBottom: 20 },
+  formGroup:       { marginBottom: 16 },
+  label:           { fontSize: 13, fontWeight: '600', color: Colors.TextPrimary, marginBottom: 6 },
+  input:           { padding: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.Border, fontSize: 14, color: Colors.TextPrimary },
+  resetButton:     { width: '100%', padding: 14, backgroundColor: Colors.Primary, borderRadius: 8, alignItems: 'center', marginBottom: 16 },
+  resetButtonText: { color: Colors.White, fontWeight: '700', fontSize: 15 },
+  link:            { textAlign: 'center', fontSize: 13, color: Colors.Blue, marginTop: 8 },
 });
