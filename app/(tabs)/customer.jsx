@@ -139,7 +139,7 @@ export default function CustomerView() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.Background, paddingHorizontal: 16, paddingTop: 30, width: Dimensions.get('screen').width },
+  container: { flex: 1, backgroundColor: Colors.Background, paddingHorizontal: 16, paddingTop: 30, width: Dimensions.get('window').width },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   label: { fontSize: 10, fontWeight: '600', color: Colors.Gray, letterSpacing: 1 },
   title: { fontSize: 24, fontWeight: '800', color: Colors.TextPrimary },

@@ -2,14 +2,14 @@ import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import React, { useContext, useEffect, useState } from 'react';
 import { Dimensions, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
 const STATUS_CONFIG = {
-  PENDING:   { color: Colors.Warning, bg: Colors.WarningLight, label: 'PENDING',   icon: 'time-outline'     },
-  SHIPPED:   { color: Colors.Primary, bg: Colors.PrimaryLight, label: 'SHIPPED',   icon: 'car-outline'      },
+  PENDING: { color: Colors.Warning, bg: Colors.WarningLight, label: 'PENDING', icon: 'time-outline' },
+  SHIPPED: { color: Colors.Primary, bg: Colors.PrimaryLight, label: 'SHIPPED', icon: 'car-outline' },
   COMPLETED: { color: Colors.Success, bg: Colors.SuccessLight, label: 'COMPLETED', icon: 'checkmark-circle' },
   CONFIRMED: { color: Colors.Success, bg: Colors.SuccessLight, label: 'CONFIRMED', icon: 'checkmark-circle' },
 };
@@ -31,18 +31,30 @@ export default function OrderView() {
         const customerList = userDetail?.customer || [];
         if (customerList.length === 0) { setOrders([]); setLoading(false); return; }
 
-        const customerNames = customerList.map(c => c.name).filter(Boolean);
+        const customerPhone = customerList.map(c => c.phone).filter(Boolean);
+        console.log("danh sach khach hang : ", customerPhone);
         const allOrders = [];
 
-        // Fetch order của từng khách hàng
-        for (const name of customerNames) {
+        //
+        for (const name of customerPhone) {
           try {
-            const snap = await getDocs(
-              query(collection(db, 'orders'), where('customer', '==', name))
+            const snap = await getDoc(
+              doc(db, 'orders', name)
+              // , where('orders.customer', '==', name)
             );
-            snap.forEach(doc => allOrders.push({ ...doc.data(), docId: doc.id }));
+            // ).data().orders;
+
+            console.log("doc data: ", snap.data())
+
+            const workingOrder = snap.data().orders;
+            workingOrder.forEach(orderSnap => {
+              console.log("doc data bên trong: ", orderSnap)
+              allOrders.push(orderSnap)
+            })
+            console.log("danh sach don hang: ", allOrders)
           } catch (e) {
             console.log('Không có order cho:', name);
+            console.log(e);
           }
         }
 
@@ -189,32 +201,32 @@ export default function OrderView() {
 }
 
 const styles = StyleSheet.create({
-  container:      { flex: 1, backgroundColor: Colors.BackgroundGray, paddingHorizontal: 16, paddingTop: 30, width: Dimensions.get('screen').width },
-  header:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  headerLeft:     { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title:          { fontSize: 26, fontWeight: '800', color: Colors.TextPrimary, letterSpacing: -0.5 },
-  addBtn:         { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.Primary, alignItems: 'center', justifyContent: 'center', shadowColor: Colors.Primary, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
-  searchContainer:{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.White, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14, shadowColor: Colors.Black, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
-  searchBar:      { flex: 1, fontSize: 14, color: Colors.TextPrimary },
-  tabsRow:        { flexDirection: 'row', marginBottom: 16, gap: 6 },
-  tabItem:        { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.White, shadowColor: Colors.Black, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
-  activeTabItem:  { backgroundColor: Colors.TextPrimary },
-  tabText:        { fontSize: 13, fontWeight: '600', color: Colors.Gray },
-  activeTabText:  { color: Colors.White },
-  orderCard:      { backgroundColor: Colors.White, borderRadius: 16, overflow: 'hidden', shadowColor: Colors.Black, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  orderTop:       { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-  orderIcon:      { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  orderMid:       { flex: 1 },
-  orderNumber:    { fontSize: 14, fontWeight: '700', color: Colors.TextPrimary, marginBottom: 3 },
-  orderDate:      { fontSize: 12, color: Colors.Gray },
-  orderRight:     { alignItems: 'flex-end', gap: 6 },
-  amountText:     { fontSize: 14, fontWeight: '800', color: Colors.TextPrimary },
-  statusBadge:    { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6 },
-  statusText:     { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  divider:        { height: 1, backgroundColor: Colors.BackgroundGray, marginHorizontal: 14 },
-  orderBottom:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
-  customerName:   { flex: 1, fontSize: 13, color: Colors.TextSecondary, fontWeight: '500' },
-  itemCount:      { fontSize: 11, color: Colors.Gray, marginRight: 4 },
-  emptyState:     { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 12 },
-  emptyText:      { fontSize: 14, color: Colors.LightGray, fontWeight: '500' },
+  container: { flex: 1, backgroundColor: Colors.BackgroundGray, paddingHorizontal: 16, paddingTop: 30, width: Dimensions.get('window').width },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { fontSize: 26, fontWeight: '800', color: Colors.TextPrimary, letterSpacing: -0.5 },
+  addBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.Primary, alignItems: 'center', justifyContent: 'center', shadowColor: Colors.Primary, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.White, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14, shadowColor: Colors.Black, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
+  searchBar: { flex: 1, fontSize: 14, color: Colors.TextPrimary },
+  tabsRow: { flexDirection: 'row', marginBottom: 16, gap: 6 },
+  tabItem: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.White, shadowColor: Colors.Black, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  activeTabItem: { backgroundColor: Colors.TextPrimary },
+  tabText: { fontSize: 13, fontWeight: '600', color: Colors.Gray },
+  activeTabText: { color: Colors.White },
+  orderCard: { backgroundColor: Colors.White, borderRadius: 16, overflow: 'hidden', shadowColor: Colors.Black, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  orderTop: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  orderIcon: { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  orderMid: { flex: 1 },
+  orderNumber: { fontSize: 14, fontWeight: '700', color: Colors.TextPrimary, marginBottom: 3 },
+  orderDate: { fontSize: 12, color: Colors.Gray },
+  orderRight: { alignItems: 'flex-end', gap: 6 },
+  amountText: { fontSize: 14, fontWeight: '800', color: Colors.TextPrimary },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6 },
+  statusText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  divider: { height: 1, backgroundColor: Colors.BackgroundGray, marginHorizontal: 14 },
+  orderBottom: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
+  customerName: { flex: 1, fontSize: 13, color: Colors.TextSecondary, fontWeight: '500' },
+  itemCount: { fontSize: 11, color: Colors.Gray, marginRight: 4 },
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 12 },
+  emptyText: { fontSize: 14, color: Colors.LightGray, fontWeight: '500' },
 });

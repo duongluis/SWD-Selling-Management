@@ -1,32 +1,23 @@
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { arrayUnion, doc, setDoc } from 'firebase/firestore';
-import { useContext, useState } from 'react';
-import {
-    Alert,
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
-} from 'react-native';
+import { useContext, useRef, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../../config/firebaseConfig';
 
-const { width } = Dimensions.get('window');
 
 export default function addOrder() {
+
+  const webDateInputRef = useRef(null);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { userDetail } = useContext(UserDetailContext);
-
   const customerList = userDetail?.customer || [];
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   const [orderId] = useState('ORD-' + Date.now().toString().slice(-6));
   const [orderDate, setOrderDate] = useState('');
@@ -37,6 +28,7 @@ export default function addOrder() {
   const [notes, setNotes] = useState('');
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: '', qty: '1', price: '' });
+
 
   const addProduct = () => {
     if (!newProduct.name || !newProduct.price) {
@@ -63,26 +55,45 @@ export default function addOrder() {
   const formatCurrency = (n) =>
     n.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
-  const handleSubmit =  async () => {
+  const handleSubmit = async () => {
     if (!selectedCustomer) { Alert.alert('Thông báo', 'Vui lòng chọn khách hàng'); return; }
     if (products.length === 0) { Alert.alert('Thông báo', 'Vui lòng thêm ít nhất 1 sản phẩm'); return; }
 
     const newOrder = {
-        id: orderId,
-        customer:selectedCustomer.name,
-        items:products,
-        createdAt:orderDate,
-        address:deliveryAddress,
-        note:notes,
-        status:'PENDING'
+      id: orderId,
+      customer: selectedCustomer.name,
+      items: products,
+      createdAt: orderDate,
+      address: deliveryAddress,
+      note: notes,
+      status: 'PENDING'
     }
 
-    await setDoc(doc(db,'orders',selectedCustomer.name),
-    arrayUnion(newOrder))
+    await setDoc(
+      doc(db, 'orders', selectedCustomer.phone),
+      { orders: arrayUnion(newOrder) },
+      { merge: true }
+    );
 
     Alert.alert('Thành công', `Đơn hàng ${orderId} đã được tạo!`, [
-      { text: 'OK', onPress: () => router.back() }
+      { text: 'OK', onPress: () => router.replace('../(tabs)/home') }
     ]);
+
+    Platform.OS === 'web' ?router.replace('../(tabs)/home'):console.log(" move to order screen");
+  };
+
+  const handleDateChange = (event, date) => {
+    if (Platform.OS === 'android') {  
+      setShowDatePicker(false);
+    }
+    if (date) {
+      setSelectedDate(date);
+      const formatted = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date
+        .getDate()
+        .toString()
+        .padStart(2, '0')}/${date.getFullYear()}`;
+      setOrderDate(formatted);
+    }
   };
 
   return (
@@ -110,10 +121,10 @@ export default function addOrder() {
           contentContainerStyle={styles.scroll}
         >
 
-    
+
           <View style={styles.formCard}>
 
-            
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Order ID</Text>
               <View style={styles.inputBox}>
@@ -121,23 +132,84 @@ export default function addOrder() {
               </View>
             </View>
 
-            
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Order Date</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="mm/dd/yyyy"
-                  placeholderTextColor="#B0B0C8"
-                  value={orderDate}
-                  onChangeText={setOrderDate}
-                  keyboardType="numbers-and-punctuation"
+
+              <Pressable onPress={() => setShowDatePicker(true)}>
+                <View style={styles.inputBox} pointerEvents="none">
+                  <TextInput
+                    style={styles.input}
+                    placeholder="mm/dd/yyyy"
+                    placeholderTextColor="#B0B0C8"
+                    value={orderDate}
+                    editable={false}
+                  />
+                  <Ionicons name="calendar-outline" size={18} color="#B0B0C8" />
+                </View>
+              </Pressable>
+
+              {Platform.OS === 'ios' && showDatePicker && (
+                <Modal transparent animationType="slide">
+                  <Pressable
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }}
+                    onPress={() => setShowDatePicker(false)}
+                  />
+                  <View style={{ backgroundColor: '#fff', padding: 16 }}>
+                    <DateTimePicker
+                      value={selectedDate}
+                      mode="date"
+                      display="spinner"
+                      onChange={handleDateChange}
+                    />
+                    <Pressable
+                      onPress={() => setShowDatePicker(false)}
+                      style={{ alignItems: 'center', padding: 12 }}
+                    >
+                      <Text style={{ color: '#6C63FF', fontWeight: '600' }}>Done</Text>
+                    </Pressable>
+                  </View>
+                </Modal>
+              )}
+
+              {/* Android: hiện picker trực tiếp */}
+              {Platform.OS === 'android' && showDatePicker && (
+                <DateTimePicker
+                  value={selectedDate}
+                  mode="date"
+                  display="default"
+                  onChange={handleDateChange}
                 />
-                <Ionicons name="calendar-outline" size={18} color="#B0B0C8" />
-              </View>
+              )}
+
+              {/* Web: dùng input type date native */}
+              {Platform.OS === 'web' && showDatePicker && (
+                <input
+                  ref={webDateInputRef}
+                  type="date"
+                  value={selectedDate ? selectedDate.toISOString().split('T')[0] : ''}
+                  style={{
+                    position: 'absolute',
+                    opacity: 0,
+                    width: 0,
+                    height: 0,
+                    pointerEvents: 'none',
+                  }}
+                  onChange={(e) => {
+                    if (!e.target.value) return;
+                    const [year, month, day] = e.target.value.split('-').map(Number);
+                    const date = new Date(year, month - 1, day);
+                    setSelectedDate(date);
+                    const formatted = `${month.toString().padStart(2, '0')}/${day
+                      .toString()
+                      .padStart(2, '0')}/${year}`;
+                    setOrderDate(formatted);
+                  }}
+                />
+              )}
             </View>
 
-            
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Customer Name</Text>
               <TouchableOpacity
@@ -183,14 +255,14 @@ export default function addOrder() {
               )}
             </View>
 
-           
+
             <View style={styles.productSection}>
               <View style={styles.productHeader}>
                 <Ionicons name="cube-outline" size={18} color="#fff" />
                 <Text style={styles.productHeaderText}>Product Information</Text>
               </View>
 
-             
+
               {products.map((p) => (
                 <View key={p.id} style={styles.productItem}>
                   <View style={styles.productItemLeft}>
@@ -206,7 +278,7 @@ export default function addOrder() {
                 </View>
               ))}
 
-             
+
               {showAddProduct && (
                 <View style={styles.addProductForm}>
                   <TextInput
@@ -245,7 +317,7 @@ export default function addOrder() {
                 </View>
               )}
 
-          
+
               <TouchableOpacity
                 style={styles.addProductBtn}
                 onPress={() => setShowAddProduct(true)}
@@ -255,7 +327,7 @@ export default function addOrder() {
                 <Text style={styles.addProductBtnText}>Thêm sản phẩm</Text>
               </TouchableOpacity>
 
-            
+
               {products.length > 0 && (
                 <View style={styles.totalRow}>
                   <Text style={styles.totalLabel}>Tổng cộng</Text>
@@ -264,7 +336,7 @@ export default function addOrder() {
               )}
             </View>
 
-      
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Delivery Address</Text>
               <View style={[styles.inputBox, styles.textAreaBox]}>
@@ -279,7 +351,7 @@ export default function addOrder() {
               </View>
             </View>
 
-        
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Internal Notes (Optional)</Text>
               <View style={[styles.inputBox, styles.textAreaBox]}>
@@ -294,7 +366,7 @@ export default function addOrder() {
               </View>
             </View>
 
-      
+
             <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} activeOpacity={0.85}>
               <Ionicons name="create-outline" size={20} color="#fff" />
               <Text style={styles.submitBtnText}>Tạo đơn hàng</Text>

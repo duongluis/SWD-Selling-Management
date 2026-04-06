@@ -37,7 +37,7 @@ export default function addCustomer() {
       await updateDoc(doc(db, 'users', userDetail.email), {
         customer: arrayUnion(newCustomer),
       });
-      await setDoc(doc(db,'orders',newCustomer.name),{})
+      await setDoc(doc(db,'orders',newCustomer.phone),{})
       setUserDetail(prev => ({ ...prev, customer: [...(prev.customer || []), newCustomer] }));
       Alert.alert('Thành công', 'Đã lưu khách hàng!', [{ text: 'OK', onPress: () => router.back() }]);
     } catch (e) {
