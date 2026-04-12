@@ -45,7 +45,7 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true,
-      "baseUrl": "/tên-repo-của-bạn"
+      "baseUrl": "/SWD-Selling-Management"
     },
     "extra": {
       "router": {},

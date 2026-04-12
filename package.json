@@ -2,7 +2,7 @@
   "name": "swd-selling-management",
   "main": "expo-router/entry",
   "version": "1.0.0",
-  "homepage": "https://username.github.io/tên-repo",
+  "homepage": "https://duongluis.github.io/SWD-Selling-Management",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
