@@ -44,7 +44,8 @@
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": true,
+      "baseUrl": "/tên-repo-của-bạn"
     },
     "extra": {
       "router": {},
