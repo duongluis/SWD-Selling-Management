@@ -125,7 +125,7 @@ export default function LeaderboardView() {
 }
 
 const styles = StyleSheet.create({
-  container:               { flex: 1, backgroundColor: Colors.Background, width: Dimensions.get('screen').width, paddingTop: 30 },
+  container:               { flex: 1, backgroundColor: Colors.Background, width: Dimensions.get('screen').width, padding: 30 },
   header:                  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 16 },
   headerBtn:               { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.White, alignItems: 'center', justifyContent: 'center', shadowColor: Colors.Black, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
   headerTitle:             { fontSize: 17, fontWeight: '800', color: Colors.TextPrimary },

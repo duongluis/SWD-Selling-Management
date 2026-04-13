@@ -8,14 +8,14 @@ import { Dimensions, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, Vi
 import { db } from '../../config/firebaseConfig';
 
 const STATUS_CONFIG = {
-  PENDING: { color: Colors.Warning, bg: Colors.WarningLight, label: 'PENDING', icon: 'time-outline' },
-  SHIPPED: { color: Colors.Primary, bg: Colors.PrimaryLight, label: 'SHIPPED', icon: 'car-outline' },
-  COMPLETED: { color: Colors.Success, bg: Colors.SuccessLight, label: 'COMPLETED', icon: 'checkmark-circle' },
-  CONFIRMED: { color: Colors.Success, bg: Colors.SuccessLight, label: 'CONFIRMED', icon: 'checkmark-circle' },
+  PENDING: { color: Colors.Warning, bg: Colors.WarningLight, label: 'Đang chuẩn bị', icon: 'time-outline' },
+  SHIPPED: { color: Colors.Primary, bg: Colors.PrimaryLight, label: 'Đang lắp đặt', icon: 'car-outline' },
+  COMPLETED: { color: Colors.Success, bg: Colors.SuccessLight, label: 'Hoàn thành', icon: 'checkmark-circle' },
+  CONFIRMED: { color: Colors.Success, bg: Colors.SuccessLight, label: 'Xác nhận đơn', icon: 'checkmark-circle' },
 };
 
 const TABS = ['All', 'PENDING', 'SHIPPED', 'COMPLETED'];
-const TAB_LABELS = { All: 'All', PENDING: 'Pending', SHIPPED: 'Shipped', COMPLETED: 'Completed' };
+const TAB_LABELS = { All: 'Tất cả', PENDING: 'Đang chuẩn bị', SHIPPED: 'Đang lắp đặt', COMPLETED: 'Hoàn thành' };
 
 export default function OrderView() {
   const router = useRouter();
@@ -32,7 +32,9 @@ export default function OrderView() {
         if (customerList.length === 0) { setOrders([]); setLoading(false); return; }
 
         const customerPhone = customerList.map(c => c.phone).filter(Boolean);
+
         console.log("danh sach khach hang : ", customerPhone);
+        
         const allOrders = [];
 
         //
@@ -40,20 +42,22 @@ export default function OrderView() {
           try {
             const snap = await getDoc(
               doc(db, 'orders', name)
-              // , where('orders.customer', '==', name)
             );
-            // ).data().orders;
 
-            console.log("doc data: ", snap.data())
+            // console.log("doc data: ", snap.data())
 
             const workingOrder = snap.data().orders;
             workingOrder.forEach(orderSnap => {
-              console.log("doc data bên trong: ", orderSnap)
+              // console.log("doc data bên trong: ", orderSnap)
               allOrders.push(orderSnap)
             })
+
             console.log("danh sach don hang: ", allOrders)
+
           } catch (e) {
+
             console.log('Không có order cho:', name);
+            
             console.log(e);
           }
         }
@@ -92,39 +96,49 @@ export default function OrderView() {
 
   const renderOrder = ({ item }) => {
     const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.PENDING;
+    console.log("item: ", item)
     return (
-      <View style={styles.orderCard}>
-        <View style={styles.orderTop}>
-          <View style={[styles.orderIcon, { backgroundColor: cfg.color + '22' }]}>
-            <Ionicons name={cfg.icon} size={22} color={cfg.color} />
-          </View>
-          <View style={styles.orderMid}>
-            <Text style={styles.orderNumber}>Order #{item.id}</Text>
-            <Text style={styles.orderDate}>
-              {item.createdAt
-                ? new Date(item.createdAt).toLocaleDateString('vi-VN')
-                : 'Chưa có ngày'}
-            </Text>
-          </View>
-          <View style={styles.orderRight}>
-            <Text style={styles.amountText}>{formatAmount(item.items)}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-              <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+      // ✅ Bọc card bằng TouchableOpacity
+      <TouchableOpacity
+        activeOpacity={0.75}
+        onPress={() => router.push({
+          pathname: '/OrderView/[orderID]' ,
+          params: {orderID: item?.id, orderParam: JSON.stringify(item) }
+        })}
+      >
+        <View style={styles.orderCard}>
+          <View style={styles.orderTop}>
+            <View style={[styles.orderIcon, { backgroundColor: cfg.color + '22' }]}>
+              <Ionicons name={cfg.icon} size={22} color={cfg.color} />
+            </View>
+            <View style={styles.orderMid}>
+              <Text style={styles.orderNumber}>Đơn hàng số {item.id}</Text>
+              <Text style={styles.orderDate}>
+                {item.createdAt
+                  ? new Date(item.createdAt).toLocaleDateString('vi-VN')
+                  : 'Chưa có ngày'}
+              </Text>
+            </View>
+            <View style={styles.orderRight}>
+              <Text style={styles.amountText}>{formatAmount(item.items)}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
+                <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+              </View>
             </View>
           </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.orderBottom}>
+            <Ionicons name="person-outline" size={16} color={Colors.Gray} />
+            <Text style={styles.customerName}>{item.customer}</Text>
+            {item.items?.length > 0 && (
+              <Text style={styles.itemCount}>{item.items.length} sản phẩm</Text>
+            )}
+            <Ionicons name="chevron-forward" size={16} color={Colors.LightGray} />
+          </View>
         </View>
-
-        <View style={styles.divider} />
-
-        <TouchableOpacity style={styles.orderBottom} activeOpacity={0.6}>
-          <Ionicons name="person-outline" size={16} color={Colors.Gray} />
-          <Text style={styles.customerName}>{item.customer}</Text>
-          {item.items?.length > 0 && (
-            <Text style={styles.itemCount}>{item.items.length} sản phẩm</Text>
-          )}
-          <Ionicons name="chevron-forward" size={16} color={Colors.LightGray} />
-        </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -134,7 +148,7 @@ export default function OrderView() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Ionicons name="receipt-outline" size={22} color={Colors.Primary} />
-          <Text style={styles.title}>Orders</Text>
+          <Text style={styles.title}>Đơn hàng</Text>
         </View>
         <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/addOrder')} activeOpacity={0.85}>
           <Ionicons name="add" size={22} color={Colors.White} />
@@ -146,7 +160,7 @@ export default function OrderView() {
         <Ionicons name="search-outline" size={16} color={Colors.Gray} style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchBar}
-          placeholder="Search orders..."
+          placeholder="Tìm kiếm đơn hàng..."
           placeholderTextColor={Colors.LightGray}
           value={search}
           onChangeText={setSearch}

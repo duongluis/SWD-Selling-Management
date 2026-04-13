@@ -58,7 +58,7 @@ export default function CustomerView() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.label}>MANAGEMENT</Text>
+          {/* <Text style={styles.label}>MANAGEMENT</Text> */}
           <Text style={styles.title}>Khách hàng</Text>
         </View>
         <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/addCustomer')} activeOpacity={0.8}>

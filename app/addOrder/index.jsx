@@ -79,20 +79,16 @@ export default function addOrder() {
       { text: 'OK', onPress: () => router.replace('../(tabs)/home') }
     ]);
 
-    Platform.OS === 'web' ?router.replace('../(tabs)/home'):console.log(" move to order screen");
+    Platform.OS === 'web' ? router.replace('../(tabs)/home') : console.log(" move to order screen");
   };
 
   const handleDateChange = (event, date) => {
-    if (Platform.OS === 'android') {  
+    if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
     if (date) {
       setSelectedDate(date);
-      const formatted = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date
-        .getDate()
-        .toString()
-        .padStart(2, '0')}/${date.getFullYear()}`;
-      setOrderDate(formatted);
+      setOrderDate(date.toISOString()); 
     }
   };
 
@@ -132,80 +128,86 @@ export default function addOrder() {
               </View>
             </View>
 
-
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Order Date</Text>
 
-              <Pressable onPress={() => setShowDatePicker(true)}>
-                <View style={styles.inputBox} pointerEvents="none">
-                  <TextInput
-                    style={styles.input}
-                    placeholder="mm/dd/yyyy"
-                    placeholderTextColor="#B0B0C8"
-                    value={orderDate}
-                    editable={false}
+              {Platform.OS === 'web' ? (
+                <View style={styles.inputBox}>
+                  <input
+                    type="date"
+                    min={new Date().toISOString().split('T')[0]} // ← chỉ chọn từ hôm nay trở đi
+                    style={{
+                      flex: 1,
+                      border: 'none',
+                      outline: 'none',
+                      fontSize: 14,
+                      color: '#1A1A2E',
+                      backgroundColor: 'transparent',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                    }}
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      const [year, month, day] = e.target.value.split('-').map(Number);
+                      const date = new Date(year, month - 1, day);
+                      setSelectedDate(date);
+                      setOrderDate(date.toISOString()); // ✅ lưu ISO string để so sánh ngày dễ hơn
+                    }}
                   />
                   <Ionicons name="calendar-outline" size={18} color="#B0B0C8" />
                 </View>
-              </Pressable>
+              ) : (
+                // ✅ Mobile — bấm vào mở picker
+                <>
+                  <TouchableOpacity
+                    style={styles.inputBox}
+                    onPress={() => setShowDatePicker(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={orderDate ? styles.input : styles.inputPlaceholder}>
+                      {orderDate
+                        ? new Date(orderDate).toLocaleDateString('vi-VN')
+                        : 'Chọn ngày giao hàng...'}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={18} color="#B0B0C8" />
+                  </TouchableOpacity>
 
-              {Platform.OS === 'ios' && showDatePicker && (
-                <Modal transparent animationType="slide">
-                  <Pressable
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }}
-                    onPress={() => setShowDatePicker(false)}
-                  />
-                  <View style={{ backgroundColor: '#fff', padding: 16 }}>
-                    <DateTimePicker
-                      value={selectedDate}
-                      mode="date"
-                      display="spinner"
-                      onChange={handleDateChange}
-                    />
-                    <Pressable
-                      onPress={() => setShowDatePicker(false)}
-                      style={{ alignItems: 'center', padding: 12 }}
-                    >
-                      <Text style={{ color: '#6C63FF', fontWeight: '600' }}>Done</Text>
-                    </Pressable>
-                  </View>
-                </Modal>
-              )}
-
-              {/* Android: hiện picker trực tiếp */}
-              {Platform.OS === 'android' && showDatePicker && (
-                <DateTimePicker
-                  value={selectedDate}
-                  mode="date"
-                  display="default"
-                  onChange={handleDateChange}
-                />
-              )}
-
-              {/* Web: dùng input type date native */}
-              {Platform.OS === 'web' && showDatePicker && (
-                <input
-                  ref={webDateInputRef}
-                  type="date"
-                  value={selectedDate ? selectedDate.toISOString().split('T')[0] : ''}
-                  style={{
-                    position: 'absolute',
-                    opacity: 0,
-                    width: 0,
-                    height: 0,
-                    pointerEvents: 'none',
-                  }}
-                  onChange={(e) => {
-                    if (!e.target.value) return;
-                    const [year, month, day] = e.target.value.split('-').map(Number);
-                    const date = new Date(year, month - 1, day);
-                    setSelectedDate(date);
-                    const formatted = `${month.toString().padStart(2, '0')}/${day
-                      .toString()
-                      .padStart(2, '0')}/${year}`;
-                    setOrderDate(formatted);
-                  }}
-                />
+                  {showDatePicker && (
+                    <>
+                      {Platform.OS === 'ios' ? (
+                        <Modal transparent animationType="slide">
+                          <Pressable
+                            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }}
+                            onPress={() => setShowDatePicker(false)}
+                          />
+                          <View style={{ backgroundColor: '#fff', padding: 16 }}>
+                            <DateTimePicker
+                              value={selectedDate}
+                              mode="date"
+                              display="spinner"
+                              minimumDate={new Date()} // ← chỉ chọn từ hôm nay
+                              onChange={handleDateChange}
+                            />
+                            <Pressable
+                              onPress={() => setShowDatePicker(false)}
+                              style={{ alignItems: 'center', padding: 12 }}
+                            >
+                              <Text style={{ color: '#2563EB', fontWeight: '600' }}>Xong</Text>
+                            </Pressable>
+                          </View>
+                        </Modal>
+                      ) : (
+                        <DateTimePicker
+                          value={selectedDate}
+                          mode="date"
+                          display="default"
+                          minimumDate={new Date()} // ← chỉ chọn từ hôm nay
+                          onChange={handleDateChange}
+                        />
+                      )}
+                    </>
+                  )}
+                </>
               )}
             </View>
 

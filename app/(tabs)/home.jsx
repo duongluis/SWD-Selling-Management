@@ -2,7 +2,7 @@ import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/firebaseConfig';
@@ -18,41 +18,50 @@ export default function HomeView() {
   const customerList = userDetail?.customer || [];
   const totalCustomers = customerList.length;
 
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        if (customerList.length === 0) return;
+  const fetchOrders = async () => {
+    try {
+      if (customerList.length === 0) return;
 
-        const customerNames = customerList.map(c => c.name).filter(Boolean);
-        const allOrders = [];
+      const customerPhone = customerList.map(c => c.phone).filter(Boolean);
+      const allOrders = [];
 
-        for (const name of customerNames) {
-          try {
-            const snap = await getDocs(
-              query(collection(db, 'orders'), where('customer', '==', name))
-            );
-            snap.forEach(doc => allOrders.push({ ...doc.data(), docId: doc.id }));
-          } catch (e) { /* bỏ qua nếu không có order */ }
-        }
+      for (const name of customerPhone) {
+        try {
+          const snap = await getDoc(
+            doc(db, 'orders', name)
+          )
 
-        const revenue = allOrders.reduce((sum, order) => {
-          const orderTotal = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
-          return sum + orderTotal;
-        }, 0);
+          console.log("doc data: ", snap.data())
 
-        allOrders.sort((a, b) => {
-          const da = a.createdAt ? new Date(a.createdAt) : new Date(0);
-          const db2 = b.createdAt ? new Date(b.createdAt) : new Date(0);
-          return db2 - da;
-        });
-
-        setTotalOrders(allOrders.length);
-        setTotalRevenue(revenue);
-        setRecentOrders(allOrders.slice(0, 2));
-      } catch (e) {
-        console.error('❌ Lỗi fetch orders:', e);
+          const workingOrder = snap.data().orders;
+          workingOrder.forEach(orderSnap => {
+            console.log("doc data o home: ", orderSnap)
+            allOrders.push(orderSnap)
+          })
+        } catch (e) { }
       }
-    };
+
+      const revenue = allOrders.reduce((sum, order) => {
+        const orderTotal = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
+        return sum + orderTotal;
+      }, 0);
+
+      allOrders.sort((a, b) => {
+        const da = a.createdAt ? new Date(a.createdAt) : new Date(0);
+        const db2 = b.createdAt ? new Date(b.createdAt) : new Date(0);
+        return db2 - da;
+      });
+
+      setTotalOrders(allOrders.length);
+      setTotalRevenue(revenue);
+      setRecentOrders(allOrders.slice(0, 2));
+    } catch (e) {
+      console.error('❌ Lỗi fetch orders:', e);
+    }
+  };
+
+  useEffect(() => {
+    if (!userDetail) return;
 
     fetchOrders();
   }, [userDetail]);
@@ -61,17 +70,17 @@ export default function HomeView() {
     n.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
   const STATUS_CONFIG = {
-    PENDING:   { icon: 'time-outline',     color: Colors.Warning, bg: Colors.WarningLight },
-    SHIPPED:   { icon: 'car-outline',      color: Colors.Primary, bg: Colors.PrimaryLight },
+    PENDING: { icon: 'time-outline', color: Colors.Warning, bg: Colors.WarningLight },
+    SHIPPED: { icon: 'car-outline', color: Colors.Primary, bg: Colors.PrimaryLight },
     COMPLETED: { icon: 'checkmark-circle', color: Colors.Success, bg: Colors.SuccessLight },
     CONFIRMED: { icon: 'checkmark-circle', color: Colors.Success, bg: Colors.SuccessLight },
   };
 
   const quickActions = [
-    { name: 'New Order',  icon: 'cart-outline',       action: () => router.push('/addOrder')    },
-    { name: 'Customer',   icon: 'person-add-outline',  action: () => router.push('/addCustomer') },
-    { name: 'Report',     icon: 'podium-outline',      action: () => console.log('Report')       },
-    { name: 'Staff',      icon: 'people-outline',      action: () => console.log('Staff')        },
+    { name: 'Thêm đơn hàng', icon: 'cart-outline', action: () => router.push('/addOrder') },
+    { name: 'Thêm khách hàng', icon: 'person-add-outline', action: () => router.push('/addCustomer') },
+    { name: 'Báo cáo doanh thu', icon: 'podium-outline', action: () => console.log('Report') },
+    { name: 'Quản lý', icon: 'people-outline', action: () => console.log('Staff') },
   ];
 
   return (
@@ -95,10 +104,10 @@ export default function HomeView() {
 
       {/* Daily Summary */}
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>DAILY SUMMARY</Text>
+        <Text style={styles.sectionTitle}>DOANH THU HÀNG NGÀY</Text>
         <View style={styles.liveTag}>
           <View style={styles.liveDot} />
-          <Text style={styles.liveText}>LIVE UPDATES</Text>
+          <Text style={styles.liveText}>CẬP NHẬT GẦN ĐÂY</Text>
         </View>
       </View>
 
@@ -120,12 +129,12 @@ export default function HomeView() {
         <View style={styles.statBox}>
           <Ionicons name="receipt-outline" size={18} color={Colors.LightBlue} style={styles.statIconWrap} />
           <Text style={styles.statNumber}>{totalOrders}</Text>
-          <Text style={styles.statLabel}>TOTAL ORDERS</Text>
+          <Text style={styles.statLabel}>TỔNG SỐ ĐƠN HÀNG</Text>
         </View>
         <View style={[styles.statBox, { marginLeft: 12 }]}>
           <Ionicons name="people-outline" size={18} color={Colors.LightBlue} style={styles.statIconWrap} />
           <Text style={styles.statNumber}>{totalCustomers}</Text>
-          <Text style={styles.statLabel}>TOTAL CUSTOMERS</Text>
+          <Text style={styles.statLabel}>TỔNG SỐ KHÁCH HÀNG</Text>
         </View>
       </View>
 
@@ -147,9 +156,10 @@ export default function HomeView() {
       {/* Recent Orders */}
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>RECENT ORDERS</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAll}>View All</Text>
+          <Text style={styles.sectionTitle}>ĐƠN HÀNG GẦN ĐÂY</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/order') }>
+            <Text style={styles.viewAll}>XEM TẤT CẢ</Text>
           </TouchableOpacity>
         </View>
 

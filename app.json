@@ -24,7 +24,8 @@
     "web": {
       "output": "static",
       "favicon": "./assets/images/icon.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "publicPath": "/SWD-Selling-Management/"
     },
     "plugins": [
       "expo-router",
@@ -40,6 +41,14 @@
           }
         }
       ],
+      // [
+      //   "expo-font",
+      //   {
+      //     "fonts": [
+      //       "node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf"
+      //     ]
+      //   }
+      // ],
       "@react-native-community/datetimepicker"
     ],
     "experiments": {

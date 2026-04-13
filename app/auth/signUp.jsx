@@ -41,7 +41,7 @@ export default function SignUp() {
       member,
       customer: [],
     };
-    await setDoc(doc(db, 'users', user.uid), data);
+    await setDoc(doc(db, 'users', gmail), data);
   };
 
   const CheckPassword = () => {
