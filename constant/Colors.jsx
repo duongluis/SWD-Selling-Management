@@ -38,7 +38,7 @@ const Colors = {
     White: '#FFFFFF',
     Black: '#000000',
     Gray: '#9E9E9E',
-    LightGray: '#C5C5C5',
+    LightGray: '#858383',
     DividerLight: '#F0F0F0',
     Orange: '#FF6B35',
     Purple: '#9C27B0',

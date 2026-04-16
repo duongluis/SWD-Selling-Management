@@ -1,28 +1,42 @@
-import Colors from '@/constant/Colors';
-import { Ionicons } from '@expo/vector-icons';
-import { sendPasswordResetEmail } from '@firebase/auth';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import auth from '../../config/firebaseConfig';
+import Colors from "@/constant/Colors";
+import { Ionicons } from "@expo/vector-icons";
+import { sendPasswordResetEmail } from "@firebase/auth";
+import { router } from "expo-router";
+import { useState } from "react";
+import {
+  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import auth from "../../config/firebaseConfig";
 
 export default function ResetPassword() {
-  const [gmail, setGmail] = useState('');
+  const [gmail, setGmail] = useState("");
 
   const sendResetLink = async () => {
     try {
       await sendPasswordResetEmail(auth, gmail);
-      Alert.alert('Thông báo', 'Vui lòng kiểm tra gmail để lấy link đặt lại mật khẩu.');
+      Alert.alert(
+        "Thông báo",
+        "Vui lòng kiểm tra gmail để lấy link đặt lại mật khẩu.",
+      );
     } catch (e) {
       console.log(e);
-      Alert.alert('Lỗi', e.message);
+      Alert.alert("Lỗi", e.message);
     }
   };
 
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Ionicons name="chevron-back-circle-outline" size={28} color={Colors.TextPrimary} />
+        <Ionicons
+          name="chevron-back-circle-outline"
+          size={28}
+          color={Colors.TextPrimary}
+        />
       </TouchableOpacity>
 
       <View style={styles.icon}>
@@ -31,7 +45,8 @@ export default function ResetPassword() {
 
       <Text style={styles.title}>Reset Password</Text>
       <Text style={styles.subtitle}>
-        Nhập địa chỉ email để chúng tôi gửi cho bạn thư xác nhận đặt lại mật khẩu
+        Nhập địa chỉ email để chúng tôi gửi cho bạn thư xác nhận đặt lại mật
+        khẩu
       </Text>
 
       <View style={styles.formGroup}>
@@ -51,7 +66,7 @@ export default function ResetPassword() {
         <Text style={styles.resetButtonText}>Send Reset Link</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => router.push('/auth/signIn')}>
+      <TouchableOpacity onPress={() => router.push("/auth/signIn")}>
         <Text style={styles.link}>Back to Login</Text>
       </TouchableOpacity>
     </View>
@@ -59,15 +74,54 @@ export default function ResetPassword() {
 }
 
 const styles = StyleSheet.create({
-  container:       { width: 350, marginTop: 50, alignSelf: 'center', padding: 20, borderWidth: 1, borderColor: Colors.Border, borderRadius: 12, backgroundColor: Colors.White },
-  backButton:      { marginBottom: 10 },
-  icon:            { alignItems: 'center', marginBottom: 16 },
-  title:           { textAlign: 'center', fontSize: 22, fontWeight: '800', color: Colors.TextPrimary, marginBottom: 10 },
-  subtitle:        { fontSize: 14, color: Colors.TextSecondary, textAlign: 'center', marginBottom: 20 },
-  formGroup:       { marginBottom: 16 },
-  label:           { fontSize: 13, fontWeight: '600', color: Colors.TextPrimary, marginBottom: 6 },
-  input:           { padding: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.Border, fontSize: 14, color: Colors.TextPrimary },
-  resetButton:     { width: '100%', padding: 14, backgroundColor: Colors.Primary, borderRadius: 8, alignItems: 'center', marginBottom: 16 },
-  resetButtonText: { color: Colors.White, fontWeight: '700', fontSize: 15 },
-  link:            { textAlign: 'center', fontSize: 13, color: Colors.Blue, marginTop: 8 },
+  container: {
+    width: 350,
+    marginTop: 50,
+    alignSelf: "center",
+    padding: 20,
+    borderWidth: 1,
+    borderColor: Colors.Border,
+    borderRadius: 12,
+    backgroundColor: Colors.White,
+  },
+  backButton: { marginBottom: 10 },
+  icon: { alignItems: "center", marginBottom: 16 },
+  title: {
+    textAlign: "center",
+    fontSize: 22,
+    fontWeight: "800",
+    color: Colors.TextPrimary,
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: Colors.TextSecondary,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  formGroup: { marginBottom: 16 },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.TextPrimary,
+    marginBottom: 6,
+  },
+  input: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.Border,
+    fontSize: 14,
+    color: Colors.TextPrimary,
+  },
+  resetButton: {
+    width: "100%",
+    padding: 14,
+    backgroundColor: Colors.Primary,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  resetButtonText: { color: Colors.White, fontWeight: "700", fontSize: 15 },
+  link: { textAlign: "center", fontSize: 13, color: Colors.Blue, marginTop: 8 },
 });

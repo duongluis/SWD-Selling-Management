@@ -1,16 +1,39 @@
-import Colors from '@/constant/Colors';
-import { UserDetailContext } from '@/context/UserDetailContext';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { doc, getDoc } from 'firebase/firestore';
-import { useContext, useEffect, useState } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { db } from '../../config/firebaseConfig';
+import Colors from "@/constant/Colors";
+import { UserDetailContext } from "@/context/UserDetailContext";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { doc, getDoc } from "firebase/firestore";
+import { useContext, useEffect, useState } from "react";
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
+import { db } from "../../config/firebaseConfig";
+
+const isWeb = Platform.OS === "web";
+
+function StatCard({ icon, label, value, sub, color, bg }) {
+  return (
+    <View style={[styles.statCard, isWeb && styles.statCardWeb]}>
+      <View style={[styles.statIconWrap, { backgroundColor: bg }]}>
+        <Ionicons name={icon} size={18} color={color} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.statLabel}>{label}</Text>
+        <Text style={styles.statValue}>{value}</Text>
+        {sub && <Text style={styles.statSub}>{sub}</Text>}
+      </View>
+    </View>
+  );
+}
 
 export default function HomeView() {
   const router = useRouter();
   const { userDetail } = useContext(UserDetailContext);
-
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
   const [recentOrders, setRecentOrders] = useState([]);
@@ -21,179 +44,296 @@ export default function HomeView() {
   const fetchOrders = async () => {
     try {
       if (customerList.length === 0) return;
-
-      const customerPhone = customerList.map(c => c.phone).filter(Boolean);
+      const customerPhone = customerList.map((c) => c.phone).filter(Boolean);
       const allOrders = [];
 
-      for (const name of customerPhone) {
+      for (const phone of customerPhone) {
         try {
-          const snap = await getDoc(
-            doc(db, 'orders', name)
-          )
-
-          console.log("doc data: ", snap.data())
-
-          const workingOrder = snap.data().orders;
-          workingOrder.forEach(orderSnap => {
-            console.log("doc data o home: ", orderSnap)
-            allOrders.push(orderSnap)
-          })
+          const snap = await getDoc(doc(db, "orders", phone));
+          if (!snap.exists()) continue;
+          const workingOrder = snap.data().orders || [];
+          workingOrder.forEach((o) => allOrders.push(o));
         } catch (e) { }
       }
 
       const revenue = allOrders.reduce((sum, order) => {
-        const orderTotal = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
-        return sum + orderTotal;
+        return (
+          sum +
+          (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0)
+        );
       }, 0);
 
-      allOrders.sort((a, b) => {
-        const da = a.createdAt ? new Date(a.createdAt) : new Date(0);
-        const db2 = b.createdAt ? new Date(b.createdAt) : new Date(0);
-        return db2 - da;
-      });
+      allOrders.sort(
+        (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0),
+      );
 
       setTotalOrders(allOrders.length);
       setTotalRevenue(revenue);
-      setRecentOrders(allOrders.slice(0, 2));
+      setRecentOrders(allOrders.slice(0, 5));
     } catch (e) {
-      console.error('❌ Lỗi fetch orders:', e);
+      console.error(e);
     }
   };
 
   useEffect(() => {
     if (!userDetail) return;
-
     fetchOrders();
   }, [userDetail]);
 
   const formatCurrency = (n) =>
-    n.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
+    (n || 0).toLocaleString("vi-VN", { style: "currency", currency: "VND" });
 
   const STATUS_CONFIG = {
-    PENDING: { icon: 'time-outline', color: Colors.Warning, bg: Colors.WarningLight },
-    SHIPPED: { icon: 'car-outline', color: Colors.Primary, bg: Colors.PrimaryLight },
-    COMPLETED: { icon: 'checkmark-circle', color: Colors.Success, bg: Colors.SuccessLight },
-    CONFIRMED: { icon: 'checkmark-circle', color: Colors.Success, bg: Colors.SuccessLight },
+    PENDING: {
+      color: "#F59E0B",
+      bg: "#FFFBEB",
+      label: "Pending",
+      dot: "#F59E0B",
+    },
+    SHIPPED: {
+      color: "#3B82F6",
+      bg: "#EFF6FF",
+      label: "Shipped",
+      dot: "#3B82F6",
+    },
+    COMPLETED: {
+      color: "#10B981",
+      bg: "#ECFDF5",
+      label: "Completed",
+      dot: "#10B981",
+    },
+    CONFIRMED: {
+      color: "#10B981",
+      bg: "#ECFDF5",
+      label: "Confirmed",
+      dot: "#10B981",
+    },
   };
 
   const quickActions = [
-    { name: 'Thêm đơn hàng', icon: 'cart-outline', action: () => router.push('/addOrder') },
-    { name: 'Thêm khách hàng', icon: 'person-add-outline', action: () => router.push('/addCustomer') },
-    { name: 'Báo cáo doanh thu', icon: 'podium-outline', action: () => console.log('Report') },
-    { name: 'Quản lý', icon: 'people-outline', action: () => console.log('Staff') },
+    {
+      name: "New Order",
+      icon: "add-circle-outline",
+      action: () => router.push("/addOrder"),
+      color: "#3B82F6",
+      bg: "#EFF6FF",
+    },
+    {
+      name: "New Customer",
+      icon: "person-add-outline",
+      action: () => router.push("/addCustomer"),
+      color: "#8B5CF6",
+      bg: "#F5F3FF",
+    },
+    {
+      name: "View Reports",
+      icon: "bar-chart-outline",
+      action: () => { },
+      color: "#10B981",
+      bg: "#ECFDF5",
+    },
+    {
+      name: "Settings",
+      icon: "settings-outline",
+      action: () => { },
+      color: "#64748B",
+      bg: "#F1F5F9",
+    },
   ];
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={22} color={Colors.White} />
-          </View>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Page header — only on mobile */}
+      {!isWeb && (
+        <View style={styles.mobileHeader}>
           <View>
-            <Text style={styles.dashboardLabel}>DASHBOARD</Text>
+            <Text style={styles.greeting}>Good morning 👋</Text>
             <Text style={styles.userName}>{userDetail?.name}</Text>
           </View>
-        </View>
-        <TouchableOpacity style={styles.bellButton}>
-          <Ionicons name="notifications-outline" size={22} color={Colors.TextPrimary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Daily Summary */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>DOANH THU HÀNG NGÀY</Text>
-        <View style={styles.liveTag}>
-          <View style={styles.liveDot} />
-          <Text style={styles.liveText}>CẬP NHẬT GẦN ĐÂY</Text>
-        </View>
-      </View>
-
-      {/* Sales Card */}
-      <View style={styles.salesCard}>
-        <View style={styles.salesCardTopRow}>
-          <Text style={styles.salesCardLabel}>Tổng doanh thu</Text>
-          <Ionicons name="stats-chart-outline" size={18} color="rgba(255,255,255,0.7)" />
-        </View>
-        <Text style={styles.salesAmount}>{formatCurrency(totalRevenue)}</Text>
-        <View style={styles.percentBadge}>
-          <Ionicons name="receipt-outline" size={13} color={Colors.White} />
-          <Text style={styles.percentText}> {totalOrders} đơn hàng</Text>
-        </View>
-      </View>
-
-      {/* Stats Row */}
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <Ionicons name="receipt-outline" size={18} color={Colors.LightBlue} style={styles.statIconWrap} />
-          <Text style={styles.statNumber}>{totalOrders}</Text>
-          <Text style={styles.statLabel}>TỔNG SỐ ĐƠN HÀNG</Text>
-        </View>
-        <View style={[styles.statBox, { marginLeft: 12 }]}>
-          <Ionicons name="people-outline" size={18} color={Colors.LightBlue} style={styles.statIconWrap} />
-          <Text style={styles.statNumber}>{totalCustomers}</Text>
-          <Text style={styles.statLabel}>TỔNG SỐ KHÁCH HÀNG</Text>
-        </View>
-      </View>
-
-      {/* Quick Actions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
-        <View style={styles.actionsRow}>
-          {quickActions.map((action) => (
-            <View key={action.name} style={styles.actionItem}>
-              <TouchableOpacity style={styles.actionButton} onPress={action.action}>
-                <Ionicons name={action.icon} size={22} color={Colors.LightBlue} />
-              </TouchableOpacity>
-              <Text style={styles.actionText}>{action.name}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* Recent Orders */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>ĐƠN HÀNG GẦN ĐÂY</Text>
-          <TouchableOpacity
-            onPress={() => router.push('/(tabs)/order') }>
-            <Text style={styles.viewAll}>XEM TẤT CẢ</Text>
+          <TouchableOpacity style={styles.notifBtn}>
+            <Ionicons
+              name="notifications-outline"
+              size={22}
+              color={Colors.TextPrimary}
+            />
           </TouchableOpacity>
         </View>
+      )}
 
-        {recentOrders.length === 0 ? (
-          <View style={styles.emptyActivity}>
-            <Ionicons name="receipt-outline" size={32} color={Colors.LightGray} />
-            <Text style={styles.emptyActivityText}>Chưa có đơn hàng nào</Text>
+      {/* Welcome banner */}
+      {isWeb && (
+        <View style={styles.welcomeBanner}>
+          <View>
+            <Text style={styles.welcomeTitle}>
+              Hello, {userDetail?.name}{/*.split(" ").pop()*/}
+            </Text>
+            <Text style={styles.welcomeSub}>
+              Here's what's happening with your business today.
+            </Text>
           </View>
-        ) : (
-          recentOrders.map((order) => {
-            const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
-            const orderTotal = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
-            return (
-              <View key={order.id || order.docId} style={styles.activityItem}>
-                <View style={[styles.activityIconWrap, { backgroundColor: cfg.bg }]}>
-                  <Ionicons name={cfg.icon} size={20} color={cfg.color} />
-                </View>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityTitle}>Order #{order.id}</Text>
-                  <Text style={styles.activityDetail}>{order.customer}</Text>
-                </View>
-                <View style={styles.activityRight}>
-                  <Text style={styles.activityAmount}>{formatCurrency(orderTotal)}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-                    <Text style={[styles.statusText, { color: cfg.color }]}>{order.status}</Text>
-                  </View>
-                </View>
-              </View>
-            );
-          })
-        )}
+          <View style={styles.welcomeActions}>
+            <TouchableOpacity
+              style={styles.welcomeBtn}
+              onPress={() => router.push("/addOrder")}
+            >
+              <Ionicons name="add" size={16} color={Colors.White} />
+              <Text style={styles.welcomeBtnText}>Đơn hàng mới</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Stats grid */}
+      <View style={[styles.statsGrid, isWeb && styles.statsGridWeb]}>
+        <StatCard
+          icon="cash-outline"
+          label="Doanh Thu"
+          value={formatCurrency(totalRevenue)}
+          color="#10B981"
+          bg="#ECFDF5"
+        />
+        <StatCard
+          icon="receipt-outline"
+          label="Tổng Số Đơn Hàng"
+          value={String(totalOrders)}
+          // sub="all time"
+          color="#3B82F6"
+          bg="#EFF6FF"
+        />
+        <StatCard
+          icon="people-outline"
+          label="Số Lượng Khách Hàng Đã Thêm"
+          value={String(totalCustomers)}
+          // sub="registered"
+          color="#8B5CF6"
+          bg="#F5F3FF"
+        />
+        <StatCard
+          icon="trending-up-outline"
+          label="Doanh Thu Trung Bình"
+          value={
+            totalOrders > 0 ? formatCurrency(totalRevenue / totalOrders) : "0đ"
+          }
+          color="#F59E0B"
+          bg="#FFFBEB"
+        />
       </View>
 
-      <View style={{ height: 24 }} />
+      {/* Content grid — web 2 columns */}
+      <View style={[styles.contentGrid, isWeb && styles.contentGridWeb]}>
+        {/* Recent orders */}
+        <View style={[styles.card, isWeb && { flex: 2 }]}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Đơn Hàng Gần Đây</Text>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/order")}>
+              <Text style={styles.cardLink}>View all →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {recentOrders.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="receipt-outline" size={32} color="#CBD5E1" />
+              <Text style={styles.emptyText}>No orders yet</Text>
+            </View>
+          ) : (
+            recentOrders.map((order) => {
+              const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
+              const total = (order.items || []).reduce(
+                (s, p) => s + (p.price * p.qty || 0),
+                0,
+              );
+              return (
+                <View key={order.id} style={styles.orderRow}>
+                  <View
+                    style={[styles.orderDot, { backgroundColor: cfg.dot }]}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.orderRowId}>#{order.id}</Text>
+                    <Text style={styles.orderRowCustomer}>
+                      {order.customer}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={styles.orderRowAmount}>
+                      {formatCurrency(total)}
+                    </Text>
+                    <View
+                      style={[styles.statusPill, { backgroundColor: cfg.bg }]}
+                    >
+                      <Text
+                        style={[styles.statusPillText, { color: cfg.color }]}
+                      >
+                        {cfg.label}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+
+        {/* Quick actions */}
+        <View style={[styles.card, isWeb && { flex: 1 }]}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Quick Actions</Text>
+          </View>
+          <View style={styles.quickGrid}>
+            {quickActions.map((a) => (
+              <TouchableOpacity
+                key={a.name}
+                style={styles.quickItem}
+                onPress={a.action}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.quickIcon, { backgroundColor: a.bg }]}>
+                  <Ionicons name={a.icon} size={20} color={a.color} />
+                </View>
+                <Text style={styles.quickLabel}>{a.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Customer summary */}
+          <View style={styles.cardDivider} />
+          <Text style={styles.cardSubtitle}>Recent Customers</Text>
+          {customerList.slice(0, 3).map((c, i) => (
+            <View key={i} style={styles.customerRow}>
+              <View
+                style={[
+                  styles.customerAvatar,
+                  { backgroundColor: ["#3B82F6", "#8B5CF6", "#10B981"][i % 3] },
+                ]}
+              >
+                <Text style={styles.customerAvatarText}>
+                  {c.name
+                    ?.trim()
+                    .split(/\s+/)
+                    .map((n) => n[0])
+                    .join("")
+                    .toUpperCase()
+                    .slice(0, 2) || "?"}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.customerName}>{c.name}</Text>
+                <Text style={styles.customerPhone}>
+                  {c.phone || "No phone"}
+                </Text>
+              </View>
+            </View>
+          ))}
+          {customerList.length === 0 && (
+            <Text style={styles.emptyText}>No customers yet</Text>
+          )}
+        </View>
+      </View>
+
+      <View style={{ height: isWeb ? 32 : 100 }} />
     </ScrollView>
   );
 }
@@ -201,255 +341,197 @@ export default function HomeView() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    width: Dimensions.get('window').width,
-    backgroundColor: Colors.Background,
-    paddingHorizontal: 16,
-    paddingTop: 30,
+    backgroundColor: "#F8FAFC",
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  scrollContent: {
+    paddingHorizontal: isWeb ? 32 : 16,
+    paddingTop: isWeb ? 28 : 16,
+  },
+
+  // Mobile header
+  mobileHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#B0BEC5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  dashboardLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.Gray,
-    letterSpacing: 1,
-  },
+  greeting: { fontSize: 12, color: "#64748B", fontWeight: "500" },
   userName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.TextPrimary,
-  },
-  bellButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.White,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.Black,
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.Gray,
-    letterSpacing: 1,
-  },
-  liveTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: Colors.Success,
-    marginRight: 4,
-  },
-  liveText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.Success,
-    letterSpacing: 0.5,
-  },
-  salesCard: {
-    backgroundColor: Colors.Primary,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: Colors.Primary,
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-  },
-  salesCardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  salesCardLabel: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  salesAmount: {
-    color: Colors.White,
-    fontSize: 28,
-    fontWeight: '800',
-    marginBottom: 12,
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#0F172A",
     letterSpacing: -0.5,
   },
-  percentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  percentText: {
-    color: Colors.White,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    marginBottom: 20,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: Colors.White,
-    padding: 14,
-    borderRadius: 12,
-    shadowColor: Colors.Black,
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  statIconWrap: {
-    marginBottom: 8,
-  },
-  statNumber: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Colors.TextPrimary,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.Gray,
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  actionItem: {
-    flex: 1,
-    alignItems: 'center',
-    marginHorizontal: 4,
-  },
-  actionButton: {
-    backgroundColor: Colors.White,
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.Black,
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-    marginBottom: 6,
-  },
-  actionText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.TextSecondary,
-    textAlign: 'center',
-  },
-  viewAll: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.Primary,
-  },
-  activityItem: {
-    backgroundColor: Colors.White,
-    borderRadius: 12,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    shadowColor: Colors.Black,
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  activityIconWrap: {
+  notifBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  activityContent: {
-    flex: 1,
+
+  // Welcome banner (web)
+  welcomeBanner: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 28,
   },
-  activityTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.TextPrimary,
+  welcomeTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.5,
+    marginBottom: 4,
+  },
+  welcomeSub: { fontSize: 14, color: "#64748B", fontWeight: "400" },
+  welcomeActions: { flexDirection: "row", gap: 8 },
+  welcomeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  welcomeBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "600" },
+
+  // Stats
+  statsGrid: { flexDirection: "column", gap: 10, marginBottom: 20 },
+  statsGridWeb: { flexDirection: "row", gap: 16, marginBottom: 24 },
+  statCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  statCardWeb: { flex: 1 },
+  statIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statLabel: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "500",
     marginBottom: 2,
   },
-  activityDetail: {
+  statValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.5,
+  },
+  statSub: { fontSize: 11, color: "#94A3B8", marginTop: 1 },
+
+  // Content grid
+  contentGrid: { flexDirection: "column", gap: 16 },
+  contentGridWeb: { flexDirection: "row", gap: 16, alignItems: "flex-start" },
+
+  // Card
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  cardTitle: { fontSize: 15, fontWeight: "700", color: "#0F172A" },
+  cardLink: { fontSize: 13, color: "#3B82F6", fontWeight: "500" },
+  cardDivider: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 14 },
+  cardSubtitle: {
     fontSize: 12,
-    color: Colors.Gray,
+    fontWeight: "700",
+    color: "#94A3B8",
+    letterSpacing: 0.5,
+    marginBottom: 10,
   },
-  activityRight: {
-    alignItems: 'flex-end',
-    gap: 4,
+
+  // Order row
+  orderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F8FAFC",
+    gap: 10,
   },
-  activityAmount: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.TextPrimary,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  statusText: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  emptyActivity: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-    gap: 8,
-    backgroundColor: Colors.White,
-    borderRadius: 12,
-  },
-  emptyActivityText: {
+  orderDot: { width: 8, height: 8, borderRadius: 4 },
+  orderRowId: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  orderRowCustomer: { fontSize: 12, color: "#64748B", marginTop: 1 },
+  orderRowAmount: {
     fontSize: 13,
-    color: Colors.LightGray,
-    fontWeight: '500',
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 3,
   },
+  statusPill: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 20 },
+  statusPillText: { fontSize: 10, fontWeight: "700" },
+
+  // Quick actions
+  quickGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  quickItem: {
+    width: "47%",
+    alignItems: "center",
+    padding: 14,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  quickIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  quickLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#374151",
+    textAlign: "center",
+  },
+
+  // Customer row
+  customerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 7,
+  },
+  customerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customerAvatarText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
+  customerName: { fontSize: 13, fontWeight: "600", color: "#0F172A" },
+  customerPhone: { fontSize: 11, color: "#94A3B8" },
+
+  // Empty
+  emptyCard: { alignItems: "center", paddingVertical: 32, gap: 8 },
+  emptyText: { fontSize: 13, color: "#94A3B8", textAlign: "center" },
 });

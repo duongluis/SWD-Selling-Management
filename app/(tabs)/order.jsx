@@ -1,27 +1,89 @@
-import Colors from '@/constant/Colors';
-import { UserDetailContext } from '@/context/UserDetailContext';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { doc, getDoc } from 'firebase/firestore';
-import React, { useContext, useEffect, useState } from 'react';
-import { Dimensions, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { db } from '../../config/firebaseConfig';
+import Colors from "@/constant/Colors";
+import { UserDetailContext } from "@/context/UserDetailContext";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { doc, getDoc } from "firebase/firestore";
+import React, { useContext, useEffect, useState } from "react";
+import {
+  Dimensions,
+  FlatList,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { db } from "../../config/firebaseConfig";
+
+const isWeb = Platform.OS === "web";
 
 const STATUS_CONFIG = {
-  PENDING: { color: Colors.Warning, bg: Colors.WarningLight, label: 'Đang chuẩn bị', icon: 'time-outline' },
-  SHIPPED: { color: Colors.Primary, bg: Colors.PrimaryLight, label: 'Đang lắp đặt', icon: 'car-outline' },
-  COMPLETED: { color: Colors.Success, bg: Colors.SuccessLight, label: 'Hoàn thành', icon: 'checkmark-circle' },
-  CONFIRMED: { color: Colors.Success, bg: Colors.SuccessLight, label: 'Xác nhận đơn', icon: 'checkmark-circle' },
+  PENDING: {
+    color: "#F59E0B",
+    bg: "#FFFBEB",
+    border: "#FDE68A",
+    label: "Chờ lắp đặt",
+    icon: "time-outline",
+  },
+  SHIPPED: {
+    color: "#3B82F6",
+    bg: "#EFF6FF",
+    border: "#BFDBFE",
+    label: "Đang giao hàng",
+    icon: "car-outline",
+  },
+  CONFIRMED: {
+    color: "#8B5CF6",
+    bg: "#F5F3FF",
+    border: "#DDD6FE",
+    label: "Đã thanh toán",
+    icon: "card-outline",
+  },
+  COMPLETED: {
+    color: "#10B981",
+    bg: "#ECFDF5",
+    border: "#A7F3D0",
+    label: "Hoàn thành",
+    icon: "checkmark-circle",
+  },
 };
 
-const TABS = ['All', 'PENDING', 'SHIPPED', 'COMPLETED'];
-const TAB_LABELS = { All: 'Tất cả', PENDING: 'Đang chuẩn bị', SHIPPED: 'Đang lắp đặt', COMPLETED: 'Hoàn thành' };
+const TABS = ["All", "PENDING", "SHIPPED", "CONFIRMED", "COMPLETED"];
+const TAB_LABELS = {
+  All: "Tất cả",
+  PENDING: "Chờ lắp đặt",
+  SHIPPED: "Đang giao hàng",
+  CONFIRMED: "Đã thanh toán",
+  COMPLETED: "Hoàn thành",
+};
+
+function getInitials(name) {
+  if (!name) return "?";
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+const AVATAR_COLORS = [
+  "#3B82F6",
+  "#8B5CF6",
+  "#10B981",
+  "#F59E0B",
+  "#EF4444",
+  "#06B6D4",
+];
 
 export default function OrderView() {
   const router = useRouter();
   const { userDetail } = useContext(UserDetailContext);
-  const [filter, setFilter] = useState('All');
-  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState("All");
+  const [search, setSearch] = useState("");
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,40 +91,26 @@ export default function OrderView() {
     const fetchOrders = async () => {
       try {
         const customerList = userDetail?.customer || [];
-        if (customerList.length === 0) { setOrders([]); setLoading(false); return; }
+        if (customerList.length === 0) {
+          setOrders([]);
+          setLoading(false);
+          return;
+        }
 
-        const customerPhone = customerList.map(c => c.phone).filter(Boolean);
-
-        console.log("danh sach khach hang : ", customerPhone);
-        
+        const customerPhone = customerList.map((c) => c.phone).filter(Boolean);
         const allOrders = [];
 
-        //
-        for (const name of customerPhone) {
+        for (const phone of customerPhone) {
           try {
-            const snap = await getDoc(
-              doc(db, 'orders', name)
-            );
-
-            // console.log("doc data: ", snap.data())
-
-            const workingOrder = snap.data().orders;
-            workingOrder.forEach(orderSnap => {
-              // console.log("doc data bên trong: ", orderSnap)
-              allOrders.push(orderSnap)
-            })
-
-            console.log("danh sach don hang: ", allOrders)
-
+            const snap = await getDoc(doc(db, "orders", phone));
+            if (!snap.exists()) continue;
+            const workingOrder = snap.data().orders || [];
+            workingOrder.forEach((o) => allOrders.push(o));
           } catch (e) {
-
-            console.log('Không có order cho:', name);
-            
-            console.log(e);
+            console.log("Không có order cho:", phone);
           }
         }
 
-        // Sort mới nhất lên đầu
         allOrders.sort((a, b) => {
           const da = a.createdAt ? new Date(a.createdAt) : new Date(0);
           const db2 = b.createdAt ? new Date(b.createdAt) : new Date(0);
@@ -71,73 +119,110 @@ export default function OrderView() {
 
         setOrders(allOrders);
       } catch (e) {
-        console.error(' Lỗi fetch orders:', e);
+        console.error("Lỗi fetch orders:", e);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchOrders();
+    if (userDetail) fetchOrders();
   }, [userDetail]);
 
-  const filteredOrders = orders.filter(order => {
-    const matchFilter = filter === 'All' || order.status === filter;
+  const filteredOrders = orders.filter((order) => {
+    const matchFilter = filter === "All" || order.status === filter;
     const matchSearch =
-      (order.customer || '').toLowerCase().includes(search.toLowerCase()) ||
-      (order.id || '').includes(search);
+      (order.customer || "").toLowerCase().includes(search.toLowerCase()) ||
+      (order.id || "").includes(search);
     return matchFilter && matchSearch;
   });
 
   const formatAmount = (items) => {
-    if (!items || items.length === 0) return '0đ';
-    const total = items.reduce((sum, p) => sum + (p.price * p.qty || 0), 0);
-    return total.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
+    if (!items?.length) return "0đ";
+    return items
+      .reduce((s, p) => s + (p.price * p.qty || 0), 0)
+      .toLocaleString("vi-VN", { style: "currency", currency: "VND" });
   };
 
-  const renderOrder = ({ item }) => {
+  const counts = {
+    All: orders.length,
+    PENDING: orders.filter((o) => o.status === "PENDING").length,
+    SHIPPED: orders.filter((o) => o.status === "SHIPPED").length,
+    CONFIRMED: orders.filter((o) => o.status === "CONFIRMED").length,
+    COMPLETED: orders.filter((o) => o.status === "COMPLETED").length,
+  };
+
+  const totalRevenue = orders.reduce(
+    (sum, o) =>
+      sum + (o.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0),
+    0,
+  );
+
+  const renderOrder = ({ item, index }) => {
     const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.PENDING;
-    console.log("item: ", item)
     return (
-      // ✅ Bọc card bằng TouchableOpacity
       <TouchableOpacity
         activeOpacity={0.75}
-        onPress={() => router.push({
-          pathname: '/OrderView/[orderID]' ,
-          params: {orderID: item?.id, orderParam: JSON.stringify(item) }
-        })}
+        style={styles.orderRow}
+        onPress={() =>
+          router.push({
+            pathname: "/OrderView/[orderID]",
+            params: { orderID: item?.id, orderParam: JSON.stringify(item) },
+          })
+        }
       >
-        <View style={styles.orderCard}>
-          <View style={styles.orderTop}>
-            <View style={[styles.orderIcon, { backgroundColor: cfg.color + '22' }]}>
-              <Ionicons name={cfg.icon} size={22} color={cfg.color} />
-            </View>
-            <View style={styles.orderMid}>
-              <Text style={styles.orderNumber}>Đơn hàng số {item.id}</Text>
-              <Text style={styles.orderDate}>
-                {item.createdAt
-                  ? new Date(item.createdAt).toLocaleDateString('vi-VN')
-                  : 'Chưa có ngày'}
-              </Text>
-            </View>
-            <View style={styles.orderRight}>
-              <Text style={styles.amountText}>{formatAmount(item.items)}</Text>
-              <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-                <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.orderBottom}>
-            <Ionicons name="person-outline" size={16} color={Colors.Gray} />
-            <Text style={styles.customerName}>{item.customer}</Text>
-            {item.items?.length > 0 && (
-              <Text style={styles.itemCount}>{item.items.length} sản phẩm</Text>
-            )}
-            <Ionicons name="chevron-forward" size={16} color={Colors.LightGray} />
-          </View>
+        {/* Avatar */}
+        <View
+          style={[
+            styles.orderAvatar,
+            { backgroundColor: AVATAR_COLORS[index % AVATAR_COLORS.length] },
+          ]}
+        >
+          <Text style={styles.orderAvatarText}>
+            {getInitials(item.customer)}
+          </Text>
         </View>
+
+        {/* Info */}
+        <View style={[styles.orderInfo, isWeb && { flex: 2 }]}>
+          <Text style={styles.orderIdText}>Đơn hàng #{item.id}</Text>
+          <Text style={styles.orderCustomer}>{item.customer}</Text>
+        </View>
+
+        {/* Date — web only */}
+        {isWeb && (
+          <Text style={styles.orderDate}>
+            {item.createdAt
+              ? new Date(item.createdAt).toLocaleDateString("vi-VN")
+              : "—"}
+          </Text>
+        )}
+
+        {/* Items count — web only */}
+        {isWeb && (
+          <Text style={styles.orderItems}>
+            {item.items?.length || 0} sản phẩm
+          </Text>
+        )}
+
+        {/* Amount */}
+        <Text style={[styles.orderAmount, isWeb && { flex: 1 }]}>
+          {formatAmount(item.items)}
+        </Text>
+
+        {/* Status */}
+        <View
+          style={[
+            styles.statusPill,
+            { backgroundColor: cfg.bg, borderColor: cfg.border },
+          ]}
+        >
+          <View style={[styles.statusDot, { backgroundColor: cfg.color }]} />
+          <Text style={[styles.statusText, { color: cfg.color }]}>
+            {cfg.label}
+          </Text>
+        </View>
+
+        <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
       </TouchableOpacity>
     );
   };
@@ -146,65 +231,168 @@ export default function OrderView() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Ionicons name="receipt-outline" size={22} color={Colors.Primary} />
+        <View>
+          {!isWeb && (
+            <View style={styles.headerLeft}>
+              <Ionicons
+                name="receipt-outline"
+                size={22}
+                color={Colors.Primary}
+              />
+            </View>
+          )}
           <Text style={styles.title}>Đơn hàng</Text>
+          <Text style={styles.headerCount}>{orders.length} đơn hàng</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/addOrder')} activeOpacity={0.85}>
-          <Ionicons name="add" size={22} color={Colors.White} />
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={() => router.push("/addOrder")}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={18} color={Colors.White} />
+          {isWeb && <Text style={styles.addBtnText}>Tạo đơn hàng</Text>}
         </TouchableOpacity>
       </View>
 
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={16} color={Colors.Gray} style={{ marginRight: 8 }} />
-        <TextInput
-          style={styles.searchBar}
-          placeholder="Tìm kiếm đơn hàng..."
-          placeholderTextColor={Colors.LightGray}
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={16} color={Colors.Gray} />
-          </TouchableOpacity>
-        )}
+      {/* Stats — web only */}
+      {isWeb && (
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <View style={[styles.statIcon, { backgroundColor: "#EFF6FF" }]}>
+              <Ionicons name="receipt-outline" size={16} color="#3B82F6" />
+            </View>
+            <View>
+              <Text style={styles.statValue}>{orders.length}</Text>
+              <Text style={styles.statLabel}>Tổng đơn hàng</Text>
+            </View>
+          </View>
+          <View style={styles.statCard}>
+            <View style={[styles.statIcon, { backgroundColor: "#FFFBEB" }]}>
+              <Ionicons name="time-outline" size={16} color="#F59E0B" />
+            </View>
+            <View>
+              <Text style={styles.statValue}>{counts.PENDING}</Text>
+              <Text style={styles.statLabel}>Chờ lắp đặt</Text>
+            </View>
+          </View>
+          <View style={styles.statCard}>
+            <View style={[styles.statIcon, { backgroundColor: "#EFF6FF" }]}>
+              <Ionicons name="car-outline" size={16} color="#3B82F6" />
+            </View>
+            <View>
+              <Text style={styles.statValue}>{counts.SHIPPED}</Text>
+              <Text style={styles.statLabel}>Đang giao hàng</Text>
+            </View>
+          </View>
+          <View style={styles.statCard}>
+            <View style={[styles.statIcon, { backgroundColor: "#ECFDF5" }]}>
+              <Ionicons name="cash-outline" size={16} color="#10B981" />
+            </View>
+            <View>
+              <Text style={styles.statValue}>
+                {totalRevenue.toLocaleString("vi-VN", {
+                  style: "currency",
+                  currency: "VND",
+                })}
+              </Text>
+              <Text style={styles.statLabel}>Tổng doanh thu</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Toolbar */}
+      <View style={styles.toolbar}>
+        <View style={styles.searchContainer}>
+          <Ionicons
+            name="search-outline"
+            size={16}
+            color="#94A3B8"
+            style={{ marginRight: 8 }}
+          />
+          <TextInput
+            style={styles.searchBar}
+            placeholder="Tìm kiếm đơn hàng..."
+            placeholderTextColor="#94A3B8"
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Filter tabs */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tabsScroll}
+        >
+          {TABS.map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tabItem, filter === tab && styles.activeTabItem]}
+              onPress={() => setFilter(tab)}
+            >
+              <Text
+                style={[styles.tabText, filter === tab && styles.activeTabText]}
+              >
+                {TAB_LABELS[tab]}
+                {counts[tab] > 0 && filter !== tab && (
+                  <Text style={styles.tabCount}> {counts[tab]}</Text>
+                )}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabsRow}>
-        {TABS.map(tab => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tabItem, filter === tab && styles.activeTabItem]}
-            onPress={() => setFilter(tab)}
-          >
-            <Text style={[styles.tabText, filter === tab && styles.activeTabText]}>
-              {TAB_LABELS[tab]}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* Table header — web */}
+      {isWeb && filteredOrders.length > 0 && (
+        <View style={styles.tableHeader}>
+          <View style={{ width: 36 }} />
+          <Text style={[styles.thCell, { flex: 2 }]}>Đơn hàng</Text>
+          <Text style={[styles.thCell, { flex: 1 }]}>Ngày</Text>
+          <Text style={[styles.thCell, { flex: 1 }]}>Sản phẩm</Text>
+          <Text style={[styles.thCell, { flex: 1 }]}>Tổng tiền</Text>
+          <Text style={[styles.thCell, { width: 130 }]}>Trạng thái</Text>
+          <View style={{ width: 20 }} />
+        </View>
+      )}
 
       {/* List */}
       {loading ? (
         <View style={styles.emptyState}>
-          <Ionicons name="hourglass-outline" size={48} color={Colors.LightGray} />
+          <Ionicons
+            name="hourglass-outline"
+            size={48}
+            color={Colors.LightGray}
+          />
           <Text style={styles.emptyText}>Đang tải đơn hàng...</Text>
         </View>
       ) : (
         <FlatList
           data={filteredOrders}
           renderItem={renderOrder}
-          keyExtractor={(item, index) => item.id?.toString() ?? index.toString()}
+          keyExtractor={(item, index) =>
+            item.id?.toString() ?? index.toString()
+          }
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 24, gap: 10 }}
+          contentContainerStyle={{ paddingBottom: isWeb ? 32 : 100, gap: 6 }}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Ionicons name="receipt-outline" size={48} color={Colors.LightGray} />
-              <Text style={styles.emptyText}>
-                {orders.length === 0 ? 'Chưa có đơn hàng nào' : 'Không tìm thấy đơn hàng'}
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="receipt-outline" size={32} color="#94A3B8" />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {orders.length === 0
+                  ? "Chưa có đơn hàng nào"
+                  : "Không tìm thấy đơn hàng"}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                Tạo đơn hàng mới để bắt đầu
               </Text>
             </View>
           }
@@ -215,32 +403,170 @@ export default function OrderView() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.BackgroundGray, paddingHorizontal: 16, paddingTop: 30, width: Dimensions.get('window').width },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { fontSize: 26, fontWeight: '800', color: Colors.TextPrimary, letterSpacing: -0.5 },
-  addBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.Primary, alignItems: 'center', justifyContent: 'center', shadowColor: Colors.Primary, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.White, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14, shadowColor: Colors.Black, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
-  searchBar: { flex: 1, fontSize: 14, color: Colors.TextPrimary },
-  tabsRow: { flexDirection: 'row', marginBottom: 16, gap: 6 },
-  tabItem: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.White, shadowColor: Colors.Black, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
-  activeTabItem: { backgroundColor: Colors.TextPrimary },
-  tabText: { fontSize: 13, fontWeight: '600', color: Colors.Gray },
-  activeTabText: { color: Colors.White },
-  orderCard: { backgroundColor: Colors.White, borderRadius: 16, overflow: 'hidden', shadowColor: Colors.Black, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  orderTop: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-  orderIcon: { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  orderMid: { flex: 1 },
-  orderNumber: { fontSize: 14, fontWeight: '700', color: Colors.TextPrimary, marginBottom: 3 },
-  orderDate: { fontSize: 12, color: Colors.Gray },
-  orderRight: { alignItems: 'flex-end', gap: 6 },
-  amountText: { fontSize: 14, fontWeight: '800', color: Colors.TextPrimary },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6 },
-  statusText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  divider: { height: 1, backgroundColor: Colors.BackgroundGray, marginHorizontal: 14 },
-  orderBottom: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
-  customerName: { flex: 1, fontSize: 13, color: Colors.TextSecondary, fontWeight: '500' },
-  itemCount: { fontSize: 11, color: Colors.Gray, marginRight: 4 },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 12 },
-  emptyText: { fontSize: 14, color: Colors.LightGray, fontWeight: '500' },
+  container: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: isWeb ? 32 : 16,
+    paddingTop: isWeb ? 28 : 30,
+    width: isWeb ? "100%" : Dimensions.get("window").width,
+  },
+
+  // Header
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: isWeb ? 24 : 16,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  title: {
+    fontSize: isWeb ? 28 : 24,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.5,
+  },
+  headerCount: { fontSize: 13, color: "#64748B", marginTop: 2 },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#2563EB",
+    paddingHorizontal: isWeb ? 14 : 12,
+    paddingVertical: 9,
+    borderRadius: 8,
+    shadowColor: "#2563EB",
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  addBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "600" },
+
+  // Stats
+  statsRow: { flexDirection: "row", gap: 12, marginBottom: 24 },
+  statCard: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  statIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statValue: { fontSize: 18, fontWeight: "800", color: "#0F172A" },
+  statLabel: { fontSize: 11, color: "#64748B", marginTop: 1 },
+
+  // Toolbar
+  toolbar: { gap: 10, marginBottom: 12 },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  searchBar: { flex: 1, fontSize: 14, color: "#0F172A" },
+  tabsScroll: { flexGrow: 0 },
+  tabItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 7,
+    backgroundColor: "#FFFFFF",
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  activeTabItem: { backgroundColor: "#0F172A", borderColor: "#0F172A" },
+  tabText: { fontSize: 12, fontWeight: "600", color: "#64748B" },
+  activeTabText: { color: "#FFFFFF" },
+  tabCount: { fontSize: 11, color: "#94A3B8" },
+
+  // Table header
+  tableHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
+  thCell: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#94A3B8",
+    letterSpacing: 0.5,
+  },
+
+  // Order row
+  orderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 10,
+  },
+  orderAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orderAvatarText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
+  orderInfo: { flex: 1 },
+  orderIdText: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  orderCustomer: { fontSize: 12, color: "#64748B", marginTop: 2 },
+  orderDate: { flex: 1, fontSize: 12, color: "#64748B" },
+  orderItems: { flex: 1, fontSize: 12, color: "#94A3B8" },
+  orderAmount: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 11, fontWeight: "600" },
+
+  // Empty
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    gap: 8,
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: "700", color: "#374151" },
+  emptySubtitle: { fontSize: 13, color: "#94A3B8" },
+  emptyText: { fontSize: 14, color: Colors.LightGray, fontWeight: "500" },
 });

@@ -1,55 +1,125 @@
-import Colors from '@/constant/Colors';
-import { UserDetailContext } from '@/context/UserDetailContext';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useContext, useState } from 'react';
-import { Dimensions, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Colors from "@/constant/Colors";
+import { UserDetailContext } from "@/context/UserDetailContext";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useContext, useState } from "react";
+import {
+  FlatList,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+const isWeb = Platform.OS === "web";
 
 function getInitials(name) {
-  if (!name) return '?';
-  return name.trim().split(/\s+/).filter(n => n.length > 0).map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  if (!name) return "?";
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter((n) => n.length > 0)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 }
+
+const AVATAR_COLORS = [
+  "#3B82F6",
+  "#8B5CF6",
+  "#10B981",
+  "#F59E0B",
+  "#EF4444",
+  "#06B6D4",
+];
 
 export default function CustomerView() {
   const router = useRouter();
   const { userDetail } = useContext(UserDetailContext);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState("list"); // list | grid
 
   const customerList = userDetail?.customer || [];
-  const filteredList = search.trim() === ''
-    ? customerList
-    : customerList.filter(c =>
-      (c.name || '').toLowerCase().includes(search.toLowerCase()) ||
-      (c.phone || '').includes(search)
-    );
+  const filteredList =
+    search.trim() === ""
+      ? customerList
+      : customerList.filter(
+          (c) =>
+            (c.name || "").toLowerCase().includes(search.toLowerCase()) ||
+            (c.phone || "").includes(search),
+        );
 
-  const renderItem = ({ item, index }) => (
+  const renderListItem = ({ item, index }) => (
     <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.75}
-      onPress={() => router.push({
-        pathname: '/CustomerView/[customerID]',
-        params: { customerid: item?.id, customerParam: JSON.stringify(item) }
-      })}
+      style={styles.listRow}
+      activeOpacity={0.6}
+      onPress={() =>
+        router.push({
+          pathname: "/CustomerView/[customerID]",
+          params: { customerid: item?.id, customerParam: JSON.stringify(item) },
+        })
+      }
     >
-      <View style={[styles.avatar, { backgroundColor: Colors.Avatar[index % Colors.Avatar.length] }]}>
-        <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
+      <View
+        style={[
+          styles.listAvatar,
+          { backgroundColor: AVATAR_COLORS[index % AVATAR_COLORS.length] },
+        ]}
+      >
+        <Text style={styles.listAvatarText}>{getInitials(item.name)}</Text>
       </View>
-      <View style={styles.cardInfo}>
-        <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
-        <View style={styles.cardMeta}>
-          <Ionicons name="call-outline" size={12} color={Colors.Gray} />
-          <Text style={styles.cardMetaText}>{item.phone || 'Chưa có SĐT'}</Text>
-          {item.address ? (
-            <>
-              <Text style={styles.dot}>•</Text>
-              <Ionicons name="location-outline" size={12} color={Colors.Gray} />
-              <Text style={styles.cardMetaText} numberOfLines={1}>{item.address}</Text>
-            </>
-          ) : null}
-        </View>
+      <View style={styles.listInfo}>
+        <Text style={styles.listName}>{item.name}</Text>
+        <Text style={styles.listSub}>
+          {item.phone || "No phone"}
+          {item.email ? ` · ${item.email}` : ""}
+        </Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={Colors.LightGray} />
+      {item.address && (
+        <Text style={styles.listAddress} numberOfLines={1}>
+          {item.address}
+        </Text>
+      )}
+      <View style={styles.listBadge}>
+        <Text style={styles.listBadgeText}>Active</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
+    </TouchableOpacity>
+  );
+
+  const renderGridItem = ({ item, index }) => (
+    <TouchableOpacity
+      style={styles.gridCard}
+      activeOpacity={0.7}
+      onPress={() =>
+        router.push({
+          pathname: "/CustomerView/[customerID]",
+          params: { customerid: item?.id, customerParam: JSON.stringify(item) },
+        })
+      }
+    >
+      <View
+        style={[
+          styles.gridAvatar,
+          { backgroundColor: AVATAR_COLORS[index % AVATAR_COLORS.length] },
+        ]}
+      >
+        <Text style={styles.gridAvatarText}>{getInitials(item.name)}</Text>
+      </View>
+      <Text style={styles.gridName} numberOfLines={1}>
+        {item.name}
+      </Text>
+      <Text style={styles.gridSub} numberOfLines={1}>
+        {item.phone || "No phone"}
+      </Text>
+      {item.address && (
+        <Text style={styles.gridAddress} numberOfLines={2}>
+          {item.address}
+        </Text>
+      )}
     </TouchableOpacity>
   );
 
@@ -58,77 +128,163 @@ export default function CustomerView() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          {/* <Text style={styles.label}>MANAGEMENT</Text> */}
-          <Text style={styles.title}>Khách hàng</Text>
+          {!isWeb && <Text style={styles.headerSub}>MANAGEMENT</Text>}
+          <Text style={styles.headerTitle}>Customers</Text>
+          <Text style={styles.headerCount}>{customerList.length} total</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/addCustomer')} activeOpacity={0.8}>
-          <Ionicons name="person-add-outline" size={18} color={Colors.White} />
-          <Text style={styles.addBtnText}>Thêm mới</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {isWeb && (
+            <View style={styles.viewToggle}>
+              <TouchableOpacity
+                style={[
+                  styles.viewBtn,
+                  viewMode === "list" && styles.viewBtnActive,
+                ]}
+                onPress={() => setViewMode("list")}
+              >
+                <Ionicons
+                  name="list-outline"
+                  size={16}
+                  color={viewMode === "list" ? "#2563EB" : "#64748B"}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.viewBtn,
+                  viewMode === "grid" && styles.viewBtnActive,
+                ]}
+                onPress={() => setViewMode("grid")}
+              >
+                <Ionicons
+                  name="grid-outline"
+                  size={16}
+                  color={viewMode === "grid" ? "#2563EB" : "#64748B"}
+                />
+              </TouchableOpacity>
+            </View>
+          )}
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => router.push("/addCustomer")}
+          >
+            <Ionicons name="add" size={18} color={Colors.White} />
+            {isWeb && <Text style={styles.addBtnText}>Add Customer</Text>}
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Stats Card */}
-      <View style={styles.statsCard}>
-        {[
-          { number: customerList.length, label: 'Tổng KH' },
-          { number: customerList.filter(c => c.createdAt && new Date(c.createdAt) > new Date(Date.now() - 7 * 86400000)).length, label: 'Tuần này' },
-          { number: customerList.filter(c => c.createdAt && new Date(c.createdAt) > new Date(Date.now() - 30 * 86400000)).length, label: 'Tháng này' },
-        ].map((s, i) => (
-          <React.Fragment key={s.label}>
-            {i > 0 && <View style={styles.statDivider} />}
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{s.number}</Text>
+      {/* Stats row — web only */}
+      {isWeb && (
+        <View style={styles.statsRow}>
+          {[
+            {
+              label: "Total",
+              value: customerList.length,
+              icon: "people-outline",
+              color: "#3B82F6",
+              bg: "#EFF6FF",
+            },
+            {
+              label: "This week",
+              value: customerList.filter(
+                (c) =>
+                  c.createdAt &&
+                  new Date(c.createdAt) > new Date(Date.now() - 7 * 86400000),
+              ).length,
+              icon: "time-outline",
+              color: "#10B981",
+              bg: "#ECFDF5",
+            },
+            {
+              label: "This month",
+              value: customerList.filter(
+                (c) =>
+                  c.createdAt &&
+                  new Date(c.createdAt) > new Date(Date.now() - 30 * 86400000),
+              ).length,
+              icon: "calendar-outline",
+              color: "#8B5CF6",
+              bg: "#F5F3FF",
+            },
+          ].map((s) => (
+            <View key={s.label} style={styles.statCard}>
+              <View style={[styles.statIcon, { backgroundColor: s.bg }]}>
+                <Ionicons name={s.icon} size={16} color={s.color} />
+              </View>
+              <Text style={styles.statValue}>{s.value}</Text>
               <Text style={styles.statLabel}>{s.label}</Text>
             </View>
-          </React.Fragment>
-        ))}
+          ))}
+        </View>
+      )}
+
+      {/* Search + filter bar */}
+      <View style={styles.toolbar}>
+        <View style={styles.searchWrap}>
+          <Ionicons name="search-outline" size={16} color="#94A3B8" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search customers..."
+            placeholderTextColor="#94A3B8"
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={18} color={Colors.Gray} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm theo tên hoặc SĐT..."
-          placeholderTextColor={Colors.LightGray}
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={18} color={Colors.Gray} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Section label */}
-      {filteredList.length > 0 && (
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>{search ? `Kết quả (${filteredList.length})` : 'TẤT CẢ KHÁCH HÀNG'}</Text>
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{filteredList.length}</Text>
-          </View>
+      {/* Table header — list mode web */}
+      {isWeb && viewMode === "list" && filteredList.length > 0 && (
+        <View style={styles.tableHeader}>
+          <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Name</Text>
+          <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Contact</Text>
+          <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Address</Text>
+          <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Status</Text>
+          <View style={{ width: 20 }} />
         </View>
       )}
 
       {/* List */}
       <FlatList
         data={filteredList}
-        renderItem={renderItem}
+        renderItem={
+          isWeb && viewMode === "grid" ? renderGridItem : renderListItem
+        }
         keyExtractor={(item, index) => item?.id?.toString() || index.toString()}
+        numColumns={isWeb && viewMode === "grid" ? 3 : 1}
+        key={isWeb && viewMode === "grid" ? "grid" : "list"}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={filteredList.length === 0 ? styles.emptyContainer : { gap: 10, paddingBottom: 24 }}
+        contentContainerStyle={[
+          { paddingBottom: isWeb ? 32 : 100 },
+          isWeb && viewMode === "grid" && { gap: 12 },
+        ]}
+        columnWrapperStyle={
+          isWeb && viewMode === "grid" ? { gap: 12 } : undefined
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="people-outline" size={40} color={Colors.Primary} />
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="people-outline" size={32} color="#94A3B8" />
             </View>
-            <Text style={styles.emptyTitle}>{search ? 'Không tìm thấy khách hàng' : 'Chưa có khách hàng nào'}</Text>
-            <Text style={styles.emptySubtitle}>{search ? 'Thử tìm với từ khóa khác' : 'Bấm "Thêm mới" để tạo khách hàng đầu tiên'}</Text>
+            <Text style={styles.emptyTitle}>
+              {search ? "No results found" : "No customers yet"}
+            </Text>
+            <Text style={styles.emptySub}>
+              {search
+                ? "Try a different search term"
+                : "Add your first customer to get started"}
+            </Text>
             {!search && (
-              <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/addCustomer')}>
-                <Ionicons name="person-add-outline" size={16} color={Colors.White} />
-                <Text style={styles.emptyBtnText}>Thêm khách hàng</Text>
+              <TouchableOpacity
+                style={styles.emptyBtn}
+                onPress={() => router.push("/addCustomer")}
+              >
+                <Ionicons name="add" size={16} color={Colors.White} />
+                <Text style={styles.emptyBtnText}>Add Customer</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -139,36 +295,208 @@ export default function CustomerView() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.Background, paddingHorizontal: 16, paddingTop: 30, width: Dimensions.get('window').width },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  label: { fontSize: 10, fontWeight: '600', color: Colors.Gray, letterSpacing: 1 },
-  title: { fontSize: 24, fontWeight: '800', color: Colors.TextPrimary },
-  addBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.Primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, gap: 6, shadowColor: Colors.Primary, shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-  addBtnText: { color: Colors.White, fontWeight: '700', fontSize: 13 },
-  statsCard: { backgroundColor: Colors.White, borderRadius: 16, padding: 16, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginBottom: 16, shadowColor: Colors.Black, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  statItem: { flex: 1, alignItems: 'center' },
-  statNumber: { fontSize: 22, fontWeight: '800', color: Colors.TextPrimary },
-  statLabel: { fontSize: 11, color: Colors.Gray, fontWeight: '600', marginTop: 2 },
-  statDivider: { width: 1, height: 32, backgroundColor: Colors.DividerLight },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.White, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16, gap: 8, shadowColor: Colors.Black, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
-  searchInput: { flex: 1, fontSize: 14, color: Colors.TextPrimary },
-  sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  sectionTitle: { fontSize: 11, fontWeight: '700', color: Colors.Gray, letterSpacing: 1 },
-  countBadge: { backgroundColor: Colors.PrimaryLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  countText: { fontSize: 11, fontWeight: '700', color: Colors.Primary },
-  card: { backgroundColor: Colors.White, borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', shadowColor: Colors.Black, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
-  avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  avatarText: { color: Colors.White, fontWeight: '800', fontSize: 16 },
-  cardInfo: { flex: 1, gap: 5 },
-  cardName: { fontSize: 15, fontWeight: '700', color: Colors.TextPrimary },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
-  cardMetaText: { fontSize: 12, color: Colors.Gray },
-  dot: { fontSize: 10, color: Colors.LightGray },
-  emptyContainer: { flexGrow: 1 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 8 },
-  emptyIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.PrimaryLight, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: Colors.TextSecondary },
-  emptySubtitle: { fontSize: 13, color: Colors.LightGray, textAlign: 'center', paddingHorizontal: 32 },
-  emptyBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.Primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, gap: 6, marginTop: 8 },
-  emptyBtnText: { color: Colors.White, fontWeight: '700', fontSize: 13 },
+  container: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: isWeb ? 32 : 16,
+    paddingTop: isWeb ? 28 : 30,
+  },
+
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: isWeb ? 24 : 16,
+  },
+  headerSub: {
+    fontSize: 10,
+    color: "#94A3B8",
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  headerTitle: {
+    fontSize: isWeb ? 28 : 24,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.5,
+  },
+  headerCount: { fontSize: 13, color: "#64748B", marginTop: 2 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+
+  viewToggle: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 8,
+    padding: 3,
+    gap: 2,
+  },
+  viewBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewBtnActive: {
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#2563EB",
+    paddingHorizontal: isWeb ? 14 : 12,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  addBtnText: { color: Colors.White, fontSize: 13, fontWeight: "600" },
+
+  statsRow: { flexDirection: "row", gap: 12, marginBottom: 20 },
+  statCard: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  statIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statValue: { fontSize: 20, fontWeight: "800", color: "#0F172A", flex: 1 },
+  statLabel: { fontSize: 12, color: "#64748B" },
+
+  toolbar: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  searchWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  searchInput: { flex: 1, fontSize: 14, color: "#0F172A" },
+
+  tableHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
+  tableHeaderCell: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#94A3B8",
+    letterSpacing: 0.5,
+  },
+
+  // List row
+  listRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 12,
+  },
+  listAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  listAvatarText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
+  listInfo: { flex: 2 },
+  listName: { fontSize: 14, fontWeight: "600", color: "#0F172A" },
+  listSub: { fontSize: 12, color: "#64748B", marginTop: 2 },
+  listAddress: { flex: 2, fontSize: 12, color: "#94A3B8" },
+  listBadge: {
+    flex: 1,
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+  },
+  listBadgeText: { fontSize: 11, fontWeight: "600", color: "#10B981" },
+
+  // Grid card
+  gridCard: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  gridAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  gridAvatarText: { color: "#FFFFFF", fontWeight: "800", fontSize: 16 },
+  gridName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 3,
+  },
+  gridSub: { fontSize: 12, color: "#64748B", marginBottom: 6 },
+  gridAddress: { fontSize: 11, color: "#94A3B8" },
+
+  // Empty
+  empty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    gap: 8,
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: "700", color: "#374151" },
+  emptySub: { fontSize: 13, color: "#94A3B8", textAlign: "center" },
+  emptyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  emptyBtnText: { color: Colors.White, fontWeight: "600", fontSize: 13 },
 });
