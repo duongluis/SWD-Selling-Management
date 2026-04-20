@@ -128,7 +128,7 @@ export default function HomeView() {
     {
       name: "View Reports",
       icon: "bar-chart-outline",
-      action: () => { },
+      action: () => router.push('/analytics'),
       color: "#10B981",
       bg: "#ECFDF5",
     },
@@ -225,62 +225,11 @@ export default function HomeView() {
 
       {/* Content grid — web 2 columns */}
       <View style={[styles.contentGrid, isWeb && styles.contentGridWeb]}>
-        {/* Recent orders */}
-        <View style={[styles.card, isWeb && { flex: 2 }]}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Đơn Hàng Gần Đây</Text>
-            <TouchableOpacity onPress={() => router.push("/(tabs)/order")}>
-              <Text style={styles.cardLink}>View all →</Text>
-            </TouchableOpacity>
-          </View>
-
-          {recentOrders.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Ionicons name="receipt-outline" size={32} color="#CBD5E1" />
-              <Text style={styles.emptyText}>No orders yet</Text>
-            </View>
-          ) : (
-            recentOrders.map((order) => {
-              const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
-              const total = (order.items || []).reduce(
-                (s, p) => s + (p.price * p.qty || 0),
-                0,
-              );
-              return (
-                <View key={order.id} style={styles.orderRow}>
-                  <View
-                    style={[styles.orderDot, { backgroundColor: cfg.dot }]}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.orderRowId}>#{order.id}</Text>
-                    <Text style={styles.orderRowCustomer}>
-                      {order.customer}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Text style={styles.orderRowAmount}>
-                      {formatCurrency(total)}
-                    </Text>
-                    <View
-                      style={[styles.statusPill, { backgroundColor: cfg.bg }]}
-                    >
-                      <Text
-                        style={[styles.statusPillText, { color: cfg.color }]}
-                      >
-                        {cfg.label}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            })
-          )}
-        </View>
 
         {/* Quick actions */}
         <View style={[styles.card, isWeb && { flex: 1 }]}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Quick Actions</Text>
+            <Text style={styles.cardTitle}>Thao tác nhanh</Text>
           </View>
           <View style={styles.quickGrid}>
             {quickActions.map((a) => (
@@ -328,9 +277,62 @@ export default function HomeView() {
             </View>
           ))}
           {customerList.length === 0 && (
-            <Text style={styles.emptyText}>No customers yet</Text>
+            <Text style={styles.emptyText}>Hiện tại chưa có khách hàng</Text>
           )}
         </View>
+
+        {/* Recent orders */}
+        <View style={[styles.card, isWeb && { flex: 2 }]}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Đơn Hàng Gần Đây</Text>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/order")}>
+              <Text style={styles.cardLink}>Xem tất cả →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {recentOrders.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="receipt-outline" size={32} color="#CBD5E1" />
+              <Text style={styles.emptyText}>Hiện chưa có đơn hàng</Text>
+            </View>
+          ) : (
+            recentOrders.map((order) => {
+              const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
+              const total = (order.items || []).reduce(
+                (s, p) => s + (p.price * p.qty || 0),
+                0,
+              );
+              return (
+                <View key={order.id} style={styles.orderRow}>
+                  <View
+                    style={[styles.orderDot, { backgroundColor: cfg.dot }]}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.orderRowId}>#{order.id}</Text>
+                    <Text style={styles.orderRowCustomer}>
+                      {order.customer}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={styles.orderRowAmount}>
+                      {formatCurrency(total)}
+                    </Text>
+                    <View
+                      style={[styles.statusPill, { backgroundColor: cfg.bg }]}
+                    >
+                      <Text
+                        style={[styles.statusPillText, { color: cfg.color }]}
+                      >
+                        {cfg.label}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+
       </View>
 
       <View style={{ height: isWeb ? 32 : 100 }} />

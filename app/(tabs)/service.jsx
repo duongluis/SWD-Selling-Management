@@ -234,15 +234,15 @@ export default function ServiceView() {
       <View style={styles.header}>
         <View>
           {!isWeb && <Text style={styles.headerSub}>MANAGEMENT</Text>}
-          <Text style={styles.headerTitle}>Services</Text>
-          <Text style={styles.headerCount}>{services.length} dịch vụ</Text>
+          <Text style={styles.headerTitle}>Dịch vụ</Text>
+          <Text style={styles.headerCount}>{services.length} dịch vụ đang hoạt động</Text>
         </View>
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => router.push("/addService")}
         >
           <Ionicons name="add" size={18} color={Colors.White} />
-          {isWeb && <Text style={styles.addBtnText}>New Service</Text>}
+          {isWeb && <Text style={styles.addBtnText}>Đăng kí dịch vụ</Text>}
         </TouchableOpacity>
       </View>
 
