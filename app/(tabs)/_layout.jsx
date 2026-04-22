@@ -1,3 +1,4 @@
+import { showAlert } from '@/components/Main/showAlert';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,43 +6,34 @@ import { Tabs, useRouter, useSegments } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { doc, writeBatch } from 'firebase/firestore';
 import { useContext, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { showInfo } from '../../components/Main/showInfo';
 import auth, { db } from '../../config/firebaseConfig';
+
+// ── Web-compatible alert helper ───────────────────────────────
 
 const DESKTOP_BREAKPOINT = 768; // px — dưới mức này dùng tab bar thay vì sidebar
 
 // ── Dữ liệu sản phẩm ────────────────────────────────────────
-const PRODUCTS_DATA = require("../../config/price.json")
-
-// [  { id: 1, name: "Máy F3000A", price: 10235000, price_a: 6141000, price_p: 7164500, price_c: 8699750, water_source: "Nước từ thủy cực", water_certificate: "QCVN 02/2009/BYT", made_in: "Việt Nam", capacity: "3000 lít/giờ", technology: "Golden Panthera", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,2 W", electric_capacity: "0 W", sorting_tech: "Ultra Filtration", pipe_material: "PVC", pipe_original: "Trung Quốc", pipe_diameter: "¾ inch", drain_pipe_diameter: "10 mm", drain_water: "0,2%", dimension: "45 x 30 x 14 (cm)", color: "Ghi xám", weight: "14 Kg", life_style: "> 3 năm", guarantee: "01 tháng với màng lọc\n12 tháng với linh kiện điện tử", recommend_location: "Âm trần thạch cao, Trong nhà, Dưới mái che" },
-//   { id: 2, name: "Máy F3000AC", price: 14835000, price_a: 8901000, price_p: 10384500, price_c: 12609750, water_source: "Nước từ thủy cực", water_certificate: "QCVN 02/2009/BYT", made_in: "Việt Nam", capacity: "3000 lít/giờ", technology: "Golden Panthera", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,2 W", electric_capacity: "0 W", sorting_tech: "Ultra Filtration", pipe_material: "PVC", pipe_original: "Trung Quốc", pipe_diameter: "¾ inch", drain_pipe_diameter: "10 mm", drain_water: "0,2%", dimension: "45 x 30 x 14 (cm)", color: "Ghi sáng", weight: "14 Kg", life_style: "> 3 năm", guarantee: "01 tháng với màng lọc\n12 tháng với linh kiện điện tử", recommend_location: "Âm trần thạch cao, Trong nhà, Dưới mái che" },
-//   { id: 3, name: "Máy F3000P", price: 17135000, price_a: 10281000, price_p: 11994500, price_c: 14564750, water_source: "Nước từ thủy cục", water_certificate: "QCVN 01/2018/BYT\nQCVN 02/2009/BYT", made_in: "Việt Nam", capacity: "3000 lít/giờ", technology: "Golden Panthera", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,2 W", electric_capacity: "1,2 W", sorting_tech: "Ultra Filtration", pipe_material: "PES (Mitsubishi Chemical)", pipe_original: "Trung Quốc", pipe_diameter: "3/4 inch", drain_pipe_diameter: "10 mm", drain_water: "0,2%", dimension: "45 x 30 x 14 (cm)", color: "Trắng", weight: "14 kg", life_style: "> 3 năm", guarantee: "06 tháng (với màng lọc)\n24 tháng (với linh kiện điện tử)", recommend_location: "Âm trần thạch cao, trong nhà, dưới mái che" },
-//   { id: 4, name: "Máy F3000PC", price: 21735000, price_a: 13041000, price_p: 15214500, price_c: 18474750, water_source: "Nước từ thủy cục", water_certificate: "QCVN 01/2018/BYT\nQCVN 02/2009/BYT", made_in: "Việt Nam", capacity: "3000 lít/giờ", technology: "Golden Panthera", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,2 W", electric_capacity: "1,2 W", sorting_tech: "Ultra Filtration", pipe_material: "PES (Mitsubishi Chemical)", pipe_original: "Trung Quốc", pipe_diameter: "3/4 inch", drain_pipe_diameter: "10 mm", drain_water: "0,2%", dimension: "45 x 30 x 14 (cm)", color: "Trắng", weight: "14 kg", life_style: "> 3 năm", guarantee: "06 tháng (với màng lọc)\n24 tháng (với linh kiện điện tử)", recommend_location: "Âm trần thạch cao, trong nhà, dưới mái che" },
-//   { id: 5, name: "Máy F3000PS", price: 41273500, price_a: 24764100, price_p: 28891450, price_c: 35082475, water_source: "Nước từ thủy cục", water_certificate: "QCVN 01/2018/BYT\nQCVN 02/2009/BYT", made_in: "Việt Nam", capacity: "3000 lít/giờ", technology: "Golden Panthera", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,2 W", electric_capacity: "1,2 W", sorting_tech: "Ultra Filtration", pipe_material: "PES (Mitsubishi Chemical)", pipe_original: "Trung Quốc", pipe_diameter: "3/4 inch", drain_pipe_diameter: "10 mm", drain_water: "0,2%", dimension: "45 x 30 x 14 (cm)", color: "Trắng", weight: "14 kg", life_style: "> 3 năm", guarantee: "06 tháng (với màng lọc)\n24 tháng (với linh kiện điện tử)", recommend_location: "Âm trần thạch cao, trong nhà, dưới mái che" },
-//   { id: 6, name: "Máy R1000E", price: 137873500, price_a: 82724100, price_p: 96511450, price_c: 117192475, water_source: "Nước sinh hoạt, nước ao, hồ, sông, suối, giếng", water_certificate: "Nước uống, nước sinh hoạt trực tiếp; PUB (Singapore); QCVN 06/2010/BYT; QCVN 01/2018/BYT", made_in: "Việt Nam", capacity: "1000 lít/giờ", technology: "RO, UF, MF, v.v.", control_system: "Siemens điều khiển tự động (CHLB Đức)", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,5 kW", electric_capacity: "5 W", pipe_material: "PA", pipe_original: "Vontron (Trung Quốc)", pipe_diameter: "25 mm", drain_pipe_diameter: "20 mm", drain_water: "8 - 15%", has_music: true, has_cip: true, auto_detect: true, auto_trigger: true, has_bypass: true, dimension: "Tùy chỉnh", color: "Inox", weight: "160 - 200 Kg", guarantee: "06 tháng (với màng lọc)\n24 tháng (với linh kiện điện tử)", recommend_location: "Trong nhà, Dưới mái che" },
-//   { id: 7, name: "Máy M1200E", price: 160873500, price_a: 96524100, price_p: 112611450, price_c: 136742475, water_source: "Nước sinh hoạt, nước ao, hồ, sông, suối, giếng", water_certificate: "Nước uống, nước sinh hoạt trực tiếp; PUB (Singapore); QCVN 06/2010/BYT; QCVN 01/2018/BYT", made_in: "Việt Nam", capacity: "1200 lít/giờ", technology: "Nano, UF, MF, v.v.", control_system: "Siemens (CHLB Đức)", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,5 kW", electric_capacity: "5 W", pipe_material: "PA", pipe_original: "Vontron (Trung Quốc)", pipe_diameter: "25 mm", drain_pipe_diameter: "20 mm", drain_water: "8 - 15%", has_music: true, has_cip: true, auto_detect: true, auto_trigger: true, has_bypass: true, dimension: "Tùy chỉnh", color: "Inox", weight: "160 - 200 Kg", guarantee: "06 tháng (với màng lọc)\n24 tháng (với linh kiện điện tử)", recommend_location: "Dưới mái che" },
-//   { id: 8, name: "Máy R500I", price: 206885000, price_a: 124131000, price_p: 144819500, price_c: 175852250, water_source: "Nước sinh hoạt, ao, hồ, sông, suối, giếng", water_certificate: "QCVN 01/2018/BYT\nQCVN 06/2010/BYT", made_in: "Việt Nam", capacity: "500 lít/giờ", technology: "RO, UF, MF, v.v.", control_system: "Siemens (CHLB Đức)", monitoring_system: "Mitsubishi (Nhật Bản)", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,5 kW", electric_capacity: "5 W", pipe_material: "PA", pipe_original: "CSM (Hàn Quốc)", pipe_diameter: "25 mm", drain_pipe_diameter: "20 mm", drain_water: "8 - 15%", has_music: true, has_cip: true, auto_detect: true, auto_trigger: true, has_bypass: true, realtime_monitoring: true, smarthome_connect: true, dimension: "65 x 65 x 160 (cm)", color: "Trắng", weight: "200 - 250 kg", guarantee: "06 tháng (với màng lọc)\n24 tháng (với linh kiện điện tử)", recommend_location: "Ngoài trời, trong nhà, dưới mái che" },
-//   { id: 9, name: "Máy R1000I", price: 442623500, price_a: 265574100, price_p: 309836450, price_c: 376229975, water_source: "Nước sinh hoạt, ao, hồ, sông, suối, giếng", water_certificate: "QCVN 01/2018/BYT\nQCVN 06/2010/BYT", made_in: "Việt Nam", capacity: "1000 lít/giờ", technology: "RO, UF, MF, v.v.", control_system: "Siemens (CHLB Đức)", monitoring_system: "Mitsubishi (Nhật Bản)", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,5 kW", electric_capacity: "5 W", pipe_material: "PA", pipe_original: "CSM (Hàn Quốc)", pipe_diameter: "25 mm", drain_pipe_diameter: "20 mm", drain_water: "8 - 15%", has_music: true, has_cip: true, auto_detect: true, auto_trigger: true, has_bypass: true, realtime_monitoring: true, smarthome_connect: true, dimension: "65 x 65 x 160 (cm)", color: "Trắng", weight: "200 - 250 kg", guarantee: "06 tháng (với màng lọc)\n24 tháng (với linh kiện điện tử)", recommend_location: "Ngoài trời, trong nhà, dưới mái che" },
-//   { id: 10, name: "Máy R1000S", price: 923890000, price_a: 554334000, price_p: 646723000, price_c: 785306500, water_source: "Nước sinh hoạt, ao, hồ, sông, suối, giếng", water_certificate: "QCVN 01/2018/BYT\nQCVN 06/2010/BYT", made_in: "Việt Nam", capacity: "1000 lít/giờ", technology: "RO, UF, MF, v.v.", control_system: "Siemens (CHLB Đức)", monitoring_system: "Mitsubishi (Nhật Bản)", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,5 kW", electric_capacity: "5 W", pipe_material: "PA", pipe_original: "DOW Filmtec (Hoa Kỳ)", pipe_diameter: "25 mm", drain_pipe_diameter: "20 mm", drain_water: "8 - 15%", has_music: true, has_cip: true, auto_detect: true, auto_trigger: true, has_bypass: true, realtime_monitoring: true, smarthome_connect: true, dimension: "65 x 65 x 160 (cm)", color: "Trắng", weight: "200 - 250 kg", guarantee: "90 tháng (với màng lọc)\n24 tháng (với linh kiện điện tử)", recommend_location: "Ngoài trời, trong nhà, dưới mái che" },
-//   { id: 11, name: "Máy M600I", price: 278173500, price_a: 166904100, price_p: 194721450, price_c: 236447475, water_source: "Nước sinh hoạt, ao, hồ, sông, suối, giếng", water_certificate: "QCVN 01/2018/BYT\nQCVN 06/2010/BYT", made_in: "Việt Nam", capacity: "600 lít/giờ", technology: "Nano, UF, MF, v.v.", control_system: "Siemens (CHLB Đức)", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,5 kW", electric_capacity: "5 W", pipe_material: "PA", pipe_original: "CSM (Hàn Quốc)", pipe_diameter: "25 mm", drain_pipe_diameter: "20 mm", drain_water: "8 - 15%", has_music: true, has_cip: true, auto_detect: true, auto_trigger: true, has_bypass: true, dimension: "65 x 65 x 160 (cm)", color: "Trắng", weight: "200 - 250 kg", guarantee: "06 tháng (với màng lọc)\n24 tháng (với linh kiện điện tử)", recommend_location: "Ngoài trời, trong nhà, dưới mái che" },
-//   { id: 12, name: "Máy M1300I", price: 505873500, price_a: 303524100, price_p: 354111450, price_c: 429992475, water_source: "Nước sinh hoạt, ao, hồ, sông, suối, giếng", water_certificate: "Nước uống trực tiếp PUB Singapore\nQCVN 01/2018/BYT\nQCVN 06/2010/BYT", made_in: "Việt Nam", capacity: "1300 lít/giờ", technology: "Nano, UF, MF, v.v.", control_system: "Siemens (CHLB Đức)", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,5 kW", electric_capacity: "5 W", pipe_material: "PA", pipe_original: "CSM (Hàn Quốc)", pipe_diameter: "25 mm", drain_pipe_diameter: "20 mm", drain_water: "8 - 15%", has_music: true, has_cip: true, auto_detect: true, auto_trigger: true, has_bypass: true, dimension: "65 x 65 x 160 (cm)", color: "Trắng", weight: "200 - 250 kg", guarantee: "06 tháng (với màng lọc)\n24 tháng (với linh kiện điện tử)", recommend_location: "Ngoài trời, trong nhà, dưới mái che" },
-//   { id: 13, name: "Máy M1300S", price: 956890000, price_a: 574134000, price_p: 669823000, price_c: 813356500, water_source: "Nước sinh hoạt, ao, hồ, sông, suối, giếng", water_certificate: "Nước uống trực tiếp PUB Singapore\nQCVN 01/2018/BYT\nQCVN 06/2010/BYT", made_in: "Việt Nam", capacity: "1300 lít/giờ", technology: "Nano, UF, MF, v.v.", control_system: "Siemens (CHLB Đức)", monitoring_system: "Mitsubishi (Nhật Bản)", electric_requirement: "220 Vac / 50-60Hz", using_electric_capacity: "1,5 kW", electric_capacity: "5 W", pipe_material: "PA", pipe_original: "DOW Filmtec (Hoa Kỳ)", pipe_diameter: "25 mm", drain_pipe_diameter: "20 mm", drain_water: "8 - 15%", has_music: true, has_cip: true, auto_detect: true, auto_trigger: true, has_bypass: true, realtime_monitoring: true, smarthome_connect: true, dimension: "65 x 65 x 160 (cm)", color: "Trắng", weight: "200 - 250 kg", guarantee: "06 tháng (với màng lọc)\n24 tháng (với linh kiện điện tử)", recommend_location: "Ngoài trời, trong nhà, dưới mái che" },
-// ];
+const PRODUCTS_DATA = require('../../config/price.json')
+const SERVICE_DATA = require('../../config/service.json')
 
 const NAV_ITEMS = [
-  { key: 'home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
-  { key: 'order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
-  { key: 'customer', label: 'KHÁCH HÀNG', icon: 'people-outline', activeIcon: 'people' },
-  { key: 'service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
-  { key: 'leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
+  { key: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
+  { key: '(tabs)/order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
+  { key: '(tabs)/customer', label: 'KHÁCH HÀNG', icon: 'people-outline', activeIcon: 'people' },
+  { key: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
+  { key: '(tabs)/leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
+  { key: 'information', label: 'Bảng giá', icon: 'cash-outline', activeIcon: 'cash' },
 ];
 
 const WEB_NAV_ITEMS = [
-  { key: 'home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
-  { key: 'order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
-  { key: 'customer', label: 'KHÁCH HÀNG', icon: 'people-outline', activeIcon: 'people' },
-  { key: 'service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
-  { key: 'leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
+  { key: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
+  { key: '(tabs)/order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
+  { key: '(tabs)/customer', label: 'KHÁCH HÀNG', icon: 'people-outline', activeIcon: 'people' },
+  { key: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
+  { key: '(tabs)/leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
+  { key: 'information', label: 'Bảng giá', icon: 'cash-outline', activeIcon: 'cash' },
 ];
 
 function getInitials(name) {
@@ -59,48 +51,77 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
   const [syncOk, setSyncOk] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
 
-  const handleLogout = async () => {
-    Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
-      { text: 'Huỷ', style: 'cancel' },
-      {
-        text: 'Đăng xuất',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await signOut(auth);
-            router.replace('/auth/signIn');
-          } catch (e) {
-            Alert.alert('Lỗi', e.message);
-          }
-        },
-      },
-    ]);
-    setShowLogout(false);
-  };
-
-  const handleSyncProducts = async () => {
+  const handleSync = async () => {
     if (syncing) return;
     setSyncing(true);
     setSyncOk(false);
     try {
       const batch = writeBatch(db);
       PRODUCTS_DATA.forEach(product => {
-        batch.set(doc(db, 'products', String(product.id)), {
+        batch.set(doc(db, 'productPrice', String(product.name)), {
           ...product,
+          updatedAt: new Date().toISOString(),
+        });
+      });
+
+      SERVICE_DATA.forEach(service => {
+        batch.set(doc(db, 'servicePrice', String(service.name)), {
+          ...service,
           updatedAt: new Date().toISOString(),
         });
       });
       await batch.commit();
       setLastSync(new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }));
       setSyncOk(true);
-      Alert.alert('✅ Thành công', `Đã cập nhật ${PRODUCTS_DATA.length} sản phẩm lên Firestore!`);
+      showInfo('✅ Thành công', `Đã cập nhật ${PRODUCTS_DATA.length + SERVICE_DATA.length} sản phẩm lên Firestore!`);
     } catch (e) {
       console.error('❌ Lỗi sync:', e);
-      Alert.alert('❌ Lỗi', 'Không thể cập nhật: ' + e.message);
+      showInfo('❌ Lỗi', 'Không thể cập nhật: ' + e.message);
     } finally {
       setSyncing(false);
     }
   };
+
+  // const handleSyncService = async () => {
+  //   if (syncing) return;
+  //   setSyncing(true);
+  //   setSyncOk(false);
+  //   try {
+  //     const batch = writeBatch(db);
+  //     SERVICE_DATA.forEach(service => {
+  //       batch.set(doc(db, 'servicePrice', String(service.id)), {
+  //         ...service,
+  //         updatedAt: new Date().toISOString(),
+  //       });
+  //     });
+  //     await batch.commit();
+  //     setLastSync(new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }));
+  //     setSyncOk(true);
+  //     showInfo('✅ Thành công', `Đã cập nhật ${PRODUCTS_DATA.length} sản phẩm lên Firestore!`);
+  //   } catch (e) {
+  //     console.error('❌ Lỗi sync:', e);
+  //     showInfo('❌ Lỗi', 'Không thể cập nhật: ' + e.message);
+  //   } finally {
+  //     setSyncing(false);
+  //   }
+  // };
+
+  const handleLogout = () => {
+    showAlert(
+      'Đăng xuất',
+      'Bạn có chắc muốn đăng xuất?',
+      async () => {
+        try {
+          await signOut(auth);
+          router.replace('/auth/signIn');
+        } catch (e) {
+          showInfo('Lỗi', e.message);
+        }
+      }
+    );
+    setShowLogout(false);
+  };
+
 
   return (
     <View style={[S.sidebar, collapsed && S.sidebarCollapsed]}>
@@ -112,7 +133,7 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
             <View style={S.workspaceLogo}>
               <Ionicons name="storefront" size={14} color={Colors.White} />
             </View>
-            <Text style={S.workspaceText}>SWD Seller</Text>
+            <Text style={S.workspaceText}>SWD Seller Manager</Text>
           </View>
         )}
         <Pressable onPress={onToggle} style={S.collapseBtn}>
@@ -135,7 +156,7 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
           const isActive = activeTab === item.key;
           return (
             <Pressable key={item.key} style={[S.navItem, isActive && S.navItemActive]} onPress={() => onNavigate(item.key)}>
-              <Ionicons name={isActive ? item.activeIcon : item.icon} size={16} color={isActive ? '#F8FAFC' : '#64748B'} style={S.navIcon} />
+              <Ionicons name={isActive ? item.activeIcon : item.icon} size={16} color={isActive ? '#64748B' : '#ffffff'} style={S.navIcon} />
               {!collapsed && <Text style={[S.navLabel, isActive && S.navLabelActive]}>{item.label}</Text>}
             </Pressable>
           );
@@ -147,11 +168,11 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
         <View style={S.navSection}>
           <Text style={S.navSectionLabel}>QUICK ADD</Text>
           {[
-            { label: 'New Order', icon: 'add-circle-outline', route: '/addOrder' },
-            { label: 'New Customer', icon: 'person-add-outline', route: '/addCustomer' },
+            { label: 'Đơn Hàng Mới', icon: 'add-circle-outline', route: '/addOrder' },
+            { label: 'Thêm Khách Hàng', icon: 'person-add-outline', route: '/addCustomer' },
           ].map(a => (
             <Pressable key={a.label} style={S.navItem} onPress={() => router.push(a.route)}>
-              <Ionicons name={a.icon} size={16} color="#64748B" style={S.navIcon} />
+              <Ionicons name={a.icon} size={16} color="#ffffff" style={S.navIcon} />
               <Text style={S.navLabel}>{a.label}</Text>
             </Pressable>
           ))}
@@ -170,6 +191,24 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
             </View>
           )}
 
+          {/* Danh sách tài khoản */}
+          <Pressable
+            style={[S.navItem, activeTab === 'users' && S.navItemActive]}
+            onPress={() => router.push('/(tabs)/user')}
+          >
+            <Ionicons
+              name={activeTab === 'users' ? 'people-outline' : 'people-outline'}
+              size={16}
+              color={activeTab === 'users' ? '#ffffff' : '#64748B '}
+              style={S.navIcon}
+            />
+            {!collapsed && (
+              <Text style={[S.navLabel, activeTab === 'users' && S.navLabelActive]}>
+                Danh sách người dùng
+              </Text>
+            )}
+          </Pressable>
+
           {/* Nút sync */}
           <Pressable
             style={[
@@ -177,7 +216,8 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
               collapsed && S.syncBtnCollapsed,
               syncing && S.syncBtnLoading,
             ]}
-            onPress={handleSyncProducts}
+            onPress={handleSync}
+
             disabled={syncing}
           >
             {syncing ? (
@@ -211,8 +251,8 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
                 </View>
               )}
               <View style={S.syncMetaRow}>
-                <Ionicons name="cube-outline" size={11} color="#475569" />
-                <Text style={S.syncMetaText}>{PRODUCTS_DATA.length} sản phẩm</Text>
+                <Ionicons name="cube-outline" size={11} color="#ffffff" />
+                <Text style={S.syncMetaText}>{PRODUCTS_DATA.length + SERVICE_DATA.length} sản phẩm</Text>
               </View>
             </View>
           )}
@@ -262,30 +302,19 @@ function CustomTabBar({ state, descriptors, navigation, isMobileWeb }) {
   const router = useRouter();
   const [showLogoutMenu, setShowLogoutMenu] = useState(false);
 
-  const handleLogout = async () => {
-    try {
-      console.log("Đã Log Out")
-      await signOut(auth);
-      router.replace('./auth/signIn');
-    } catch (e) {
-      Alert.alert('Lỗi', e.message);
-    }
-    // Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
-    //   { text: 'Huỷ', style: 'cancel' },
-    //   {
-    //     text: 'Đăng xuất',
-    //     style: 'destructive',
-    //     onPress: async () => {
-    //       try {
-    //         console.log("Đã Log Out")
-    //         await signOut(auth);
-    //         router.replace('/auth/signIn');
-    //       } catch (e) {
-    //         Alert.alert('Lỗi', e.message);
-    //       }
-    //     },
-    //   },
-    // ]);
+  const handleLogout = () => {
+    showAlert(
+      'Đăng xuất',
+      'Bạn có chắc muốn đăng xuất?',
+      async () => {
+        try {
+          await signOut(auth);
+          router.replace('/auth/signIn');
+        } catch (e) {
+          showInfo('Lỗi', e.message);
+        }
+      }
+    );
     setShowLogoutMenu(false);
   };
 
@@ -347,7 +376,7 @@ export default function TabLayout() {
   const activeTab = segments[segments.length - 1] || 'home';
   const pageLabel = WEB_NAV_ITEMS.find(n => n.key === activeTab)?.label || 'Overview';
 
-  const handleNavigate = (key) => router.push(`/(tabs)/${key}`);
+  const handleNavigate = (key) => router.push(`/${key}`);
 
   const tabScreens = (
     <>
@@ -356,6 +385,8 @@ export default function TabLayout() {
       <Tabs.Screen name="customer" />
       <Tabs.Screen name="service" />
       <Tabs.Screen name="leaderboard" />
+      <Tabs.Screen name="users" />
+      <Tabs.Screen name="information" />
     </>
   );
 
@@ -412,7 +443,7 @@ export default function TabLayout() {
 // ── Web Styles ───────────────────────────────────────────────
 const S = StyleSheet.create({
   root: { flex: 1, flexDirection: 'row', backgroundColor: '#F8FAFC', height: '100vh' },
-  sidebar: { width: 240, backgroundColor: '#0F172A', paddingTop: 16, paddingBottom: 12, paddingHorizontal: 12, flexDirection: 'column', borderRightWidth: 1, borderRightColor: '#1E293B' },
+  sidebar: { width: 240, backgroundColor: '#40668d', paddingTop: 16, paddingBottom: 12, paddingHorizontal: 12, flexDirection: 'column', borderRightWidth: 1, borderRightColor: '#1E293B' },
   sidebarCollapsed: { width: 60, paddingHorizontal: 10 },
   workspaceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingHorizontal: 4 },
   workspaceName: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -420,14 +451,14 @@ const S = StyleSheet.create({
   workspaceText: { color: '#F8FAFC', fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
   collapseBtn: { width: 24, height: 24, borderRadius: 5, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#1E293B', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 16 },
-  searchText: { flex: 1, color: '#64748B', fontSize: 13 },
+  searchText: { flex: 1, color: '#ffffff', fontSize: 13 },
   searchShortcut: { color: '#334155', fontSize: 11, fontWeight: '600' },
   navSection: { marginBottom: 16 },
   navSectionLabel: { color: '#334155', fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4, paddingHorizontal: 8 },
   navItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 7, borderRadius: 7, marginBottom: 1 },
   navItemActive: { backgroundColor: '#1E293B' },
   navIcon: { marginRight: 8 },
-  navLabel: { color: '#64748B', fontSize: 13, fontWeight: '500' },
+  navLabel: { color: '#ffffff', fontSize: 13, fontWeight: '500' },
   navLabelActive: { color: '#F8FAFC', fontWeight: '600' },
 
   // ── Admin section ──
@@ -444,7 +475,7 @@ const S = StyleSheet.create({
   // ── Sync meta ──
   syncMeta: { paddingHorizontal: 4, gap: 3 },
   syncMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  syncMetaText: { color: '#475569', fontSize: 10 },
+  syncMetaText: { color: '#ffffff', fontSize: 10 },
 
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, paddingVertical: 8, borderRadius: 8, backgroundColor: '#1E293B', cursor: 'pointer' },
   userAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center' },

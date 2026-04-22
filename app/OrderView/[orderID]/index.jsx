@@ -15,7 +15,7 @@ const STATUS_CONFIG = {
   PENDING: {
     color: Colors.Warning,
     bg: Colors.WarningLight,
-    label: "Đang tạo đơn",
+    label: "Chờ lắp đặt",
     icon: "time-outline",
   },
   SHIPPED: {

@@ -298,10 +298,10 @@ export default function RevenueAnalyticsScreen() {
                 {/* Revenue Trends chart */}
                 <View style={styles.card}>
                     <View style={styles.cardTopRow}>
-                        <Text style={styles.cardTitle}>Revenue Trends</Text>
+                        <Text style={styles.cardTitle}>Xu hướng doanh thu</Text>
                         <View style={styles.legendRow}>
-                            <View style={styles.legendDot} /><Text style={styles.legendText}>Current</Text>
-                            <View style={[styles.legendDot, { backgroundColor: '#A78BFA' }]} /><Text style={styles.legendText}>Clients</Text>
+                            <View style={styles.legendDot} /><Text style={styles.legendText}>Hiện nay</Text>
+                            <View style={[styles.legendDot, { backgroundColor: '#A78BFA' }]} /><Text style={styles.legendText}>Khách hàng</Text>
                         </View>
                     </View>
 
@@ -316,7 +316,7 @@ export default function RevenueAnalyticsScreen() {
 
                 {/* Category Performance */}
                 <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Category Performance</Text>
+                    <Text style={styles.cardTitle}>Báo cáo doanh thu</Text>
                     {categories.map((cat, i) => (
                         <View key={i} style={styles.catRow}>
                             <View style={styles.catInfo}>
@@ -346,9 +346,9 @@ export default function RevenueAnalyticsScreen() {
                 {/* Top Customers */}
                 <View style={styles.card}>
                     <View style={styles.cardTopRow}>
-                        <Text style={styles.cardTitle}>Top Customers</Text>
+                        <Text style={styles.cardTitle}>Khách hàng tiềm năng</Text>
                         <TouchableOpacity onPress={() => router.push('/(tabs)/customer')}>
-                            <Text style={styles.viewAllText}>VIEW ALL</Text>
+                            <Text style={styles.viewAllText}>Xem tất cả</Text>
                         </TouchableOpacity>
                     </View>
 

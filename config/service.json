@@ -1,0 +1,27 @@
+[
+    {
+        "id": 1,
+        "name": "Tư vấn",
+        "price": 100000
+    },
+    {
+        "id": 2,
+        "name": "Lắp đặt",
+        "price": 100000
+    },
+    {
+        "id": 3,
+        "name": "Bảo dưỡng",
+        "price": 100000
+    },
+    {
+        "id": 4,
+        "name": "Đổ muối",
+        "price": 100000
+    },
+    {
+        "id": 5,
+        "name": "Giao hàng",
+        "price": 100000
+    }
+]

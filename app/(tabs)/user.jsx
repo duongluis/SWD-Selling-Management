@@ -1,10 +1,10 @@
+import { showAlert } from '@/components/Main/showAlert';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     Platform,
     RefreshControl,
@@ -15,6 +15,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { showSuccess } from '../../components/Main/showSuccess';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
@@ -139,7 +140,7 @@ function UserDetailPanel({ user, onClose, onApprove, onReject, loading }) {
 }
 
 // ── Main Screen ───────────────────────────────────────────────
-export default function UserView() {
+export default function UsersView() {
     const { userDetail } = useContext(UserDetailContext);
 
     const [tab, setTab] = useState('unverified');
@@ -192,65 +193,52 @@ export default function UserView() {
 
     // ── Approve ───────────────────────────────────────────────
     const handleApprove = () => {
-        Alert.alert(
+        showAlert(
             '✅ Chấp thuận tài khoản',
             `Xác thực tài khoản "${selected?.name}"?`,
-            [
-                { text: 'Huỷ', style: 'cancel' },
-                {
-                    text: 'Chấp thuận',
-                    onPress: async () => {
-                        setActionLoading(true);
-                        try {
-                            await updateDoc(doc(db, 'users', selected.email), {
-                                verified: true,
-                                verifiedAt: new Date().toISOString(),
-                            });
-                            setUsers(prev => prev.map(u =>
-                                u.email === selected.email ? { ...u, verified: true } : u
-                            ));
-                            setSelected(prev => ({ ...prev, verified: true }));
-                            Alert.alert('✅ Thành công', `Đã xác thực "${selected.name}"`);
-                        } catch (e) {
-                            Alert.alert('Lỗi', e.message);
-                        } finally {
-                            setActionLoading(false);
-                        }
-                    },
-                },
-            ]
+            async () => {
+                setActionLoading(true);
+                try {
+                    await updateDoc(doc(db, 'users', selected.email), {
+                        verified: true,
+                        verifiedAt: new Date().toISOString(),
+                    });
+                    setUsers(prev => prev.map(u =>
+                        u.email === selected.email ? { ...u, verified: true } : u
+                    ));
+                    setSelected(prev => ({ ...prev, verified: true }));
+                    showSuccess('✅ Thành công', `Đã xác thực "${selected.name}"`);
+                } catch (e) {
+                    showAlert('Lỗi', e.message);
+                } finally {
+                    setActionLoading(false);
+                }
+            }
         );
     };
 
     // ── Reject ────────────────────────────────────────────────
     const handleReject = () => {
-        Alert.alert(
+        showAlert(
             '❌ Từ chối tài khoản',
             `Từ chối tài khoản "${selected?.name}"?`,
-            [
-                { text: 'Huỷ', style: 'cancel' },
-                {
-                    text: 'Từ chối',
-                    style: 'destructive',
-                    onPress: async () => {
-                        setActionLoading(true);
-                        try {
-                            await updateDoc(doc(db, 'users', selected.email), {
-                                verified: false,
-                                rejected: true,
-                                rejectedAt: new Date().toISOString(),
-                            });
-                            setUsers(prev => prev.filter(u => u.email !== selected.email));
-                            setSelected(null);
-                            Alert.alert('Đã từ chối', `Tài khoản "${selected.name}" đã bị từ chối.`);
-                        } catch (e) {
-                            Alert.alert('Lỗi', e.message);
-                        } finally {
-                            setActionLoading(false);
-                        }
-                    },
-                },
-            ]
+            async () => {
+                setActionLoading(true);
+                try {
+                    await updateDoc(doc(db, 'users', selected.email), {
+                        verified: false,
+                        rejected: true,
+                        rejectedAt: new Date().toISOString(),
+                    });
+                    setUsers(prev => prev.filter(u => u.email !== selected.email));
+                    setSelected(null);
+                    showAlert('Đã từ chối', `Tài khoản "${selected.name}" đã bị từ chối.`);
+                } catch (e) {
+                    showAlert('Lỗi', e.message);
+                } finally {
+                    setActionLoading(false);
+                }
+            }
         );
     };
 
@@ -427,7 +415,7 @@ const S = StyleSheet.create({
     // Tabs — active dùng màu sidebar #0F172A
     tabRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
     tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
-    tabActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
+    tabActive: { backgroundColor: '#40668d', borderColor: '#40668d' },
     tabText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
     tabTextActive: { color: '#FFFFFF' },
     tabBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 20, minWidth: 20, alignItems: 'center' },
@@ -459,7 +447,7 @@ const S = StyleSheet.create({
 
     // ── Detail panel — tông tối giống sidebar ──────────────────
     detailPanel: {
-        backgroundColor: '#0F172A',              // ← màu sidebar
+        backgroundColor: '#d1e2f2',              // ← màu sidebar
         borderTopWidth: 1,
         borderTopColor: '#1E293B',
         padding: 16,
@@ -482,7 +470,7 @@ const S = StyleSheet.create({
     detailName: { fontSize: 16, fontWeight: '800', color: '#F8FAFC' },           // ← text sáng
     detailEmail: { fontSize: 12, color: '#64748B' },
     rolePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-    rolePillText: { fontSize: 12, fontWeight: '700' },
+    rolePillText: { fontSize: 15, fontWeight: '700' },
     verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#064E3B', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
     verifiedBadgeText: { fontSize: 12, color: '#34D399', fontWeight: '600' },           // ← xanh lá sáng trên nền tối
     pendingBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#451A03', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
@@ -492,9 +480,9 @@ const S = StyleSheet.create({
     detailCardTitle: { fontSize: 10, fontWeight: '700', color: '#334155', letterSpacing: 0.8, marginBottom: 10 },
 
     infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
-    infoIcon: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+    infoIcon: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
     infoLabel: { fontSize: 10, color: '#475569', marginBottom: 2 },
-    infoValue: { fontSize: 13, color: '#E2E8F0', fontWeight: '600' },           // ← text sáng trên nền tối
+    infoValue: { fontSize: 13, color: '#475569', fontWeight: '600' },           // ← text sáng trên nền tối
 
     // Action buttons — reject giữ đỏ, approve dùng blue accent
     actionRow: { flexDirection: 'row', gap: 10, marginTop: 16 },

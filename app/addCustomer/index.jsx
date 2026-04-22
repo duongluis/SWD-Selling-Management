@@ -17,8 +17,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { showSuccess } from '../../components/Main/showSuccess';
 import { db } from '../../config/firebaseConfig';
-
 const isWeb = Platform.OS === 'web';
 
 export default function AddCustomer() {
@@ -54,15 +54,15 @@ export default function AddCustomer() {
         phone: form.phone.trim(),
         email: form.email?.trim() || '',
         note: form.note?.trim() || '',
-        createdBy: userDetail?.gmail,
+        createdBy: userDetail?.email,
         createdAt: new Date().toISOString(),
       },
         { merge: true }
       );
       setUserDetail(prev => ({ ...prev, customer: [...(prev.customer || []), newCustomer] }));
-      Alert.alert('Thành công', 'Đã lưu khách hàng!', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      showSuccess('Thành công', 'Đã lưu khách hàng!', async () => {
+        router.back()
+      });
     } catch (e) {
       console.error('Lỗi:', e.code, e.message);
       Alert.alert('Lỗi', e.message);

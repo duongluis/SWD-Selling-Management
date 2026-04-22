@@ -1,4 +1,5 @@
 import { getFirebaseErrorMessage } from "@/components/Main/getFirebaseErrorMessage";
+import { showAlert } from "@/components/Main/showAlert";
 import auth, { db } from "@/config/firebaseConfig";
 import Colors from "@/constant/Colors";
 import { UserDetailContext } from "@/context/UserDetailContext";
@@ -8,12 +9,11 @@ import { router } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import { useContext, useState } from "react";
 import {
-  Alert,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 export default function SignIn() {
@@ -31,7 +31,7 @@ export default function SignIn() {
         router.replace("../(tabs)/home");
       }
     } catch (e) {
-      Alert.alert(getFirebaseErrorMessage(e));
+      showAlert(getFirebaseErrorMessage(e));
       console.log(e);
     }
   };

@@ -1,9 +1,12 @@
+import { db } from "@/config/firebaseConfig";
 import Colors from "@/constant/Colors";
 import { UserDetailContext } from "@/context/UserDetailContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useContext, useState } from "react";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { useCallback, useContext, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   StyleSheet,
@@ -12,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { getRole } from "../../components/Hooks/useCustomers";
 
 const isWeb = Platform.OS === "web";
 
@@ -77,45 +81,6 @@ const STATUS_CONFIG = {
   },
 };
 
-const MOCK_SERVICES = [
-  {
-    id: "SV-001",
-    customer: "Nguyễn Văn A",
-    type: "INSTALLATION",
-    status: "PENDING",
-    date: "2024-05-25",
-    address: "123 Nguyễn Trãi, Q1",
-    note: "Lắp máy lạnh 2HP",
-  },
-  {
-    id: "SV-002",
-    customer: "Trần Thị B",
-    type: "DELIVERY",
-    status: "PROCESSING",
-    date: "2024-05-24",
-    address: "456 Lê Lợi, Q3",
-    note: "Giao tủ lạnh",
-  },
-  {
-    id: "SV-003",
-    customer: "Lê Văn C",
-    type: "MAINTENANCE",
-    status: "COMPLETED",
-    date: "2024-05-23",
-    address: "789 Trần Hưng Đạo",
-    note: "Bảo trì điều hòa",
-  },
-  {
-    id: "SV-004",
-    customer: "Phạm Thị D",
-    type: "CONSULTING",
-    status: "PENDING",
-    date: "2024-05-22",
-    address: "321 Cộng Hòa, Tân Bình",
-    note: "Tư vấn hệ thống",
-  },
-];
-
 const TABS = ["All", "PENDING", "PROCESSING", "COMPLETED"];
 
 function getInitials(name) {
@@ -131,13 +96,86 @@ function getInitials(name) {
 
 const AVATAR_COLORS = ["#8B5CF6", "#3B82F6", "#10B981", "#F59E0B", "#EF4444"];
 
+// ── Hook: fetch services theo role ────────────────────────────
+function useServices() {
+  const { userDetail } = useContext(UserDetailContext);
+  const role = getRole(userDetail);
+
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchServices = useCallback(async () => {
+    if (!userDetail?.email) return;
+    const myEmail = userDetail.email;
+    const all = [];
+
+    try {
+      if (role === "admin") {
+        // Admin thấy tất cả
+        const snap = await getDocs(collection(db, "service"));
+        snap.docs.forEach((d) => all.push({ ...d.data(), docId: d.id }));
+
+      } else if (role === "ctv") {
+        // CTV chỉ thấy dịch vụ do mình tạo
+        const snap = await getDocs(
+          query(collection(db, "service"), where("createdBy", "==", myEmail))
+        );
+        snap.docs.forEach((d) => all.push({ ...d.data(), docId: d.id }));
+
+      } else if (role === "daily" || role === "phantan") {
+        // Dịch vụ do mình tạo
+        const selfSnap = await getDocs(
+          query(collection(db, "service"), where("createdBy", "==", myEmail))
+        );
+        selfSnap.docs.forEach((d) => all.push({ ...d.data(), docId: d.id }));
+
+        // Dịch vụ của tài khoản con (advisor == myEmail)
+        const subSnap = await getDocs(
+          query(collection(db, "users"), where("advisor", "==", myEmail))
+        );
+        const subEmails = subSnap.docs
+          .map((d) => d.data().email)
+          .filter(Boolean);
+
+        for (let i = 0; i < subEmails.length; i += 30) {
+          const chunk = subEmails.slice(i, i + 30);
+          const snap = await getDocs(
+            query(collection(db, "service"), where("createdBy", "in", chunk))
+          );
+          snap.docs.forEach((d) => all.push({ ...d.data(), docId: d.id }));
+        }
+      }
+
+      // Loại trùng theo docId, sắp xếp mới nhất lên trên
+      const map = new Map();
+      all.forEach((s) => map.set(s.docId, s));
+      const unique = [...map.values()].sort((a, b) => {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      });
+      setServices(unique);
+    } catch (e) {
+      console.error("useServices error:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [userDetail?.email, role]);
+
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
+
+  return { services, loading, refresh: fetchServices };
+}
+
+// ── Main Component ────────────────────────────────────────────
 export default function ServiceView() {
   const router = useRouter();
-  const { userDetail } = useContext(UserDetailContext);
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
 
-  const services = MOCK_SERVICES;
+  const { services, loading, refresh } = useServices();
 
   const filteredServices = services.filter((s) => {
     const matchFilter = filter === "All" || s.status === filter;
@@ -199,7 +237,11 @@ export default function ServiceView() {
 
         {isWeb && (
           <Text style={styles.serviceDate}>
-            {item.date ? new Date(item.date).toLocaleDateString("vi-VN") : "—"}
+            {item.date
+              ? new Date(item.date).toLocaleDateString("vi-VN")
+              : item.createdAt
+                ? new Date(item.createdAt).toLocaleDateString("vi-VN")
+                : "—"}
           </Text>
         )}
 
@@ -235,7 +277,9 @@ export default function ServiceView() {
         <View>
           {!isWeb && <Text style={styles.headerSub}>MANAGEMENT</Text>}
           <Text style={styles.headerTitle}>Dịch vụ</Text>
-          <Text style={styles.headerCount}>{services.length} dịch vụ đang hoạt động</Text>
+          <Text style={styles.headerCount}>
+            {loading ? "Đang tải..." : `${services.length} dịch vụ đang hoạt động`}
+          </Text>
         </View>
         <TouchableOpacity
           style={styles.addBtn}
@@ -321,32 +365,45 @@ export default function ServiceView() {
         </View>
       )}
 
-      {/* List */}
-      <FlatList
-        data={filteredServices}
-        renderItem={renderService}
-        keyExtractor={(item, index) => item.id?.toString() ?? index.toString()}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: isWeb ? 32 : 100 }}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <View style={styles.emptyIconWrap}>
-              <Ionicons name="build-outline" size={32} color="#94A3B8" />
+      {/* Loading state */}
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color="#2563EB" />
+          <Text style={styles.loadingText}>Đang tải dịch vụ...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredServices}
+          renderItem={renderService}
+          keyExtractor={(item, index) =>
+            item.docId ?? item.id?.toString() ?? index.toString()
+          }
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: isWeb ? 32 : 100 }}
+          onRefresh={refresh}
+          refreshing={loading}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="build-outline" size={32} color="#94A3B8" />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {services.length === 0
+                  ? "Chưa có dịch vụ nào"
+                  : "Không tìm thấy"}
+              </Text>
+              <Text style={styles.emptySub}>Tạo dịch vụ mới để bắt đầu</Text>
+              <TouchableOpacity
+                style={styles.emptyBtn}
+                onPress={() => router.push("/addService")}
+              >
+                <Ionicons name="add" size={16} color={Colors.White} />
+                <Text style={styles.emptyBtnText}>Tạo dịch vụ</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.emptyTitle}>
-              {services.length === 0 ? "Chưa có dịch vụ nào" : "Không tìm thấy"}
-            </Text>
-            <Text style={styles.emptySub}>Tạo dịch vụ mới để bắt đầu</Text>
-            <TouchableOpacity
-              style={styles.emptyBtn}
-              onPress={() => router.push("/addService")}
-            >
-              <Ionicons name="add" size={16} color={Colors.White} />
-              <Text style={styles.emptyBtnText}>Tạo dịch vụ</Text>
-            </TouchableOpacity>
-          </View>
-        }
-      />
+          }
+        />
+      )}
     </View>
   );
 }
@@ -503,6 +560,15 @@ const styles = StyleSheet.create({
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 11, fontWeight: "600" },
+
+  loadingWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingTop: 60,
+  },
+  loadingText: { fontSize: 14, color: "#94A3B8" },
 
   empty: { alignItems: "center", paddingVertical: 60, gap: 8 },
   emptyIconWrap: {
