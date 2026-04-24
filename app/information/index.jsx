@@ -5,19 +5,20 @@ import { useRouter } from 'expo-router';
 import { collection, getDocs } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, FlatList, Platform,
+    ActivityIndicator, FlatList, Image, Platform,
     ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
+const BG_IMAGE = require('../../assets/images/logo-light.png')
 
 // ── Role helpers ─────────────────────────────────────────────
 const getRole = (u) => {
     const r = (u?.role || u?.member || '').toLowerCase();
     if (r === 'admin') return 'admin';
     if (['đại lý', 'daily', 'dealer'].includes(r)) return 'daily';
-    if (['nhà phân phối', 'phantan', 'distributor'].includes(r)) return 'phantan';
+    if (['đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
     if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
     return 'other';
 };
@@ -25,7 +26,7 @@ const getRole = (u) => {
 const PRICE_LABELS = {
     price: { label: 'Giá niêm yết', color: '#64748B', bg: '#F1F5F9' },
     price_a: { label: 'Giá đại lý', color: '#2563EB', bg: '#EFF6FF' },
-    price_p: { label: 'Giá NP', color: '#7C3AED', bg: '#F5F3FF' },
+    price_p: { label: 'Giá đối tác', color: '#7C3AED', bg: '#F5F3FF' },
     price_c: { label: 'Giá CTV', color: '#059669', bg: '#ECFDF5' },
 };
 
@@ -272,78 +273,87 @@ export default function InformationScreen() {
     };
 
     return (
-        <View style={S.container}>
-            {/* Header */}
-            <View style={S.header}>
-                {!isWeb && (
-                    <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
-                        <Ionicons name="arrow-back" size={20} color={Colors.TextPrimary} />
-                    </TouchableOpacity>
-                )}
-                <View style={{ flex: 1 }}>
-                    <Text style={S.headerTitle}>Thông tin</Text>
-                    <View style={S.roleBadge}>
-                        <Text style={S.roleBadgeText}>
-                            {{ admin: '👑 Quản trị viên', daily: '🏪 Đại lý', phantan: '🚚 Nhà phân phối', ctv: '🤝 Cộng tác viên' }[role] || ''}
-                        </Text>
+        <View style={S.root}>
+
+            {/* ✅ Watermark — cố định chính giữa, mờ nhạt */}
+            <Image
+                source={BG_IMAGE}
+                style={S.watermark}
+                resizeMode="contain"
+            />
+            <View style={S.container}>
+                {/* Header */}
+                <View style={S.header}>
+                    {!isWeb && (
+                        <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
+                            <Ionicons name="arrow-back" size={20} color={Colors.TextPrimary} />
+                        </TouchableOpacity>
+                    )}
+                    <View style={{ flex: 1 }}>
+                        <Text style={S.headerTitle}>Thông tin</Text>
+                        <View style={S.roleBadge}>
+                            <Text style={S.roleBadgeText}>
+                                {{ admin: '👑 Quản trị viên', daily: '🏪 Đại lý', phantan: '🚚 đối tác', ctv: '🤝 Cộng tác viên' }[role] || ''}
+                            </Text>
+                        </View>
                     </View>
                 </View>
-            </View>
 
-            {/* Tabs */}
-            <View style={S.tabBar}>
-                {[
-                    { key: 'products', label: 'Sản phẩm', icon: 'cube-outline' },
-                    { key: 'services', label: 'Dịch vụ', icon: 'construct-outline' },
-                ].map(tab => (
-                    <TouchableOpacity key={tab.key} style={[S.tab, activeTab === tab.key && S.tabActive]} onPress={() => handleTabChange(tab.key)}>
-                        <Ionicons name={tab.icon} size={16} color={activeTab === tab.key ? '#2563EB' : '#94A3B8'} />
-                        <Text style={[S.tabText, activeTab === tab.key && S.tabTextActive]}>{tab.label}</Text>
-                        {tab.key === 'services' && services.length > 0 && (
-                            <View style={S.tabBadge}><Text style={S.tabBadgeText}>{services.length}</Text></View>
-                        )}
-                    </TouchableOpacity>
-                ))}
-            </View>
+                {/* Tabs */}
+                <View style={S.tabBar}>
+                    {[
+                        { key: 'products', label: 'Sản phẩm', icon: 'cube-outline' },
+                        { key: 'services', label: 'Dịch vụ', icon: 'construct-outline' },
+                    ].map(tab => (
+                        <TouchableOpacity key={tab.key} style={[S.tab, activeTab === tab.key && S.tabActive]} onPress={() => handleTabChange(tab.key)}>
+                            <Ionicons name={tab.icon} size={16} color={activeTab === tab.key ? '#2563EB' : '#94A3B8'} />
+                            <Text style={[S.tabText, activeTab === tab.key && S.tabTextActive]}>{tab.label}</Text>
+                            {tab.key === 'services' && services.length > 0 && (
+                                <View style={S.tabBadge}><Text style={S.tabBadgeText}>{services.length}</Text></View>
+                            )}
+                        </TouchableOpacity>
+                    ))}
+                </View>
 
-            {/* Content */}
-            <View style={S.content}>
+                {/* Content */}
+                <View style={S.content}>
 
-                {/* ── Products ── */}
-                {activeTab === 'products' && (
-                    selectedProduct ? (
-                        <ProductDetail product={selectedProduct} priceFields={priceFields} onClose={() => setSelectedProduct(null)} />
-                    ) : (
+                    {/* ── Products ── */}
+                    {activeTab === 'products' && (
+                        selectedProduct ? (
+                            <ProductDetail product={selectedProduct} priceFields={priceFields} onClose={() => setSelectedProduct(null)} />
+                        ) : (
+                            <View style={S.listContainer}>
+                                {loadingProducts ? (
+                                    <View style={S.loadingWrap}><ActivityIndicator size="large" color="#2563EB" /><Text style={S.loadingText}>Đang tải sản phẩm...</Text></View>
+                                ) : (
+                                    <>
+                                        <View style={S.listHeader}>
+                                            <Text style={S.listCount}>{products.length} sản phẩm</Text>
+                                        </View>
+                                        <ProductList products={products} priceFields={priceFields} onSelect={setSelectedProduct} />
+                                    </>
+                                )}
+                            </View>
+                        )
+                    )}
+
+                    {/* ── Services ── */}
+                    {activeTab === 'services' && (
                         <View style={S.listContainer}>
-                            {loadingProducts ? (
-                                <View style={S.loadingWrap}><ActivityIndicator size="large" color="#2563EB" /><Text style={S.loadingText}>Đang tải sản phẩm...</Text></View>
+                            {loadingServices ? (
+                                <View style={S.loadingWrap}><ActivityIndicator size="large" color="#2563EB" /><Text style={S.loadingText}>Đang tải dịch vụ...</Text></View>
                             ) : (
                                 <>
                                     <View style={S.listHeader}>
-                                        <Text style={S.listCount}>{products.length} sản phẩm</Text>
+                                        <Text style={S.listCount}>{services.length} danh mục dịch vụ</Text>
                                     </View>
-                                    <ProductList products={products} priceFields={priceFields} onSelect={setSelectedProduct} />
+                                    <ServiceCategoryGrid services={services} />
                                 </>
                             )}
                         </View>
-                    )
-                )}
-
-                {/* ── Services ── */}
-                {activeTab === 'services' && (
-                    <View style={S.listContainer}>
-                        {loadingServices ? (
-                            <View style={S.loadingWrap}><ActivityIndicator size="large" color="#2563EB" /><Text style={S.loadingText}>Đang tải dịch vụ...</Text></View>
-                        ) : (
-                            <>
-                                <View style={S.listHeader}>
-                                    <Text style={S.listCount}>{services.length} danh mục dịch vụ</Text>
-                                </View>
-                                <ServiceCategoryGrid services={services} />
-                            </>
-                        )}
-                    </View>
-                )}
+                    )}
+                </View>
             </View>
         </View>
     );
@@ -351,7 +361,19 @@ export default function InformationScreen() {
 
 // ── Styles ────────────────────────────────────────────────────
 const S = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8FAFC', paddingTop: isWeb ? 0 : 44 },
+    root: {
+        flex: 1,
+        backgroundColor: "#F8FAFC",
+    },
+    watermark: {
+        position: "absolute",
+        width: "80%",           // ← to nhỏ tuỳ ý
+        height: "60%",          // ← cao thấp tuỳ ý
+        top: "20%",             // ← căn giữa dọc
+        left: "10%",            // ← căn giữa ngang
+        opacity: 0.05,          // ← 0.05 rất mờ / 0.15 rõ hơn
+    },
+    container: { flex: 1, backgroundColor: 'transparent', paddingTop: isWeb ? 0 : 44 },
     header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: isWeb ? 32 : 16, paddingVertical: isWeb ? 20 : 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
     headerTitle: { fontSize: isWeb ? 22 : 18, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },

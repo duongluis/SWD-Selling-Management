@@ -8,6 +8,7 @@ import { useCallback, useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Platform,
   StyleSheet,
   Text,
@@ -18,6 +19,7 @@ import {
 import { getRole } from "../../components/Hooks/useCustomers";
 
 const isWeb = Platform.OS === "web";
+const BG_IMAGE = require('../../assets/images/logo-light.png')
 
 const SERVICE_TYPES = {
   INSTALLATION: {
@@ -197,6 +199,7 @@ export default function ServiceView() {
     const statusCfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.PENDING;
 
     return (
+
       <TouchableOpacity
         style={styles.serviceRow}
         activeOpacity={0.6}
@@ -271,147 +274,168 @@ export default function ServiceView() {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          {!isWeb && <Text style={styles.headerSub}>MANAGEMENT</Text>}
-          <Text style={styles.headerTitle}>Dịch vụ</Text>
-          <Text style={styles.headerCount}>
-            {loading ? "Đang tải..." : `${services.length} dịch vụ đang hoạt động`}
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => router.push("/addService")}
-        >
-          <Ionicons name="add" size={18} color={Colors.White} />
-          {isWeb && <Text style={styles.addBtnText}>Đăng kí dịch vụ</Text>}
-        </TouchableOpacity>
-      </View>
+    <View style={styles.root}>
 
-      {/* Stats — web */}
-      {isWeb && (
-        <View style={styles.statsRow}>
-          {Object.entries(SERVICE_TYPES).map(([key, cfg]) => (
-            <View key={key} style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: cfg.bg }]}>
-                <Ionicons name={cfg.icon} size={16} color={cfg.color} />
+      {/* ✅ Watermark — cố định chính giữa, mờ nhạt */}
+      <Image
+        source={BG_IMAGE}
+        style={styles.watermark}
+        resizeMode="contain"
+      />
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            {!isWeb && <Text style={styles.headerSub}>MANAGEMENT</Text>}
+            <Text style={styles.headerTitle}>Dịch vụ</Text>
+            <Text style={styles.headerCount}>
+              {loading ? "Đang tải..." : `${services.length} dịch vụ đang hoạt động`}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => router.push("/addService")}
+          >
+            <Ionicons name="add" size={18} color={Colors.White} />
+            {isWeb && <Text style={styles.addBtnText}>Đăng kí dịch vụ</Text>}
+          </TouchableOpacity>
+        </View>
+
+        {/* Stats — web */}
+        {isWeb && (
+          <View style={styles.statsRow}>
+            {Object.entries(SERVICE_TYPES).map(([key, cfg]) => (
+              <View key={key} style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: cfg.bg }]}>
+                  <Ionicons name={cfg.icon} size={16} color={cfg.color} />
+                </View>
+                <View>
+                  <Text style={styles.statValue}>
+                    {services.filter((s) => s.type === key).length}
+                  </Text>
+                  <Text style={styles.statLabel}>{cfg.label}</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.statValue}>
-                  {services.filter((s) => s.type === key).length}
-                </Text>
-                <Text style={styles.statLabel}>{cfg.label}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
+            ))}
+          </View>
+        )}
 
-      {/* Toolbar */}
-      <View style={styles.toolbar}>
-        <View style={styles.searchWrap}>
-          <Ionicons name="search-outline" size={16} color="#94A3B8" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm dịch vụ..."
-            placeholderTextColor="#94A3B8"
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={16} color="#94A3B8" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.filterTabs}>
-          {TABS.map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              style={[
-                styles.filterTab,
-                filter === tab && styles.filterTabActive,
-              ]}
-              onPress={() => setFilter(tab)}
-            >
-              <Text
-                style={[
-                  styles.filterTabText,
-                  filter === tab && styles.filterTabTextActive,
-                ]}
-              >
-                {tab === "All"
-                  ? `Tất cả (${counts.All})`
-                  : `${STATUS_CONFIG[tab]?.label} (${counts[tab]})`}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Table header — web */}
-      {isWeb && filteredServices.length > 0 && (
-        <View style={styles.tableHeader}>
-          <View style={{ width: 36 }} />
-          <Text style={[styles.thCell, { flex: 2 }]}>Khách hàng</Text>
-          <Text style={[styles.thCell, { width: 110 }]}>Loại dịch vụ</Text>
-          <Text style={[styles.thCell, { flex: 1 }]}>Ngày</Text>
-          <Text style={[styles.thCell, { flex: 2 }]}>Ghi chú</Text>
-          <Text style={[styles.thCell, { width: 110 }]}>Trạng thái</Text>
-          <View style={{ width: 20 }} />
-        </View>
-      )}
-
-      {/* Loading state */}
-      {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color="#2563EB" />
-          <Text style={styles.loadingText}>Đang tải dịch vụ...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredServices}
-          renderItem={renderService}
-          keyExtractor={(item, index) =>
-            item.docId ?? item.id?.toString() ?? index.toString()
-          }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: isWeb ? 32 : 100 }}
-          onRefresh={refresh}
-          refreshing={loading}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <View style={styles.emptyIconWrap}>
-                <Ionicons name="build-outline" size={32} color="#94A3B8" />
-              </View>
-              <Text style={styles.emptyTitle}>
-                {services.length === 0
-                  ? "Chưa có dịch vụ nào"
-                  : "Không tìm thấy"}
-              </Text>
-              <Text style={styles.emptySub}>Tạo dịch vụ mới để bắt đầu</Text>
-              <TouchableOpacity
-                style={styles.emptyBtn}
-                onPress={() => router.push("/addService")}
-              >
-                <Ionicons name="add" size={16} color={Colors.White} />
-                <Text style={styles.emptyBtnText}>Tạo dịch vụ</Text>
+        {/* Toolbar */}
+        <View style={styles.toolbar}>
+          <View style={styles.searchWrap}>
+            <Ionicons name="search-outline" size={16} color="#94A3B8" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm dịch vụ..."
+              placeholderTextColor="#94A3B8"
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch("")}>
+                <Ionicons name="close-circle" size={16} color="#94A3B8" />
               </TouchableOpacity>
-            </View>
-          }
-        />
-      )}
+            )}
+          </View>
+
+          <View style={styles.filterTabs}>
+            {TABS.map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.filterTab,
+                  filter === tab && styles.filterTabActive,
+                ]}
+                onPress={() => setFilter(tab)}
+              >
+                <Text
+                  style={[
+                    styles.filterTabText,
+                    filter === tab && styles.filterTabTextActive,
+                  ]}
+                >
+                  {tab === "All"
+                    ? `Tất cả (${counts.All})`
+                    : `${STATUS_CONFIG[tab]?.label} (${counts[tab]})`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Table header — web */}
+        {isWeb && filteredServices.length > 0 && (
+          <View style={styles.tableHeader}>
+            <View style={{ width: 36 }} />
+            <Text style={[styles.thCell, { flex: 2 }]}>Khách hàng</Text>
+            <Text style={[styles.thCell, { width: 110 }]}>Loại dịch vụ</Text>
+            <Text style={[styles.thCell, { flex: 1 }]}>Ngày</Text>
+            <Text style={[styles.thCell, { flex: 2 }]}>Ghi chú</Text>
+            <Text style={[styles.thCell, { width: 110 }]}>Trạng thái</Text>
+            <View style={{ width: 20 }} />
+          </View>
+        )}
+
+        {/* Loading state */}
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color="#2563EB" />
+            <Text style={styles.loadingText}>Đang tải dịch vụ...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredServices}
+            renderItem={renderService}
+            keyExtractor={(item, index) =>
+              item.docId ?? item.id?.toString() ?? index.toString()
+            }
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: isWeb ? 32 : 100 }}
+            onRefresh={refresh}
+            refreshing={loading}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <View style={styles.emptyIconWrap}>
+                  <Ionicons name="build-outline" size={32} color="#94A3B8" />
+                </View>
+                <Text style={styles.emptyTitle}>
+                  {services.length === 0
+                    ? "Chưa có dịch vụ nào"
+                    : "Không tìm thấy"}
+                </Text>
+                <Text style={styles.emptySub}>Tạo dịch vụ mới để bắt đầu</Text>
+                <TouchableOpacity
+                  style={styles.emptyBtn}
+                  onPress={() => router.push("/addService")}
+                >
+                  <Ionicons name="add" size={16} color={Colors.White} />
+                  <Text style={styles.emptyBtnText}>Tạo dịch vụ</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
     backgroundColor: "#F8FAFC",
+  },
+  watermark: {
+    position: "absolute",
+    width: "80%",           // ← to nhỏ tuỳ ý
+    height: "60%",          // ← cao thấp tuỳ ý
+    top: "20%",             // ← căn giữa dọc
+    left: "10%",            // ← căn giữa ngang
+    opacity: 0.05,          // ← 0.05 rất mờ / 0.15 rõ hơn
+  },
+  container: {
+    flex: 1,
+    backgroundColor: "#transparent",
     paddingHorizontal: isWeb ? 32 : 16,
     paddingTop: isWeb ? 28 : 30,
   },

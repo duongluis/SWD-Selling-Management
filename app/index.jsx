@@ -1,5 +1,6 @@
 import Colors from "@/constant/Colors";
 import { router } from "expo-router";
+import { useEffect } from 'react';
 import {
   Dimensions,
   Image,
@@ -8,7 +9,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 const backgroundImg = require("./../assets/images/background_img.png");
@@ -16,6 +17,14 @@ const logoImg = require("./../assets/images/logo-dark.png");
 
 export default function Index() {
   const { height, width } = Dimensions.get("window");
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((reg) => reg.unregister());
+      });
+    }
+  }, []);
 
   if (Platform.OS === "web") {
     // ✅ Fix double assets

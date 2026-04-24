@@ -3,10 +3,11 @@ import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
+const BG_IMAGE = require('../../assets/images/logo-light.png')
 
 // ── Time filter helpers ───────────────────────────────────────
 const now = new Date();
@@ -220,89 +221,111 @@ export default function LeaderboardView() {
   const filterLabel = FILTERS.find(f => f.key === filter);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.root}>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          {!isWeb && <Text style={styles.headerSub}>RANKINGS</Text>}
-          <Text style={styles.headerTitle}>Bảng xếp hạng</Text>
-          <Text style={styles.headerDesc}>Doanh thu · {filterLabel?.label}</Text>
-        </View>
-      </View>
+      {/* ✅ Watermark — cố định chính giữa, mờ nhạt */}
+      <Image
+        source={BG_IMAGE}
+        style={styles.watermark}
+        resizeMode="contain"
+      />
+      <View style={styles.container}>
 
-      {/* Filter tabs */}
-      <View style={styles.filterScroll}>
-        {FILTERS.map(f => (
-          <TouchableOpacity
-            key={f.key}
-            style={[styles.filterTab, filter === f.key && styles.filterTabActive]}
-            onPress={() => setFilter(f.key)}
-          >
-            <Text style={[styles.filterTabText, filter === f.key && styles.filterTabTextActive]}>
-              {f.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* My rank badge */}
-      {myRank && (
-        <View style={styles.myRankBanner}>
-          <Ionicons name="person-circle-outline" size={16} color={Colors.LightBlue} />
-          <Text style={styles.myRankText}>
-            Thứ hạng của bạn: <Text style={{ fontWeight: '800', color: Colors.LightBlue }}>#{myRank.rank}</Text>
-            {'  '}·{'  '}{fmtVND(myRank.revenue)} doanh thu
-          </Text>
-        </View>
-      )}
-
-      {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={Colors.LightBlue} size="large" />
-          <Text style={styles.loadingText}>Đang tải...</Text>
-        </View>
-      ) : ranking.length === 0 ? (
-        <View style={styles.empty}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="trophy-outline" size={32} color="#94A3B8" />
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            {!isWeb && <Text style={styles.headerSub}>RANKINGS</Text>}
+            <Text style={styles.headerTitle}>Bảng xếp hạng</Text>
+            <Text style={styles.headerDesc}>Doanh thu · {filterLabel?.label}</Text>
           </View>
-          <Text style={styles.emptyTitle}>Chưa có dữ liệu</Text>
-          <Text style={styles.emptySub}>Không có doanh thu trong {filterLabel?.label?.toLowerCase()}</Text>
         </View>
-      ) : (
-        <FlatList
-          data={rest}
-          keyExtractor={item => item.email}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: isWeb ? 32 : 100 }}
-          ListHeaderComponent={
-            <>
-              {/* Podium top 3 */}
-              <View style={styles.podiumCard}>
-                <Podium top3={top3} />
-              </View>
 
-              {/* Table header */}
-              {rest.length > 0 && (
-                <View style={styles.tableHeader}>
-                  <Text style={[styles.thCell, { width: 28 }]}>#</Text>
-                  <Text style={[styles.thCell, { flex: 1 }]}>Nhân viên</Text>
-                  {isWeb && <Text style={[styles.thCell, { flex: 2 }]}>Tiến độ</Text>}
-                  <Text style={[styles.thCell, { width: 90, textAlign: 'right' }]}>Doanh thu</Text>
+        {/* Filter tabs */}
+        <View style={styles.filterScroll}>
+          {FILTERS.map(f => (
+            <TouchableOpacity
+              key={f.key}
+              style={[styles.filterTab, filter === f.key && styles.filterTabActive]}
+              onPress={() => setFilter(f.key)}
+            >
+              <Text style={[styles.filterTabText, filter === f.key && styles.filterTabTextActive]}>
+                {f.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* My rank badge */}
+        {myRank && (
+          <View style={styles.myRankBanner}>
+            <Ionicons name="person-circle-outline" size={16} color={Colors.LightBlue} />
+            <Text style={styles.myRankText}>
+              Thứ hạng của bạn: <Text style={{ fontWeight: '800', color: Colors.LightBlue }}>#{myRank.rank}</Text>
+              {'  '}·{'  '}{fmtVND(myRank.revenue)} doanh thu
+            </Text>
+          </View>
+        )}
+
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator color={Colors.LightBlue} size="large" />
+            <Text style={styles.loadingText}>Đang tải...</Text>
+          </View>
+        ) : ranking.length === 0 ? (
+          <View style={styles.empty}>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="trophy-outline" size={32} color="#94A3B8" />
+            </View>
+            <Text style={styles.emptyTitle}>Chưa có dữ liệu</Text>
+            <Text style={styles.emptySub}>Không có doanh thu trong {filterLabel?.label?.toLowerCase()}</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={rest}
+            keyExtractor={item => item.email}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: isWeb ? 32 : 100 }}
+            ListHeaderComponent={
+              <>
+                {/* Podium top 3 */}
+                <View style={styles.podiumCard}>
+                  <Podium top3={top3} />
                 </View>
-              )}
-            </>
-          }
-          renderItem={renderRow}
-        />
-      )}
+
+                {/* Table header */}
+                {rest.length > 0 && (
+                  <View style={styles.tableHeader}>
+                    <Text style={[styles.thCell, { width: 28 }]}>#</Text>
+                    <Text style={[styles.thCell, { flex: 1 }]}>Nhân viên</Text>
+                    {isWeb && <Text style={[styles.thCell, { flex: 2 }]}>Tiến độ</Text>}
+                    <Text style={[styles.thCell, { width: 90, textAlign: 'right' }]}>Doanh thu</Text>
+                  </View>
+                )}
+              </>
+            }
+            renderItem={renderRow}
+          />
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC', paddingHorizontal: isWeb ? 32 : 16, paddingTop: isWeb ? 28 : 30 },
+  root: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
+  watermark: {
+    position: "absolute",
+    width: "80%",           // ← to nhỏ tuỳ ý
+    height: "60%",          // ← cao thấp tuỳ ý
+    top: "20%",             // ← căn giữa dọc
+    left: "10%",            // ← căn giữa ngang
+    opacity: 0.05,          // ← 0.05 rất mờ / 0.15 rõ hơn
+  },
+
+  container: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: isWeb ? 32 : 16, paddingTop: isWeb ? 28 : 30 },
 
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: isWeb ? 24 : 14 },
   headerSub: { fontSize: 10, color: '#94A3B8', fontWeight: '700', letterSpacing: 1, marginBottom: 2 },

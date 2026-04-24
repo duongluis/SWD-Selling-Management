@@ -236,7 +236,7 @@ export default function AddCustomer() {
                 <Text style={W.submitBtnText}>{submitting ? 'Đang lưu...' : 'Lưu khách hàng'}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={W.cancelBtnFull} onPress={() => router.back()}>
+              <TouchableOpacity style={W.cancelBtnFull} onPress={() => router.replace('(tabs)/customer')}>
                 <Text style={W.cancelBtnFullText}>Hủy bỏ</Text>
               </TouchableOpacity>
             </View>

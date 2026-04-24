@@ -13,6 +13,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useCustomers } from '../../components/Hooks/useCustomers'; // adjust path as needed
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
@@ -22,12 +23,6 @@ const { width: SCREEN_W } = Dimensions.get('window');
 const getCurrentQuarter = () => {
     const now = new Date();
     return `${now.getFullYear()}-Q${Math.ceil((now.getMonth() + 1) / 3)}`;
-};
-const getLastQuarter = () => {
-    const now = new Date();
-    const q = Math.ceil((now.getMonth() + 1) / 3);
-    if (q === 1) return `${now.getFullYear() - 1}-Q4`;
-    return `${now.getFullYear()}-Q${q - 1}`;
 };
 const isThisMonth = (dateStr) => {
     if (!dateStr) return false;
@@ -56,10 +51,10 @@ const fmt = (n) => {
 const fmtVND = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
 const PERIOD_TABS = [
-    { key: 'day', label: 'Day' },
-    { key: 'week', label: 'Week' },
-    { key: 'month', label: 'Month' },
-    { key: 'now', label: 'Now' },
+    { key: 'day', label: 'THEO NGÀY' },
+    { key: 'week', label: 'THEO TUẦN' },
+    { key: 'month', label: 'THEO THÁNG' },
+    { key: 'now', label: 'TẤT CẢ' },
 ];
 
 // ── Mini Line Chart (SVG) ────────────────────────────────────
@@ -98,7 +93,6 @@ function MiniChart({ data, color = '#4A9EFF', height = 120, width }) {
             </svg>
         );
     }
-    // React Native — fallback view bars
     return (
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', height, gap: 4, paddingHorizontal: pad }}>
             {data.map((d, i) => {
@@ -127,30 +121,43 @@ export default function RevenueAnalyticsScreen() {
     const router = useRouter();
     const { userDetail } = useContext(UserDetailContext);
 
+    // ✅ Use the shared hook — respects role-based access automatically
+    const { customers, loading: customersLoading } = useCustomers();
+
     const [period, setPeriod] = useState('month');
-    const [loading, setLoading] = useState(true);
     const [orders, setOrders] = useState([]);
+    const [ordersLoading, setOrdersLoading] = useState(false);
 
+    // ── Fetch orders whenever customers list changes ─────────
     useEffect(() => {
-        const fetchAll = async () => {
-            try {
-                const customerList = userDetail?.customer || [];
-                if (customerList.length === 0) { setLoading(false); return; }
+        if (customersLoading) return;           // wait for customers to load first
+        if (customers.length === 0) return;
 
-                const phones = customerList.map(c => c.phone).filter(Boolean);
+        const fetchOrders = async () => {
+            setOrdersLoading(true);
+            try {
+                const phones = customers.map(c => c.phone).filter(Boolean);
                 const all = [];
                 for (const phone of phones) {
                     try {
                         const snap = await getDoc(doc(db, 'orders', phone));
-                        if (snap.exists()) (snap.data().orders || []).forEach(o => all.push(o));
+                        if (snap.exists()) {
+                            (snap.data().orders || []).forEach(o => all.push(o));
+                        }
                     } catch (_) { }
                 }
                 setOrders(all);
-            } catch (e) { console.error(e); }
-            finally { setLoading(false); }
+            } catch (e) {
+                console.error('fetchOrders error:', e);
+            } finally {
+                setOrdersLoading(false);
+            }
         };
-        if (userDetail) fetchAll();
-    }, [userDetail]);
+
+        fetchOrders();
+    }, [customers, customersLoading]);
+
+    const loading = customersLoading || ordersLoading;
 
     // ── Filter by period ────────────────────────────────────────
     const filterOrders = (list) => {
@@ -172,7 +179,11 @@ export default function RevenueAnalyticsScreen() {
 
     // Revenue vs prev period delta
     const prevFiltered = period === 'month'
-        ? orders.filter(o => { const d = new Date(o.createdAt || 0); const p = new Date(); p.setMonth(p.getMonth() - 1); return d.getMonth() === p.getMonth() && d.getFullYear() === p.getFullYear(); })
+        ? orders.filter(o => {
+            const d = new Date(o.createdAt || 0);
+            const p = new Date(); p.setMonth(p.getMonth() - 1);
+            return d.getMonth() === p.getMonth() && d.getFullYear() === p.getFullYear();
+        })
         : [];
     const prevRevenue = prevFiltered.reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + p.price * p.qty, 0), 0);
     const delta = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue * 100) : 0;
@@ -192,7 +203,7 @@ export default function RevenueAnalyticsScreen() {
     // Category performance (by status)
     const categories = [
         { label: 'Đã hoàn thành', count: filtered.filter(o => o.status === 'COMPLETED').length, color: '#4A9EFF' },
-        { label: 'Lắp đặt (SHIPPED)', count: filtered.filter(o => o.status === 'SHIPPED').length, color: '#A78BFA' },
+        { label: 'Lắp đặt', count: filtered.filter(o => o.status === 'SHIPPED').length, color: '#A78BFA' },
         { label: 'Chờ xử lý', count: filtered.filter(o => o.status === 'PENDING').length, color: '#34D399' },
     ];
     const maxCat = Math.max(...categories.map(c => c.count), 1);
@@ -226,12 +237,12 @@ export default function RevenueAnalyticsScreen() {
                 <View style={styles.header}>
                     {!isWeb && (
                         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                            <Ionicons name="arrow-back" size={20} color="rgba(255,255,255,0.7)" />
+                            <Ionicons name="arrow-back" size={20} color="#FFF" />
                         </TouchableOpacity>
                     )}
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.headerSub}>PERFORMANCE OVERVIEW</Text>
-                        <Text style={styles.headerTitle}>Financial Insights</Text>
+                        <Text style={styles.headerSub}>TỔNG QUAN</Text>
+                        <Text style={styles.headerTitle}>BÁO CÁO TÀI CHÍNH</Text>
                     </View>
                     <View style={styles.headerAvatar}>
                         <Text style={styles.headerAvatarText}>
@@ -257,7 +268,7 @@ export default function RevenueAnalyticsScreen() {
 
                 {/* Total Revenue hero */}
                 <View style={styles.heroCard}>
-                    <Text style={styles.heroLabel}>TOTAL REVENUE</Text>
+                    <Text style={styles.heroLabel}>Tổng doanh thu</Text>
                     <View style={styles.heroRow}>
                         <Text style={styles.heroAmount}>{fmt(totalRevenue)}</Text>
                         <View style={[styles.deltaBadge, { backgroundColor: deltaPos ? '#16A34A22' : '#DC262622' }]}>
@@ -268,7 +279,6 @@ export default function RevenueAnalyticsScreen() {
                         </View>
                     </View>
 
-                    {/* Stats row */}
                     <View style={styles.statsRow}>
                         <View style={styles.statItem}>
                             <Text style={styles.statNum}>{totalOrders}</Text>
@@ -283,7 +293,6 @@ export default function RevenueAnalyticsScreen() {
                         </View>
                     </View>
 
-                    {/* Premium badge */}
                     <View style={styles.premiumBadge}>
                         <Ionicons name="trophy-outline" size={13} color="#F59E0B" />
                         <Text style={styles.premiumText}>
@@ -304,9 +313,7 @@ export default function RevenueAnalyticsScreen() {
                             <View style={[styles.legendDot, { backgroundColor: '#A78BFA' }]} /><Text style={styles.legendText}>Khách hàng</Text>
                         </View>
                     </View>
-
                     <MiniChart data={chartData} color="#4A9EFF" height={130} />
-
                     <View style={styles.chartLabels}>
                         {chartData.map((d, i) => (
                             <Text key={i} style={styles.chartLabel}>{d.label}</Text>
@@ -331,8 +338,6 @@ export default function RevenueAnalyticsScreen() {
                             </Text>
                         </View>
                     ))}
-
-                    {/* Insight box */}
                     <View style={styles.insightBox}>
                         <Ionicons name="bulb-outline" size={15} color="#F59E0B" />
                         <Text style={styles.insightText}>
@@ -351,13 +356,12 @@ export default function RevenueAnalyticsScreen() {
                             <Text style={styles.viewAllText}>Xem tất cả</Text>
                         </TouchableOpacity>
                     </View>
-
                     {topCustomers.length === 0 ? (
                         <Text style={styles.emptyText}>Chưa có dữ liệu</Text>
                     ) : topCustomers.map((c, i) => (
                         <View key={i} style={styles.topRow}>
-                            <View style={[styles.topRank, { backgroundColor: ['#F59E0B', '#94A3B8', '#B45309'][i] + '22' }]}>
-                                <Text style={[styles.topRankText, { color: ['#F59E0B', '#94A3B8', '#B45309'][i] }]}>
+                            <View style={[styles.topRank, { backgroundColor: ['#18b036', '#4A9EFF', '#861a97'][i] + '22' }]}>
+                                <Text style={[styles.topRankText, { color: ['#18b036', '#4A9EFF', '#861a97'][i] }]}>
                                     #{i + 1}
                                 </Text>
                             </View>
@@ -376,72 +380,57 @@ export default function RevenueAnalyticsScreen() {
     );
 }
 
+// styles unchanged — paste your original StyleSheet here
 const styles = StyleSheet.create({
-    root: { flex: 1, backgroundColor: '#0A0F2C' },
+    root: { flex: 1, backgroundColor: '#fff' },
     scroll: { paddingHorizontal: isWeb ? 32 : 16, paddingTop: isWeb ? 24 : 52 },
-
-    // Header
     header: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
-    backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
-    headerSub: { fontSize: 10, color: 'rgba(255,255,255,0.45)', letterSpacing: 1.5, fontWeight: '700', marginBottom: 3 },
-    headerTitle: { fontSize: isWeb ? 26 : 22, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
+    backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#7ca9bd', alignItems: 'center', justifyContent: 'center' },
+    headerSub: { fontSize: 10, color: '#7ca9bd', letterSpacing: 1.5, fontWeight: '700', marginBottom: 3 },
+    headerTitle: { fontSize: isWeb ? 26 : 22, fontWeight: '900', color: '#7ca9bd', letterSpacing: -0.3 },
     headerAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center' },
     headerAvatarText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
-
-    // Period tabs
-    periodTabs: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 3, marginBottom: 20, gap: 2 },
+    periodTabs: { flexDirection: 'row', backgroundColor: '#7ca9bd', borderRadius: 10, padding: 3, marginBottom: 20, gap: 2 },
     periodTab: { flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center' },
     periodTabActive: { backgroundColor: '#2563EB' },
-    periodTabText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
+    periodTabText: { fontSize: 12, fontWeight: '600', color: '#fff' },
     periodTabTextActive: { color: '#FFFFFF' },
-
-    // Hero card
-    heroCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 18, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-    heroLabel: { fontSize: 10, color: 'rgba(255,255,255,0.45)', letterSpacing: 1.5, fontWeight: '700', marginBottom: 6 },
+    heroCard: { backgroundColor: '#7ca9bd', borderRadius: 18, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#7ca9bd' },
+    heroLabel: { fontSize: 10, color: '#fff', letterSpacing: 1.5, fontWeight: '700', marginBottom: 6 },
     heroRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-    heroAmount: { fontSize: isWeb ? 44 : 38, fontWeight: '900', color: '#FFFFFF', letterSpacing: -1 },
+    heroAmount: { fontSize: isWeb ? 44 : 38, fontWeight: '900', color: '#fff', letterSpacing: -1 },
     deltaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
     deltaText: { fontSize: 12, fontWeight: '700' },
-
     statsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
     statItem: { flex: 1 },
-    statDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 16 },
-    statNum: { fontSize: isWeb ? 24 : 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 2 },
-    statLbl: { fontSize: 10, color: 'rgba(255,255,255,0.45)', fontWeight: '700', letterSpacing: 0.5 },
-    statPeriod: { fontSize: 10, color: 'rgba(255,255,255,0.3)' },
-
-    premiumBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(245,158,11,0.15)', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-    premiumText: { fontSize: 11, color: '#F59E0B', fontWeight: '800', letterSpacing: 0.5 },
-
-    // Cards
-    card: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+    statDivider: { width: 1, height: 40, backgroundColor: '#7ca9bd', marginHorizontal: 16 },
+    statNum: { fontSize: isWeb ? 24 : 20, fontWeight: '800', color: '#fff', marginBottom: 2 },
+    statLbl: { fontSize: 10, color: '#fff', fontWeight: '700', letterSpacing: 0.5 },
+    statPeriod: { fontSize: 10, color: '#fff' },
+    premiumBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fff', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+    premiumText: { fontSize: 11, color: '#7ca9bd', fontWeight: '800', letterSpacing: 0.5 },
+    card: { backgroundColor: '#7ca9bd', borderRadius: 16, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#7ca9bd' },
     cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    cardTitle: { fontSize: 15, fontWeight: '700', color: '#FFFFFF', marginBottom: 0 },
+    cardTitle: { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 0 },
     legendRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     legendDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#4A9EFF' },
-    legendText: { fontSize: 11, color: 'rgba(255,255,255,0.45)', marginRight: 6 },
+    legendText: { fontSize: 11, color: '#fff', marginRight: 6 },
     chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-    chartLabel: { fontSize: 10, color: 'rgba(255,255,255,0.3)', textAlign: 'center', flex: 1 },
-
-    // Category
+    chartLabel: { fontSize: 10, color: '#fff', textAlign: 'center', flex: 1 },
     catRow: { marginBottom: 14 },
     catInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
-    catLabel: { fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
-    catCount: { fontSize: 12, color: 'rgba(255,255,255,0.4)' },
+    catLabel: { fontSize: 12, color: '#fff', fontWeight: '500' },
+    catCount: { fontSize: 12, color: '#fff' },
     catBarWrap: { marginBottom: 3 },
     catPct: { fontSize: 11, fontWeight: '700', textAlign: 'right' },
-
-    insightBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: 'rgba(245,158,11,0.08)', borderRadius: 10, padding: 12, marginTop: 6, borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' },
-    insightText: { flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 17 },
-    viewAllText: { fontSize: 11, color: '#4A9EFF', fontWeight: '700', letterSpacing: 0.5 },
-
-    // Top customers
+    insightBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#65c1d6', borderRadius: 10, padding: 12, marginTop: 6, borderWidth: 1, borderColor: '#fff' },
+    insightText: { flex: 1, fontSize: 12, color: '#fff', lineHeight: 17 },
+    viewAllText: { fontSize: 11, color: '#fff', fontWeight: '700', letterSpacing: 0.5 },
     topRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
     topRank: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     topRankText: { fontSize: 12, fontWeight: '800' },
-    topName: { fontSize: 13, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 },
-    topSub: { fontSize: 11, color: 'rgba(255,255,255,0.4)' },
+    topName: { fontSize: 13, fontWeight: '700', color: '#FFF', marginBottom: 2 },
+    topSub: { fontSize: 11, color: '#fff' },
     topRevenue: { fontSize: 13, fontWeight: '700', color: '#4ADE80' },
-
-    emptyText: { fontSize: 13, color: 'rgba(255,255,255,0.3)', textAlign: 'center', paddingVertical: 16 },
+    emptyText: { fontSize: 13, color: '#fff', textAlign: 'center', paddingVertical: 16 },
 });

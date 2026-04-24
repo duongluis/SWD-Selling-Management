@@ -1,4 +1,5 @@
 import { getFirebaseErrorMessage } from '@/components/Main/getFirebaseErrorMessage';
+import { showAlert } from '@/components/Main/showAlert';
 import Colors from '@/constant/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { createUserWithEmailAndPassword } from '@firebase/auth';
@@ -51,7 +52,7 @@ export default function SignUp() {
       // DB sẽ được ghi ở userInfoView sau khi user hoàn tất
       router.replace('/auth/userInfo');
     } catch (e) {
-      Alert.alert('Lỗi đăng ký', getFirebaseErrorMessage(e));
+      showAlert('Lỗi đăng ký', getFirebaseErrorMessage(e));
     } finally {
       setLoading(false);
     }

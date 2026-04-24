@@ -16,6 +16,31 @@ import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
 
+// ── Order types ───────────────────────────────────────────────
+const ORDER_TYPES = {
+  buon: {
+    key: 'buon', label: 'Đơn buôn',
+    desc: 'Đại lý — giao hàng số lượng lớn',
+    icon: 'cube-outline', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE',
+    autoService: 'DELIVERY', autoSvcLabel: 'Giao hàng', autoSvcIcon: 'car-outline',
+  },
+  le: {
+    key: 'le', label: 'Đơn lẻ',
+    desc: 'NPP / CTV — lắp đặt tại nhà khách',
+    icon: 'home-outline', color: '#8B5CF6', bg: '#F5F3FF', border: '#DDD6FE',
+    autoService: 'INSTALLATION', autoSvcLabel: 'Lắp đặt', autoSvcIcon: 'build-outline',
+  },
+};
+
+// Role → locked order type (null = admin có thể chọn)
+const ROLE_ORDER_TYPE = {
+  daily: 'buon',   // đại lý → chỉ đơn buôn
+  ctv: 'le',     // cộng tác viên → chỉ đơn lẻ
+  phantan: 'le',     // nhà phân phối → chỉ đơn lẻ
+  admin: null,     // admin → chọn cả hai
+  other: 'le',
+};
+
 // ── Date helpers ─────────────────────────────────────────────
 const toDateStr = (d) => {
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
@@ -70,13 +95,6 @@ const getPriceField = (role) => ({ daily: 'price_a', phantan: 'price_p', ctv: 'p
 const ROLE_LABEL = { admin: 'Giá niêm yết', daily: 'Giá đại lý', phantan: 'Giá NP', ctv: 'Giá CTV', other: 'Giá niêm yết' };
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
-const SERVICE_TYPES = [
-  { key: 'INSTALLATION', label: 'Lắp đặt', icon: 'build-outline', color: '#8B5CF6' },
-  { key: 'MAINTENANCE', label: 'Bảo dưỡng', icon: 'construct-outline', color: '#F59E0B' },
-  { key: 'DELIVERY', label: 'Giao hàng', icon: 'car-outline', color: '#10B981' },
-  { key: 'CONSULTING', label: 'Tư vấn', icon: 'chatbubbles-outline', color: '#EC4899' },
-];
-
 // ── Product Dropdown ─────────────────────────────────────────
 function ProductDropdown({ catalog, onSelect }) {
   const [search, setSearch] = useState('');
@@ -120,6 +138,13 @@ export default function AddOrder() {
   const role = getRole(userDetail);
   const priceField = getPriceField(role);
 
+  // ── Locked order type theo role ───────────────────────────
+  const lockedType = ROLE_ORDER_TYPE[role];
+  const orderType = lockedType || 'le';  // admin defaults to 'le', can change
+  const [selectedOrderType, setSelectedOrderType] = useState(lockedType || 'le');
+  const activeType = lockedType ?? selectedOrderType;
+  const typeCfg = ORDER_TYPES[activeType];
+
   // ── Customers ─────────────────────────────────────────────
   const [customerList, setCustomerList] = useState([]);
   const [customerLoading, setCustomerLoading] = useState(true);
@@ -132,12 +157,12 @@ export default function AddOrder() {
       if (role === 'admin') {
         (await getDocs(collection(db, 'customers'))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
       } else if (role === 'ctv') {
-        (await getDocs(query(collection(db, 'customers'), where('createdBy', '==', myEmail)))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
+        (await getDocs(query(collection(db, 'customers'), where('addBy', '==', myEmail)))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
       } else if (role === 'daily' || role === 'phantan') {
-        (await getDocs(query(collection(db, 'customers'), where('createdBy', '==', myEmail)))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
+        (await getDocs(query(collection(db, 'customers'), where('addBy', '==', myEmail)))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
         const subs = (await getDocs(query(collection(db, 'users'), where('advisor', '==', myEmail)))).docs.map(d => d.data().email).filter(Boolean);
         for (let i = 0; i < subs.length; i += 30) {
-          (await getDocs(query(collection(db, 'customers'), where('createdBy', 'in', subs.slice(i, i + 30))))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
+          (await getDocs(query(collection(db, 'customers'), where('addBy', 'in', subs.slice(i, i + 30))))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
         }
       }
       const map = new Map(); all.forEach(c => map.set(c.docId, c));
@@ -168,10 +193,6 @@ export default function AddOrder() {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showProductDrop, setShowProductDrop] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: '', qty: '1', price: '', productId: '' });
-
-  // ── Service state ─────────────────────────────────────────
-  const [includeService, setIncludeService] = useState(false);
-  const [serviceType, setServiceType] = useState('INSTALLATION');
   const [serviceNote, setServiceNote] = useState('');
 
   const filteredCustomers = customerSearch.trim() === '' ? customerList
@@ -197,33 +218,36 @@ export default function AddOrder() {
     if (products.length === 0) { showAlert('Thông báo', 'Vui lòng thêm ít nhất 1 sản phẩm'); return; }
     setSubmitting(true);
     try {
-      // Lưu đơn hàng
-      const newOrder = { id: orderId, customer: selectedCustomer.name, items: products, createdAt: orderDate, address: deliveryAddress, note: notes, status: 'PENDING' };
+      const newOrder = {
+        id: orderId, customer: selectedCustomer.name,
+        items: products, createdAt: orderDate,
+        address: deliveryAddress, note: notes,
+        status: 'PENDING', orderType: activeType,
+      };
       await setDoc(doc(db, 'orders', selectedCustomer.phone), { orders: arrayUnion(newOrder) }, { merge: true });
 
-      // Lưu dịch vụ kèm (nếu bật)
-      if (includeService) {
-        const svcId = 'SV-' + Date.now().toString().slice(-6);
-        await setDoc(doc(db, 'services', svcId), {
-          id: svcId, type: serviceType,
-          orderId, orderItems: products,
-          customer: selectedCustomer.name, phone: selectedCustomer.phone,
-          address: deliveryAddress, note: serviceNote,
-          status: 'PENDING', createdBy: userDetail?.email || '',
-          createdAt: new Date().toISOString(),
-        });
-      }
+      // ✅ Tự động tạo dịch vụ — không có toggle
+      const svcId = 'SV-' + Date.now().toString().slice(-6);
+      await setDoc(doc(db, 'service', svcId), {
+        id: svcId, type: typeCfg.autoService,
+        orderId, orderItems: products,
+        customer: selectedCustomer.name, phone: selectedCustomer.phone,
+        address: deliveryAddress, note: serviceNote,
+        status: 'PENDING', createdBy: userDetail?.email || '',
+        createdAt: new Date().toISOString(),
+        autoAssigned: true, orderType: activeType,
+      });
 
       showSuccess(
         'Đơn hàng đã được tạo!',
-        `Mã đơn: ${orderId}${includeService ? '\nDịch vụ đã được tạo kèm.' : ''}`,
+        `Mã đơn: ${orderId} (${typeCfg.label})\nDịch vụ ${typeCfg.autoSvcLabel} đã được tự động tạo kèm.`,
         () => router.replace('/(tabs)/order')
       );
     } catch (e) { showAlert('Lỗi', e.message); }
     finally { setSubmitting(false); }
   };
 
-  // ── Customer Picker Dropdown ──────────────────────────────
+  // ── Customer Picker ───────────────────────────────────────
   const CustomerPickerDropdown = ({ ws }) => (
     <View style={ws ? W.dropdown : styles.dropdown}>
       <View style={ws ? W.dropdownSearch : styles.dropdownSearch}>
@@ -285,74 +309,68 @@ export default function AddOrder() {
     </View>
   );
 
-  // ── Service Section ───────────────────────────────────────
-  const ServiceSection = ({ ws }) => (
-    <View style={ws ? W.serviceCard : styles.serviceCard}>
-      {/* Toggle header */}
-      <TouchableOpacity style={ws ? W.serviceToggleRow : styles.serviceToggleRow} onPress={() => setIncludeService(p => !p)} activeOpacity={0.8}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-          <View style={[ws ? W.serviceIcon : styles.serviceIcon, { backgroundColor: includeService ? '#EFF6FF' : '#F1F5F9' }]}>
-            <Ionicons name="construct-outline" size={16} color={includeService ? '#2563EB' : '#94A3B8'} />
+  // ── Order type badge / selector ───────────────────────────
+  // Nếu locked → chỉ hiện badge thông báo, không cho chọn
+  // Nếu admin → hiện 2 lựa chọn
+  const OrderTypeBadge = ({ ws }) => {
+    if (lockedType) {
+      // Locked — chỉ hiện badge
+      return (
+        <View style={[ws ? W.lockedBadge : styles.lockedBadge, { backgroundColor: typeCfg.bg, borderColor: typeCfg.border }]}>
+          <Ionicons name={typeCfg.icon} size={16} color={typeCfg.color} />
+          <View style={{ flex: 1 }}>
+            <Text style={[ws ? W.lockedBadgeLabel : styles.lockedBadgeLabel, { color: typeCfg.color }]}>{typeCfg.label}</Text>
+            <Text style={ws ? W.lockedBadgeDesc : styles.lockedBadgeDesc}>{typeCfg.desc}</Text>
           </View>
-          <View>
-            <Text style={[ws ? W.serviceToggleLabel : styles.serviceToggleLabel, includeService && { color: '#2563EB' }]}>Tạo dịch vụ kèm đơn hàng</Text>
-            <Text style={ws ? W.serviceToggleSub : styles.serviceToggleSub}>{includeService ? 'Dịch vụ sẽ được lưu cùng đơn' : 'Tuỳ chọn'}</Text>
+          <Ionicons name="lock-closed" size={13} color={typeCfg.color} />
+        </View>
+      );
+    }
+    // Admin — 2 lựa chọn
+    return (
+      <View style={ws ? W.typeRow : styles.typeRow}>
+        {Object.values(ORDER_TYPES).map(t => {
+          const active = selectedOrderType === t.key;
+          return (
+            <TouchableOpacity key={t.key}
+              style={[ws ? W.typeCard : styles.typeCard, active && { borderColor: t.color, backgroundColor: t.bg }]}
+              onPress={() => setSelectedOrderType(t.key)} activeOpacity={0.8}
+            >
+              <View style={[ws ? W.typeCardIcon : styles.typeCardIcon, { backgroundColor: active ? t.color + '22' : '#F1F5F9' }]}>
+                <Ionicons name={t.icon} size={18} color={active ? t.color : '#94A3B8'} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[ws ? W.typeCardLabel : styles.typeCardLabel, active && { color: t.color }]}>{t.label}</Text>
+                <Text style={ws ? W.typeCardDesc : styles.typeCardDesc}>{t.desc}</Text>
+              </View>
+              {active && <View style={[ws ? W.typeCheckDot : styles.typeCheckDot, { backgroundColor: t.color }]}><Ionicons name="checkmark" size={10} color="#fff" /></View>}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  };
+
+  // ── Auto service info banner ──────────────────────────────
+  const AutoServiceBanner = ({ ws }) => (
+    <View style={[ws ? W.svcBanner : styles.svcBanner, { backgroundColor: typeCfg.bg, borderColor: typeCfg.border }]}>
+      <View style={[ws ? W.svcBannerIcon : styles.svcBannerIcon, { backgroundColor: typeCfg.color + '22' }]}>
+        <Ionicons name={typeCfg.autoSvcIcon} size={18} color={typeCfg.color} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={[ws ? W.svcBannerTitle : styles.svcBannerTitle, { color: typeCfg.color }]}>
+            Dịch vụ {typeCfg.autoSvcLabel} tự động
+          </Text>
+          <View style={[ws ? W.autoBadge : styles.autoBadge, { backgroundColor: typeCfg.color + '22', borderColor: typeCfg.color + '44' }]}>
+            <Ionicons name="flash" size={9} color={typeCfg.color} />
+            <Text style={[ws ? W.autoBadgeText : styles.autoBadgeText, { color: typeCfg.color }]}>Tự động</Text>
           </View>
         </View>
-        {/* Toggle switch */}
-        <View style={[ws ? W.toggleSwitch : styles.toggleSwitch, includeService && (ws ? W.toggleOn : styles.toggleOn)]}>
-          <View style={[ws ? W.toggleThumb : styles.toggleThumb, includeService && (ws ? W.toggleThumbOn : styles.toggleThumbOn)]} />
-        </View>
-      </TouchableOpacity>
-
-      {/* Body — hiện khi bật */}
-      {includeService && (
-        <View style={ws ? W.serviceBody : styles.serviceBody}>
-          {/* Service type */}
-          <Text style={ws ? W.svcLabel : styles.svcLabel}>Loại dịch vụ</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-            {SERVICE_TYPES.map(t => {
-              const active = serviceType === t.key;
-              return (
-                <TouchableOpacity key={t.key}
-                  style={[ws ? W.svcTypeTab : styles.svcTypeTab, active && { borderColor: t.color, backgroundColor: t.color + '18' }]}
-                  onPress={() => setServiceType(t.key)} activeOpacity={0.8}
-                >
-                  <Ionicons name={t.icon} size={13} color={active ? t.color : '#94A3B8'} />
-                  <Text style={[ws ? W.svcTypeText : styles.svcTypeText, active && { color: t.color, fontWeight: '700' }]}>{t.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {/* Sản phẩm sẽ được đính kèm */}
-          {products.length > 0 && (
-            <View style={ws ? W.svcItemsBox : styles.svcItemsBox}>
-              <Text style={ws ? W.svcItemsTitle : styles.svcItemsTitle}>Sản phẩm đính kèm:</Text>
-              {products.map((p, i) => (
-                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 3 }}>
-                  <Ionicons name="water-outline" size={12} color="#64748B" />
-                  <Text style={{ flex: 1, fontSize: 12, color: '#374151' }} numberOfLines={1}>{p.name}</Text>
-                  <Text style={{ fontSize: 12, color: '#64748B' }}>x{p.qty}</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#2563EB' }}>{fmt(p.price)}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Ghi chú */}
-          <Text style={ws ? W.svcLabel : styles.svcLabel}>Ghi chú dịch vụ</Text>
-          <View style={[ws ? W.inputBox : styles.svcNoteBox, { alignItems: 'flex-start', minHeight: 64 }]}>
-            <TextInput style={[{ flex: 1, fontSize: 13, color: '#0F172A', textAlignVertical: 'top' }, { ...(ws ? { fontWeight: '500' } : {}) }]} placeholder="Yêu cầu lắp đặt, bảo dưỡng..." placeholderTextColor="#94A3B8" multiline value={serviceNote} onChangeText={setServiceNote} />
-          </View>
-
-          {/* Info */}
-          <View style={ws ? W.svcInfo : styles.svcInfo}>
-            <Ionicons name="information-circle-outline" size={14} color="#2563EB" />
-            <Text style={ws ? W.svcInfoText : styles.svcInfoText}>Dịch vụ sẽ được lưu vào db/service với orderId đính kèm.</Text>
-          </View>
-        </View>
-      )}
+        <Text style={ws ? W.svcBannerSub : styles.svcBannerSub}>
+          Khi tạo đơn hàng này, dịch vụ {typeCfg.autoSvcLabel.toLowerCase()} sẽ tự động được tạo kèm.
+        </Text>
+      </View>
     </View>
   );
 
@@ -367,7 +385,7 @@ export default function AddOrder() {
             <Text style={W.pageTitle}>Tạo đơn hàng mới</Text>
             <Text style={W.pageSub}>Điền thông tin để tạo đơn hàng cho khách hàng</Text>
           </View>
-          <TouchableOpacity style={W.cancelBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('/(tabs)/order')}>
             <Ionicons name="close" size={16} color="#64748B" />
             <Text style={W.cancelBtnText}>Huỷ</Text>
           </TouchableOpacity>
@@ -376,6 +394,22 @@ export default function AddOrder() {
         <View style={W.grid}>
           {/* ── LEFT ── */}
           <View style={W.col}>
+            {/* Thể loại */}
+            <View style={W.card}>
+              <View style={W.cardHeader}>
+                <Ionicons name="layers-outline" size={16} color="#2563EB" />
+                <Text style={W.cardTitle}>Thể loại đơn hàng</Text>
+                {lockedType && (
+                  <View style={W.roleLockBadge}>
+                    <Ionicons name="lock-closed" size={10} color="#64748B" />
+                    <Text style={W.roleLockText}>Theo role</Text>
+                  </View>
+                )}
+              </View>
+              <OrderTypeBadge ws />
+            </View>
+
+            {/* Thông tin đơn hàng */}
             <View style={W.card}>
               <View style={W.cardHeader}>
                 <Ionicons name="receipt-outline" size={16} color="#2563EB" />
@@ -392,7 +426,6 @@ export default function AddOrder() {
                 </View>
               </View>
 
-              {/* Customer */}
               <View style={W.inputGroup}>
                 <Text style={W.label}>Khách hàng <Text style={W.req}>*</Text></Text>
                 <TouchableOpacity style={[W.inputBox, showCustomerPicker && W.inputBoxFocus]} onPress={() => setShowCustomerPicker(p => !p)} activeOpacity={0.8}>
@@ -412,7 +445,7 @@ export default function AddOrder() {
                 <View style={W.inputBox}><TextInput style={W.input} placeholder="Nhập địa chỉ..." placeholderTextColor="#94A3B8" value={deliveryAddress} onChangeText={setDeliveryAddress} /></View>
               </View>
               <View style={W.inputGroup}>
-                <Text style={W.label}>Ghi chú</Text>
+                <Text style={W.label}>Ghi chú đơn hàng</Text>
                 <View style={[W.inputBox, { alignItems: 'flex-start', minHeight: 80 }]}><TextInput style={[W.input, { textAlignVertical: 'top' }]} placeholder="Hướng dẫn đặc biệt..." placeholderTextColor="#94A3B8" multiline value={notes} onChangeText={setNotes} /></View>
               </View>
             </View>
@@ -451,8 +484,20 @@ export default function AddOrder() {
               )}
             </View>
 
-            {/* ✅ Dịch vụ đính kèm */}
-            <ServiceSection ws />
+            {/* ✅ Auto service banner (luôn hiện, không có toggle) */}
+            <View style={W.card}>
+              <View style={W.cardHeader}>
+                <Ionicons name={typeCfg.autoSvcIcon} size={16} color={typeCfg.color} />
+                <Text style={W.cardTitle}>Dịch vụ kèm đơn</Text>
+              </View>
+              <AutoServiceBanner ws />
+              <View style={[W.inputGroup, { marginTop: 12 }]}>
+                <Text style={W.label}>Ghi chú dịch vụ</Text>
+                <View style={[W.inputBox, { alignItems: 'flex-start', minHeight: 64 }]}>
+                  <TextInput style={[W.input, { textAlignVertical: 'top' }]} placeholder={`Yêu cầu ${typeCfg.autoSvcLabel.toLowerCase()}...`} placeholderTextColor="#94A3B8" multiline value={serviceNote} onChangeText={setServiceNote} />
+                </View>
+              </View>
+            </View>
 
             <TouchableOpacity style={[W.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
               <Ionicons name={submitting ? 'hourglass-outline' : 'checkmark-circle-outline'} size={18} color="#fff" />
@@ -471,7 +516,7 @@ export default function AddOrder() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor="#0A0F2C" />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Ionicons name="arrow-back" size={20} color="#fff" /></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.replace('/(tabs)/order')} style={styles.backBtn}><Ionicons name="arrow-back" size={20} color="#fff" /></TouchableOpacity>
         <Text style={styles.headerLabel}>Tạo đơn hàng</Text>
         <View style={styles.headerAvatar}><Text style={styles.headerAvatarText}>{userDetail?.name?.trim().split(/\s+/).pop()?.[0]?.toUpperCase() ?? 'U'}{userDetail?.name?.trim().split(/\s+/)[0]?.[0]?.toUpperCase() ?? ''}</Text></View>
       </View>
@@ -479,6 +524,12 @@ export default function AddOrder() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
           <View style={styles.formCard}>
+
+            {/* Thể loại */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Thể loại đơn hàng</Text>
+              <OrderTypeBadge ws={false} />
+            </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Order ID</Text>
@@ -499,7 +550,6 @@ export default function AddOrder() {
               {showCustomerPicker && <CustomerPickerDropdown ws={false} />}
             </View>
 
-            {/* Sản phẩm */}
             <View style={styles.productSection}>
               <View style={styles.productHeader}>
                 <Ionicons name="cube-outline" size={18} color="#fff" />
@@ -525,13 +575,14 @@ export default function AddOrder() {
               <View style={[styles.inputBox, styles.textAreaBox]}><TextInput style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]} placeholder="Địa chỉ giao hàng..." placeholderTextColor="#B0B0C8" multiline value={deliveryAddress} onChangeText={setDeliveryAddress} /></View>
             </View>
 
+            {/* Auto service banner */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Ghi chú (tuỳ chọn)</Text>
-              <View style={[styles.inputBox, styles.textAreaBox]}><TextInput style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]} placeholder="Hướng dẫn đặc biệt..." placeholderTextColor="#B0B0C8" multiline value={notes} onChangeText={setNotes} /></View>
+              <Text style={styles.inputLabel}>Dịch vụ kèm đơn</Text>
+              <AutoServiceBanner ws={false} />
+              <View style={[styles.inputBox, styles.textAreaBox, { marginTop: 8 }]}>
+                <TextInput style={[styles.input, { minHeight: 56, textAlignVertical: 'top' }]} placeholder={`Ghi chú ${typeCfg.autoSvcLabel.toLowerCase()}...`} placeholderTextColor="#B0B0C8" multiline value={serviceNote} onChangeText={setServiceNote} />
+              </View>
             </View>
-
-            {/* ✅ Dịch vụ đính kèm */}
-            <ServiceSection ws={false} />
 
             <TouchableOpacity style={[styles.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
               <Ionicons name="create-outline" size={20} color="#fff" />
@@ -545,7 +596,6 @@ export default function AddOrder() {
   );
 }
 
-// ── Web Styles ────────────────────────────────────────────────
 const W = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F8FAFC' },
   scroll: { paddingHorizontal: 32, paddingTop: 28, paddingBottom: 40 },
@@ -560,6 +610,8 @@ const W = StyleSheet.create({
   card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   cardTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', flex: 1 },
+  roleLockBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F1F5F9', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
+  roleLockText: { fontSize: 10, color: '#64748B', fontWeight: '600' },
   productCount: { backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
   productCountText: { fontSize: 11, fontWeight: '700', color: '#2563EB' },
   roleBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F0FDF4', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
@@ -596,8 +648,8 @@ const W = StyleSheet.create({
   productTotal: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
   removeBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' },
   addForm: { backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, marginTop: 8, gap: 8, borderWidth: 1, borderColor: '#E2E8F0' },
-  addInput: { backgroundColor: '#FFF', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0' },
-  addRow: { flexDirection: 'row', gap: 8 },
+  addInput: { backgroundColor: '#FFF', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0', minHeight: 42, justifyContent: 'center' },
+  addRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   addActions: { flexDirection: 'row', gap: 8 },
   addCancel: { flex: 1, padding: 9, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', backgroundColor: '#FFF' },
   addCancelText: { color: '#64748B', fontWeight: '600', fontSize: 13 },
@@ -612,29 +664,27 @@ const W = StyleSheet.create({
   totalValue: { fontSize: 12, color: '#64748B', fontWeight: '600' },
   totalLabelBig: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
   totalAmountBig: { fontSize: 18, fontWeight: '800', color: '#2563EB', letterSpacing: -0.5 },
-  // Service
-  serviceCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' },
-  serviceToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  serviceIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  serviceToggleLabel: { fontSize: 13, fontWeight: '700', color: '#374151' },
-  serviceToggleSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-  toggleSwitch: { width: 42, height: 24, borderRadius: 12, backgroundColor: '#E2E8F0', padding: 2, justifyContent: 'center' },
-  toggleOn: { backgroundColor: '#2563EB' },
-  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFF', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 },
-  toggleThumbOn: { alignSelf: 'flex-end' },
-  serviceBody: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 8 },
-  svcLabel: { fontSize: 12, fontWeight: '600', color: '#64748B', marginBottom: 4 },
-  svcTypeTab: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1.5, borderColor: '#E2E8F0', marginRight: 6, backgroundColor: '#F8FAFC' },
-  svcTypeText: { fontSize: 12, fontWeight: '600', color: '#94A3B8' },
-  svcItemsBox: { backgroundColor: '#F8FAFC', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 2 },
-  svcItemsTitle: { fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 4 },
-  svcInfo: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: '#EFF6FF', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#BFDBFE' },
-  svcInfoText: { flex: 1, fontSize: 12, color: '#2563EB' },
+  // Order type
+  lockedBadge: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12, borderWidth: 1.5 },
+  lockedBadgeLabel: { fontSize: 14, fontWeight: '700' },
+  lockedBadgeDesc: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  typeRow: { flexDirection: 'row', gap: 12 },
+  typeCard: { flex: 1, flexDirection: 'column', gap: 8, padding: 14, borderRadius: 12, borderWidth: 2, borderColor: '#E2E8F0', backgroundColor: '#FFFFFF', position: 'relative' },
+  typeCardIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  typeCardLabel: { fontSize: 14, fontWeight: '700', color: '#374151' },
+  typeCardDesc: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+  typeCheckDot: { position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  // Service banner
+  svcBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14, borderRadius: 10, borderWidth: 1 },
+  svcBannerIcon: { width: 36, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  svcBannerTitle: { fontSize: 13, fontWeight: '700' },
+  svcBannerSub: { fontSize: 12, color: '#64748B', marginTop: 2, lineHeight: 17 },
+  autoBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, borderWidth: 1 },
+  autoBadgeText: { fontSize: 9, fontWeight: '700' },
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 14, shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
   submitBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
 });
 
-// ── Mobile Styles ─────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0A0F2C' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },
@@ -672,8 +722,8 @@ const styles = StyleSheet.create({
   productItemRight: { alignItems: 'flex-end', gap: 4 },
   productItemTotal: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
   addProductForm: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', gap: 8 },
-  addProductInput: { backgroundColor: '#F8F9FF', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1A1A2E', borderWidth: 1, borderColor: '#E5E7EB' },
-  addProductRow: { flexDirection: 'row' },
+  addProductInput: { backgroundColor: '#F8F9FF', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1A1A2E', borderWidth: 1, borderColor: '#E5E7EB', minHeight: 42, justifyContent: 'center' },
+  addProductRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   addProductActions: { flexDirection: 'row', gap: 8, marginTop: 4 },
   addProductCancel: { flex: 1, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center' },
   addProductCancelText: { color: '#6B7280', fontWeight: '600', fontSize: 13 },
@@ -684,25 +734,22 @@ const styles = StyleSheet.create({
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, backgroundColor: '#EFF6FF', borderTopWidth: 1, borderTopColor: '#BFDBFE' },
   totalLabel: { fontSize: 13, fontWeight: '700', color: '#1E3A8A' },
   totalAmount: { fontSize: 16, fontWeight: '900', color: '#1E3A8A' },
-  // Service
-  serviceCard: { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 18, overflow: 'hidden' },
-  serviceToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14 },
-  serviceIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  serviceToggleLabel: { fontSize: 14, fontWeight: '700', color: '#1A1A2E' },
-  serviceToggleSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-  toggleSwitch: { width: 42, height: 24, borderRadius: 12, backgroundColor: '#E2E8F0', padding: 2, justifyContent: 'center' },
-  toggleOn: { backgroundColor: '#2563EB' },
-  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 },
-  toggleThumbOn: { alignSelf: 'flex-end' },
-  serviceBody: { paddingHorizontal: 14, paddingBottom: 14, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12, gap: 8 },
-  svcLabel: { fontSize: 12, fontWeight: '700', color: '#6B7280', letterSpacing: 0.3, marginBottom: 4 },
-  svcTypeTab: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: '#E2E8F0', marginRight: 8, backgroundColor: '#F8FAFC' },
-  svcTypeText: { fontSize: 13, fontWeight: '600', color: '#94A3B8' },
-  svcNoteBox: { backgroundColor: '#F8FAFC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0' },
-  svcItemsBox: { backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 2 },
-  svcItemsTitle: { fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 4 },
-  svcInfo: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: '#EFF6FF', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#BFDBFE' },
-  svcInfoText: { flex: 1, fontSize: 12, color: '#2563EB' },
+  // Order type mobile
+  lockedBadge: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, borderWidth: 1.5 },
+  lockedBadgeLabel: { fontSize: 14, fontWeight: '700' },
+  lockedBadgeDesc: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  typeRow: { flexDirection: 'row', gap: 10 },
+  typeCard: { flex: 1, gap: 6, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF', position: 'relative' },
+  typeCardIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  typeCardLabel: { fontSize: 13, fontWeight: '700', color: '#374151' },
+  typeCardDesc: { fontSize: 10, color: '#94A3B8' },
+  typeCheckDot: { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  svcBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 10, borderWidth: 1 },
+  svcBannerIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  svcBannerTitle: { fontSize: 13, fontWeight: '700' },
+  svcBannerSub: { fontSize: 11, color: '#64748B', marginTop: 2, lineHeight: 16 },
+  autoBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 8, borderWidth: 1 },
+  autoBadgeText: { fontSize: 9, fontWeight: '700' },
   submitBtn: { backgroundColor: '#2563EB', borderRadius: 16, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 8, marginBottom: 20, shadowColor: '#2563EB', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
 });

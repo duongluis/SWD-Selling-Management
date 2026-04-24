@@ -4,7 +4,7 @@
     "slug": "SWD-Selling-Management",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/logo-light.png",
     "scheme": "swdsellingmanagement",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -23,7 +23,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/icon.png",
+      "favicon": "./assets/images/logo-light.png",
       "bundler": "metro",
       "publicPath": "/SWD-Selling-Management/"
     },

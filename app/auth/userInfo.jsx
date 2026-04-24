@@ -18,22 +18,23 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { showAlert } from '../../components/Main/showAlert';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
 
-// advisor: true → role này cần chọn advisor (đại lý/nhà phân phối quản lý)
+// advisor: true → role này cần chọn advisor (đại lý/Đối tác quản lý)
 const ROLES = [
     { key: 'đại lý', label: 'Đại lý', icon: 'storefront-outline', color: '#2563EB', bg: '#EFF6FF', desc: 'Phân phối trực tiếp tới khách hàng cuối', advisor: false },
-    { key: 'nhà phân phối', label: 'Nhà phân phối', icon: 'car-outline', color: '#7C3AED', bg: '#F5F3FF', desc: 'Phân phối hàng hóa theo khu vực rộng lớn', advisor: true },
-    { key: 'cộng tác viên', label: 'Cộng tác viên', icon: 'people-outline', color: '#059669', bg: '#ECFDF5', desc: 'Giới thiệu và hỗ trợ bán hàng theo hoa hồng', advisor: true },
+    { key: 'Đối tác', label: 'Đối tác', icon: 'car-outline', color: '#7C3AED', bg: '#F5F3FF', desc: 'Bán hàng trong khu vực lớn ', advisor: false },
+    { key: 'cộng tác viên', label: 'Cộng tác viên', icon: 'people-outline', color: '#059669', bg: '#ECFDF5', desc: 'Giới thiệu và hỗ trợ bán hàng theo hoa hồng', advisor: false },
 ];
 
 // Mapping role → advisor pool (lấy từ db/users có role nào)
 const ADVISOR_ROLES = {
-    'cộng tác viên': ['đại lý', 'nhà phân phối'],
-    'nhà phân phối': ['đại lý'],
-    // thêm các role khác nếu cần
+    // 'cộng tác viên': ['đại lý', 'Đối tác'],
+    // 'Đối tác': ['đại lý'],
+
 };
 
 function getInitials(name) {
@@ -111,7 +112,7 @@ export default function UserInfoView() {
         if (!form.phone.trim()) { Alert.alert('Thông báo', 'Vui lòng nhập số điện thoại'); return; }
         if (!selectedRole) { Alert.alert('Thông báo', 'Vui lòng chọn vị trí'); return; }
         if (needsAdvisor && !selectedAdvisor) {
-            Alert.alert('Thông báo', 'Vui lòng chọn đại lý / nhà phân phối quản lý'); return;
+            Alert.alert('Thông báo', 'Vui lòng chọn đại lý / Đối tác quản lý'); return;
         }
 
         setSubmitting(true);
@@ -136,7 +137,7 @@ export default function UserInfoView() {
 
             router.replace('/auth/pendingVerification');
         } catch (e) {
-            Alert.alert('Lỗi', e.message);
+            showAlert('Lỗi', e.message);
         } finally {
             setSubmitting(false);
         }
@@ -183,7 +184,7 @@ export default function UserInfoView() {
                 <View style={styles.advisorHeader}>
                     <Ionicons name="person-circle-outline" size={16} color={roleCfg?.color || '#2563EB'} />
                     <Text style={[styles.advisorHeaderText, { color: roleCfg?.color || '#2563EB' }]}>
-                        Chọn đại lý / nhà phân phối quản lý <Text style={{ color: '#EF4444' }}>*</Text>
+                        Chọn đại lý / Đối tác quản lý <Text style={{ color: '#EF4444' }}>*</Text>
                     </Text>
                 </View>
 
@@ -239,7 +240,7 @@ export default function UserInfoView() {
                             </View>
                         ) : filteredAdvisors.length === 0 ? (
                             <Text style={styles.advisorEmpty}>
-                                {advisorSearch ? 'Không tìm thấy' : 'Chưa có đại lý / nhà phân phối nào'}
+                                {advisorSearch ? 'Không tìm thấy' : 'Chưa có đại lý / Đối tác nào'}
                             </Text>
                         ) : (
                             <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>

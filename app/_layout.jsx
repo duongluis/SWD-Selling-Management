@@ -5,19 +5,21 @@ import * as SplashScreen from "expo-splash-screen";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
+import { ActivityIndicator, View } from 'react-native';
 import { UserDetailContext } from "../context/UserDetailContext";
 
 SplashScreen.preventAutoHideAsync();
 
-// ── Route groups ─────────────────────────────────────────────
-const PUBLIC_ROUTES = ['auth', 'index'];          // ai cũng vào được
-const ADMIN_ROUTES = ['users'];                   // chỉ admin
-const APP_ROUTES = ['(tabs)', 'addOrder', 'addCustomer',
-  'addService', 'CustomerView', 'ServiceView',
-  'OrderView', 'revenue', 'information'];
+const PUBLIC_ROUTES = ['auth', 'index'];
+const ADMIN_ROUTES = ['users'];
+
+// 3 trạng thái rõ ràng thay vì null-ambiguous
+// 'pending'        → chưa biết (Firebase đang kiểm tra)
+// null             → chắc chắn chưa đăng nhập
+// { ...userData }  → đã đăng nhập
 
 export default function RootLayout() {
-  const [userDetail, setUserDetail] = useState(null);
+  const [userDetail, setUserDetail] = useState('pending'); // ← key change
   const [authChecked, setAuthChecked] = useState(false);
   const router = useRouter();
   const segments = useSegments();
@@ -38,7 +40,6 @@ export default function RootLayout() {
           if (snap.exists()) {
             setUserDetail(snap.data());
           } else {
-            // Auth có nhưng chưa điền thông tin (bỏ dở bước 2)
             setUserDetail({ email: user.email, _incomplete: true });
           }
         } catch (e) {
@@ -46,57 +47,61 @@ export default function RootLayout() {
           setUserDetail(null);
         }
       } else {
-        setUserDetail(null);
+        setUserDetail(null); // chắc chắn chưa đăng nhập
       }
       setAuthChecked(true);
     });
     return () => unsub();
   }, []);
 
-  // ── Redirect logic ────────────────────────────────────────
   useEffect(() => {
     if (!loaded || !authChecked) return;
+    if (userDetail === 'pending') return;
+
     SplashScreen.hideAsync();
 
     const segment = segments[0] || '';
-    const inPublic = PUBLIC_ROUTES.includes(segment);
+
+    // ✅ '' (root) cũng được coi là public
+    const inPublic = !segment || PUBLIC_ROUTES.includes(segment);
     const isAdmin = userDetail?.role === 'admin' || userDetail?.member === 'admin';
 
-    // ── Chưa đăng nhập ──────────────────────────────────────
     if (!userDetail) {
       if (!inPublic) router.replace('/auth/signIn');
       return;
     }
 
-    // ── Có Auth nhưng chưa điền thông tin ───────────────────
     if (userDetail._incomplete) {
       router.replace('/auth/userInfo');
       return;
     }
 
-    // ── Chưa xác thực (không phải admin) ────────────────────
     if (!userDetail.verified && !isAdmin) {
       if (segment !== 'auth') router.replace('/auth/pendingVerification');
       return;
     }
 
-    // ── Chặn non-admin truy cập route admin ─────────────────
     const currentPath = segments.join('/');
     const accessingAdmin = ADMIN_ROUTES.some(r => currentPath.includes(r));
     if (accessingAdmin && !isAdmin) {
-      console.warn('🚫 Truy cập trái phép:', currentPath);
       router.replace('/(tabs)/home');
       return;
     }
 
-    // ── Đã xác thực đang ở trang auth → vào app ─────────────
-    if (inPublic && segment === 'auth') {
+    if (inPublic) {
       router.replace('/(tabs)/home');
     }
 
   }, [loaded, authChecked, userDetail, segments]);
 
-  if (!loaded || !authChecked) return null;
+  // Loading screen — hiển thị khi font hoặc auth chưa xong
+  if (!loaded || !authChecked || userDetail === 'pending') {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F172A' }}>
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   return (
     <UserDetailContext.Provider value={{ userDetail, setUserDetail }}>

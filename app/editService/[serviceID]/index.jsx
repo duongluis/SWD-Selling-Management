@@ -1,60 +1,57 @@
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    KeyboardAvoidingView, Platform, ScrollView, StatusBar,
-    StyleSheet, Text, TextInput, TouchableOpacity, View,
+    KeyboardAvoidingView, Platform, ScrollView,
+    StatusBar, StyleSheet, Text, TextInput,
+    TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCustomers } from '../../components/Hooks/useCustomers';
-import { showAlert } from '../../components/Main/showAlert';
-import { showSuccess } from '../../components/Main/showSuccess';
-import { db } from '../../config/firebaseConfig';
+import { useCustomers } from '../../../components/Hooks/useCustomers';
+import { showAlert } from '../../../components/Main/showAlert';
+import { showSuccess } from '../../../components/Main/showSuccess';
+import { db } from '../../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
 
 const SERVICE_TYPES = [
-    { key: 'MAINTENANCE', label: 'Bảo dưỡng', icon: 'construct-outline', color: '#F59E0B', bg: '#FFFBEB', hasMachine: true },
-    { key: 'INSTALLATION', label: 'Lắp đặt', icon: 'build-outline', color: '#8B5CF6', bg: '#F5F3FF', hasMachine: true },
-    { key: 'SALT', label: 'Đổ muối', icon: 'water-outline', color: '#3B82F6', bg: '#EFF6FF', hasMachine: false },
-    { key: 'DELIVERY', label: 'Giao hàng', icon: 'car-outline', color: '#10B981', bg: '#ECFDF5', hasMachine: false },
-    { key: 'CONSULTING', label: 'Tư vấn', icon: 'chatbubbles-outline', color: '#EC4899', bg: '#FDF2F8', hasMachine: true },
+    { key: 'MAINTENANCE', label: 'Bảo dưỡng', icon: 'construct-outline', color: '#F59E0B', bg: '#FFFBEB' },
+    { key: 'INSTALLATION', label: 'Lắp đặt', icon: 'build-outline', color: '#8B5CF6', bg: '#F5F3FF' },
+    { key: 'SALT', label: 'Đổ muối', icon: 'water-outline', color: '#3B82F6', bg: '#EFF6FF' },
+    { key: 'DELIVERY', label: 'Giao hàng', icon: 'car-outline', color: '#10B981', bg: '#ECFDF5' },
+    { key: 'CONSULTING', label: 'Tư vấn', icon: 'chatbubbles-outline', color: '#EC4899', bg: '#FDF2F8' },
 ];
 
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
-export default function AddService() {
+export default function EditService() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const params = useLocalSearchParams();
     const { userDetail } = useContext(UserDetailContext);
 
-    const [serviceType, setServiceType] = useState('MAINTENANCE');
-    const [customerName, setCustomerName] = useState('');
-    const [customerPhone, setCustomerPhone] = useState('');
-    const [address, setAddress] = useState('');
-    const [note, setNote] = useState('');
+    // Parse existing service from params
+    const existingService = params.serviceParam ? JSON.parse(params.serviceParam) : {};
+    const serviceId = existingService.id || params.serviceID;
+
+    // ── Form state — pre-filled ───────────────────────────────
+    const [serviceType, setServiceType] = useState(existingService.type || 'MAINTENANCE');
+    const [customerName, setCustomerName] = useState(existingService.customer || '');
+    const [customerPhone, setCustomerPhone] = useState(existingService.phone || '');
+    const [address, setAddress] = useState(existingService.address || '');
+    const [note, setNote] = useState(existingService.note || '');
     const [submitting, setSubmitting] = useState(false);
 
     // ── Order picker ──────────────────────────────────────────
-    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [selectedOrder, setSelectedOrder] = useState(
+        existingService.orderId ? { id: existingService.orderId, items: existingService.orderItems || [], customer: existingService.customer, _phone: existingService.phone, address: existingService.address } : null
+    );
     const [showOrderPicker, setShowOrderPicker] = useState(false);
     const [orderList, setOrderList] = useState([]);
     const [orderLoading, setOrderLoading] = useState(false);
     const [orderSearch, setOrderSearch] = useState('');
-
-    // ── Machine picker (từ sản phẩm trong đơn hàng) ──────────
-    const [selectedMachine, setSelectedMachine] = useState(null);
-    const [showMachinePicker, setShowMachinePicker] = useState(false);
-
-    const currentTypeCfg = SERVICE_TYPES.find(t => t.key === serviceType);
-    const showMachineSection = currentTypeCfg?.hasMachine && selectedOrder?.items?.length > 0;
-
-    // Khi đổi loại dịch vụ → reset máy nếu không cần
-    useEffect(() => {
-        if (!currentTypeCfg?.hasMachine) setSelectedMachine(null);
-    }, [serviceType]);
 
     const { customers } = useCustomers();
 
@@ -74,7 +71,7 @@ export default function AddService() {
                 }));
                 allOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
                 setOrderList(allOrders);
-            } catch (e) { console.error('Lỗi fetch orders:', e); }
+            } catch (e) { console.error(e); }
             finally { setOrderLoading(false); }
         };
         fetchOrders();
@@ -82,127 +79,94 @@ export default function AddService() {
 
     const filteredOrders = orderSearch.trim() === ''
         ? orderList
-        : orderList.filter(o => (o.id || '').toLowerCase().includes(orderSearch.toLowerCase()) || (o.customer || '').toLowerCase().includes(orderSearch.toLowerCase()));
+        : orderList.filter(o =>
+            (o.id || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
+            (o.customer || '').toLowerCase().includes(orderSearch.toLowerCase())
+        );
 
     const handleSelectOrder = (order) => {
         setSelectedOrder(order);
         setCustomerName(order.customer || '');
         setCustomerPhone(order._phone || '');
         setAddress(order.address || '');
-        setSelectedMachine(null); // reset máy khi đổi đơn
         setShowOrderPicker(false);
         setOrderSearch('');
     };
 
-    const serviceId = 'SV-' + Date.now().toString().slice(-6);
-
     const handleSubmit = async () => {
         if (!customerName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên khách hàng'); return; }
         if (!customerPhone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại'); return; }
-        if (showMachineSection && !selectedMachine) {
-            showAlert('Thông báo', `Vui lòng chọn máy cần ${currentTypeCfg.label.toLowerCase()}`);
-            return;
-        }
 
         setSubmitting(true);
         try {
-            const newService = {
-                id: serviceId,
+            const updated = {
                 type: serviceType,
                 orderId: selectedOrder?.id || null,
                 orderItems: selectedOrder?.items || [],
-                // Máy được chọn (cho lắp đặt, bảo dưỡng, tư vấn)
-                machineItem: selectedMachine || null,
                 customer: customerName.trim(),
                 phone: customerPhone.trim(),
                 address: address.trim(),
                 note: note.trim(),
-                status: 'PENDING',
-                createdBy: userDetail?.email || '',
-                createdAt: new Date().toISOString(),
+                updatedBy: userDetail?.email || '',
+                updatedAt: new Date().toISOString(),
             };
-            await setDoc(doc(db, 'service', serviceId), newService);
-            showSuccess('Dịch vụ đã được tạo!', `Mã dịch vụ: ${serviceId}`, () => router.replace('/(tabs)/service'));
-        } catch (e) { showAlert('Lỗi', e.message); }
-        finally { setSubmitting(false); }
+            await updateDoc(doc(db, 'service', serviceId), updated);
+            showSuccess('Đã cập nhật dịch vụ!', `Mã dịch vụ: ${serviceId}`,
+                () => router.back());
+        } catch (e) {
+            showAlert('Lỗi', e.message);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const selectedType = SERVICE_TYPES.find(t => t.key === serviceType);
 
     // ── Order Picker Dropdown ─────────────────────────────────
     const OrderPickerDropdown = () => (
-        <View style={S.pickerDropdown}>
-            <View style={S.pickerSearch}>
+        <View style={styles.pickerDropdown}>
+            <View style={styles.pickerSearch}>
                 <Ionicons name="search-outline" size={14} color="#94A3B8" />
-                <TextInput style={S.pickerSearchInput} placeholder="Tìm mã đơn hoặc tên khách..." placeholderTextColor="#94A3B8" value={orderSearch} onChangeText={setOrderSearch} autoFocus />
-                {orderSearch.length > 0 && <TouchableOpacity onPress={() => setOrderSearch('')}><Ionicons name="close-circle" size={14} color="#94A3B8" /></TouchableOpacity>}
+                <TextInput
+                    style={styles.pickerSearchInput}
+                    placeholder="Tìm mã đơn hoặc tên khách..."
+                    placeholderTextColor="#94A3B8"
+                    value={orderSearch}
+                    onChangeText={setOrderSearch}
+                    autoFocus
+                />
+                {orderSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setOrderSearch('')}>
+                        <Ionicons name="close-circle" size={14} color="#94A3B8" />
+                    </TouchableOpacity>
+                )}
             </View>
             <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
-                {orderLoading ? <Text style={S.pickerEmpty}>Đang tải đơn hàng...</Text>
-                    : filteredOrders.length === 0 ? <Text style={S.pickerEmpty}>{orderSearch ? 'Không tìm thấy' : 'Chưa có đơn hàng nào'}</Text>
-                        : filteredOrders.map((order, i) => {
-                            const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
-                            return (
-                                <TouchableOpacity key={order.id || i}
-                                    style={[S.pickerItem, selectedOrder?.id === order.id && S.pickerItemActive]}
-                                    onPress={() => handleSelectOrder(order)} activeOpacity={0.7}
-                                >
-                                    <View style={S.pickerItemIcon}><Ionicons name="receipt-outline" size={14} color="#2563EB" /></View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={S.pickerItemId}>#{order.id}</Text>
-                                        <Text style={S.pickerItemSub}>{order.customer} · {order.items?.length || 0} sản phẩm</Text>
-                                    </View>
-                                    <Text style={S.pickerItemAmount}>{fmt(total)}</Text>
-                                </TouchableOpacity>
-                            );
-                        })}
+                {orderLoading ? (
+                    <Text style={styles.pickerEmpty}>Đang tải đơn hàng...</Text>
+                ) : filteredOrders.length === 0 ? (
+                    <Text style={styles.pickerEmpty}>{orderSearch ? 'Không tìm thấy' : 'Chưa có đơn hàng nào'}</Text>
+                ) : filteredOrders.map((order, i) => {
+                    const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
+                    return (
+                        <TouchableOpacity
+                            key={order.id || i}
+                            style={[styles.pickerItem, selectedOrder?.id === order.id && styles.pickerItemActive]}
+                            onPress={() => handleSelectOrder(order)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.pickerItemIcon}><Ionicons name="receipt-outline" size={14} color="#2563EB" /></View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.pickerItemId}>#{order.id}</Text>
+                                <Text style={styles.pickerItemSub}>{order.customer} · {order.items?.length || 0} sản phẩm</Text>
+                            </View>
+                            <Text style={styles.pickerItemAmount}>{fmt(total)}</Text>
+                        </TouchableOpacity>
+                    );
+                })}
             </ScrollView>
         </View>
     );
-
-    // ── Machine Picker (từ items của đơn hàng đã chọn) ────────
-    const MachinePickerSection = ({ ws }) => {
-        if (!showMachineSection) return null;
-        const machines = selectedOrder?.items || [];
-        return (
-            <View style={ws ? W.machineSection : M.machineSection}>
-                <View style={ws ? W.machineHeader : M.machineHeader}>
-                    <Ionicons name="settings-outline" size={14} color={selectedType?.color || '#2563EB'} />
-                    <Text style={[ws ? W.machineHeaderText : M.machineHeaderText, { color: selectedType?.color }]}>
-                        Chọn máy cần {selectedType?.label?.toLowerCase()} <Text style={{ color: '#EF4444' }}>*</Text>
-                    </Text>
-                </View>
-                <View style={ws ? W.machineGrid : M.machineGrid}>
-                    {machines.map((item, i) => {
-                        const active = selectedMachine?.id === (item.id || String(i));
-                        return (
-                            <TouchableOpacity
-                                key={item.id || i}
-                                style={[ws ? W.machineCard : M.machineCard, active && { borderColor: selectedType?.color, backgroundColor: selectedType?.bg }]}
-                                onPress={() => setSelectedMachine(active ? null : { ...item, id: item.id || String(i) })}
-                                activeOpacity={0.8}
-                            >
-                                <View style={[ws ? W.machineIcon : M.machineIcon, { backgroundColor: active ? selectedType?.color + '22' : '#F1F5F9' }]}>
-                                    <Ionicons name="water-outline" size={16} color={active ? selectedType?.color : '#94A3B8'} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={[ws ? W.machineName : M.machineName, active && { color: selectedType?.color }]} numberOfLines={2}>
-                                        {item.name}
-                                    </Text>
-                                    <Text style={ws ? W.machineMeta : M.machineMeta}>x{item.qty} · {fmt(item.price)}</Text>
-                                </View>
-                                {active && (
-                                    <View style={[ws ? W.machineCheck : M.machineCheck, { backgroundColor: selectedType?.color }]}>
-                                        <Ionicons name="checkmark" size={12} color="#fff" />
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-            </View>
-        );
-    };
 
     // ─────────────────────────────────────────────────────────
     // WEB LAYOUT
@@ -212,10 +176,10 @@ export default function AddService() {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
                 <View style={W.pageHeader}>
                     <View>
-                        <Text style={W.pageTitle}>Tạo dịch vụ mới</Text>
-                        <Text style={W.pageSub}>Điền thông tin để tạo yêu cầu dịch vụ mới</Text>
+                        <Text style={W.pageTitle}>Sửa dịch vụ</Text>
+                        <Text style={W.pageSub}>Mã dịch vụ: {serviceId}</Text>
                     </View>
-                    <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('/(tabs)/service')}>
+                    <TouchableOpacity style={W.cancelBtn} onPress={() => router.back()}>
                         <Ionicons name="close" size={16} color="#64748B" />
                         <Text style={W.cancelBtnText}>Huỷ</Text>
                     </TouchableOpacity>
@@ -226,10 +190,7 @@ export default function AddService() {
                     <View style={W.col}>
                         {/* Service type */}
                         <View style={W.card}>
-                            <View style={W.cardHeader}>
-                                <Ionicons name="construct-outline" size={16} color="#2563EB" />
-                                <Text style={W.cardTitle}>Loại hình dịch vụ</Text>
-                            </View>
+                            <View style={W.cardHeader}><Ionicons name="construct-outline" size={16} color="#2563EB" /><Text style={W.cardTitle}>Loại hình dịch vụ</Text></View>
                             <View style={W.typeGrid}>
                                 {SERVICE_TYPES.map(type => {
                                     const active = serviceType === type.key;
@@ -242,7 +203,6 @@ export default function AddService() {
                                                 <Ionicons name={type.icon} size={18} color={active ? type.color : '#94A3B8'} />
                                             </View>
                                             <Text style={[W.typeLabel, active && { color: type.color, fontWeight: '700' }]}>{type.label}</Text>
-                                            {type.hasMachine && <View style={W.machineBadge}><Ionicons name="settings-outline" size={9} color="#94A3B8" /></View>}
                                             {active && <View style={[W.typeCheck, { backgroundColor: type.color }]}><Ionicons name="checkmark" size={10} color="#fff" /></View>}
                                         </TouchableOpacity>
                                     );
@@ -259,7 +219,8 @@ export default function AddService() {
                             </View>
                             <TouchableOpacity
                                 style={[W.inputBox, showOrderPicker && W.inputBoxFocus]}
-                                onPress={() => setShowOrderPicker(!showOrderPicker)} activeOpacity={0.8}
+                                onPress={() => setShowOrderPicker(p => !p)}
+                                activeOpacity={0.8}
                             >
                                 {selectedOrder ? (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
@@ -268,7 +229,7 @@ export default function AddService() {
                                             <Text style={W.selectedOrderId}>#{selectedOrder.id}</Text>
                                             <Text style={W.selectedOrderSub}>{selectedOrder.customer} · {selectedOrder.items?.length || 0} sản phẩm</Text>
                                         </View>
-                                        <TouchableOpacity onPress={() => { setSelectedOrder(null); setCustomerName(''); setCustomerPhone(''); setSelectedMachine(null); }}>
+                                        <TouchableOpacity onPress={() => { setSelectedOrder(null); setCustomerName(''); setCustomerPhone(''); }}>
                                             <Ionicons name="close-circle" size={16} color="#94A3B8" />
                                         </TouchableOpacity>
                                     </View>
@@ -281,12 +242,7 @@ export default function AddService() {
                                 )}
                             </TouchableOpacity>
                             {showOrderPicker && <OrderPickerDropdown />}
-
-                            {/* ✅ Machine picker */}
-                            <MachinePickerSection ws />
-
-                            {/* Sản phẩm trong đơn (nếu không cần máy) */}
-                            {selectedOrder?.items?.length > 0 && !showMachineSection && (
+                            {selectedOrder?.items?.length > 0 && (
                                 <View style={W.orderItemsBox}>
                                     <Text style={W.orderItemsTitle}>Sản phẩm trong đơn:</Text>
                                     {selectedOrder.items.map((item, i) => (
@@ -305,10 +261,7 @@ export default function AddService() {
                     {/* RIGHT */}
                     <View style={W.colRight}>
                         <View style={W.card}>
-                            <View style={W.cardHeader}>
-                                <Ionicons name="person-outline" size={16} color="#2563EB" />
-                                <Text style={W.cardTitle}>Thông tin khách hàng</Text>
-                            </View>
+                            <View style={W.cardHeader}><Ionicons name="person-outline" size={16} color="#2563EB" /><Text style={W.cardTitle}>Thông tin khách hàng</Text></View>
                             <View style={W.row2}>
                                 <View style={[W.inputGroup, { flex: 1 }]}>
                                     <Text style={W.label}>Tên khách hàng <Text style={W.required}>*</Text></Text>
@@ -333,33 +286,25 @@ export default function AddService() {
                         <View style={W.card}>
                             <View style={W.cardHeader}><Ionicons name="eye-outline" size={16} color="#2563EB" /><Text style={W.cardTitle}>Xem trước</Text></View>
                             <View style={W.previewRow}>
-                                <View style={[W.previewIcon, { backgroundColor: selectedType?.bg }]}><Ionicons name={selectedType?.icon} size={20} color={selectedType?.color} /></View>
+                                <View style={[W.previewIcon, { backgroundColor: selectedType?.bg }]}>
+                                    <Ionicons name={selectedType?.icon} size={20} color={selectedType?.color} />
+                                </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={W.previewId}>{serviceId}</Text>
                                     <Text style={[W.previewType, { color: selectedType?.color }]}>{selectedType?.label}</Text>
                                 </View>
-                                <View style={[W.statusBadge, { backgroundColor: '#FFFBEB' }]}>
-                                    <View style={[W.statusDot, { backgroundColor: '#F59E0B' }]} />
-                                    <Text style={{ fontSize: 11, color: '#F59E0B', fontWeight: '600' }}>Chờ xử lý</Text>
-                                </View>
                             </View>
-                            {selectedMachine && (
-                                <View style={W.previewMachine}>
-                                    <Ionicons name="settings-outline" size={14} color={selectedType?.color} />
-                                    <Text style={[W.previewMachineText, { color: selectedType?.color }]} numberOfLines={1}>Máy: {selectedMachine.name}</Text>
-                                </View>
-                            )}
-                            {selectedOrder && (
-                                <View style={W.previewCustomer}><Ionicons name="receipt-outline" size={14} color="#2563EB" /><Text style={[W.previewCustomerText, { color: '#2563EB' }]}>Đơn #{selectedOrder.id}</Text></View>
-                            )}
                             {(customerName || customerPhone) && (
-                                <View style={W.previewCustomer}><Ionicons name="person-circle-outline" size={14} color="#94A3B8" /><Text style={W.previewCustomerText}>{customerName || '—'}{customerPhone ? ` · ${customerPhone}` : ''}</Text></View>
+                                <View style={W.previewCustomer}>
+                                    <Ionicons name="person-circle-outline" size={14} color="#94A3B8" />
+                                    <Text style={W.previewCustomerText}>{customerName || '—'}{customerPhone ? ` · ${customerPhone}` : ''}</Text>
+                                </View>
                             )}
                         </View>
 
                         <TouchableOpacity style={[W.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
                             <Ionicons name={submitting ? 'hourglass-outline' : 'checkmark-circle-outline'} size={18} color="#fff" />
-                            <Text style={W.submitBtnText}>{submitting ? 'Đang tạo...' : 'Tạo dịch vụ'}</Text>
+                            <Text style={W.submitBtnText}>{submitting ? 'Đang lưu...' : 'Lưu thay đổi'}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -375,20 +320,22 @@ export default function AddService() {
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
             <View style={M.header}>
                 <TouchableOpacity onPress={() => router.back()} style={M.backBtn}><Ionicons name="arrow-back" size={22} color="#0F172A" /></TouchableOpacity>
-                <Text style={M.headerTitle}>Thêm dịch vụ</Text>
-                <View style={M.headerAvatar}><Ionicons name="person" size={16} color="#64748B" /></View>
+                <Text style={M.headerTitle}>Sửa dịch vụ</Text>
+                <View style={M.headerAvatar}><Ionicons name="create-outline" size={16} color="#2563EB" /></View>
             </View>
 
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={M.scroll}>
+
+                    {/* Banner */}
                     <View style={M.banner}>
                         <View style={[M.bannerIcon, { backgroundColor: selectedType?.color + '22' }]}>
                             <Ionicons name={selectedType?.icon} size={40} color={selectedType?.color} />
                         </View>
-                        <Text style={M.bannerText}>Chi tiết thông tin dịch vụ mới</Text>
+                        <Text style={M.bannerText}>Sửa dịch vụ #{serviceId}</Text>
                     </View>
 
-                    {/* Loại dịch vụ */}
+                    {/* Service type */}
                     <View style={M.card}>
                         <Text style={M.sectionTitle}>LOẠI HÌNH DỊCH VỤ</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={M.typeScroll}>
@@ -396,11 +343,10 @@ export default function AddService() {
                                 const active = serviceType === type.key;
                                 return (
                                     <TouchableOpacity key={type.key}
-                                        style={[M.typeTab, active && M.typeTabActive, active && { borderColor: type.color }]}
+                                        style={[M.typeTab, active && M.typeTabActive]}
                                         onPress={() => setServiceType(type.key)} activeOpacity={0.8}
                                     >
-                                        <Text style={[M.typeTabText, active && { color: type.color, fontWeight: '700' }]}>{type.label}</Text>
-                                        {type.hasMachine && <Ionicons name="settings-outline" size={10} color={active ? type.color : '#94A3B8'} />}
+                                        <Text style={[M.typeTabText, active && M.typeTabTextActive]}>{type.label}</Text>
                                     </TouchableOpacity>
                                 );
                             })}
@@ -412,13 +358,14 @@ export default function AddService() {
                         <Text style={M.sectionTitle}>ĐƠN HÀNG LIÊN QUAN</Text>
                         <TouchableOpacity
                             style={[M.inputBox, showOrderPicker && { borderColor: '#2563EB' }]}
-                            onPress={() => setShowOrderPicker(!showOrderPicker)} activeOpacity={0.8}
+                            onPress={() => setShowOrderPicker(p => !p)}
+                            activeOpacity={0.8}
                         >
                             {selectedOrder ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                                     <Ionicons name="receipt-outline" size={15} color="#2563EB" />
                                     <View style={{ flex: 1 }}><Text style={M.selectedOrderText}>#{selectedOrder.id} · {selectedOrder.customer}</Text></View>
-                                    <TouchableOpacity onPress={() => { setSelectedOrder(null); setCustomerName(''); setCustomerPhone(''); setSelectedMachine(null); }}>
+                                    <TouchableOpacity onPress={() => { setSelectedOrder(null); setCustomerName(''); setCustomerPhone(''); }}>
                                         <Ionicons name="close-circle" size={16} color="#94A3B8" />
                                     </TouchableOpacity>
                                 </View>
@@ -430,11 +377,7 @@ export default function AddService() {
                             )}
                         </TouchableOpacity>
                         {showOrderPicker && <OrderPickerDropdown />}
-
-                        {/* ✅ Machine picker mobile */}
-                        <MachinePickerSection ws={false} />
-
-                        {selectedOrder?.items?.length > 0 && !showMachineSection && (
+                        {selectedOrder?.items?.length > 0 && (
                             <View style={M.orderItemsBox}>
                                 {selectedOrder.items.map((item, i) => (
                                     <View key={i} style={M.orderItemRow}>
@@ -447,7 +390,7 @@ export default function AddService() {
                         )}
                     </View>
 
-                    {/* Customer */}
+                    {/* Customer info */}
                     <View style={M.card}>
                         <Text style={M.sectionTitle}>THÔNG TIN KHÁCH HÀNG</Text>
                         <Text style={M.fieldLabel}>TÊN KHÁCH HÀNG</Text>
@@ -466,15 +409,16 @@ export default function AddService() {
 
             <View style={[M.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity style={[M.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
-                    <Ionicons name={submitting ? 'hourglass-outline' : 'add-circle-outline'} size={22} color="#fff" />
-                    <Text style={M.submitBtnText}>{submitting ? 'Đang tạo...' : 'Tạo dịch vụ'}</Text>
+                    <Ionicons name={submitting ? 'hourglass-outline' : 'checkmark-circle-outline'} size={22} color="#fff" />
+                    <Text style={M.submitBtnText}>{submitting ? 'Đang lưu...' : 'Lưu thay đổi'}</Text>
                 </TouchableOpacity>
             </View>
         </View>
     );
 }
 
-const S = StyleSheet.create({
+// ── Shared picker styles ──────────────────────────────────────
+const styles = StyleSheet.create({
     pickerDropdown: { backgroundColor: '#FFFFFF', borderRadius: 10, marginTop: 4, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 10, elevation: 6 },
     pickerSearch: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     pickerSearchInput: { flex: 1, fontSize: 13, color: '#0F172A' },
@@ -487,6 +431,7 @@ const S = StyleSheet.create({
     pickerEmpty: { padding: 14, fontSize: 13, color: '#94A3B8', textAlign: 'center' },
 });
 
+// ── Web Styles ────────────────────────────────────────────────
 const W = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },
     scroll: { paddingHorizontal: 32, paddingTop: 28, paddingBottom: 40 },
@@ -507,7 +452,6 @@ const W = StyleSheet.create({
     typeIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     typeLabel: { fontSize: 12, fontWeight: '600', color: '#64748B', textAlign: 'center' },
     typeCheck: { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-    machineBadge: { position: 'absolute', bottom: 6, right: 6 },
     row2: { flexDirection: 'row', gap: 12 },
     inputGroup: { marginBottom: 14 },
     label: { fontSize: 12, fontWeight: '600', color: '#64748B', marginBottom: 6, letterSpacing: 0.3 },
@@ -524,37 +468,23 @@ const W = StyleSheet.create({
     orderItemName: { flex: 1, fontSize: 12, color: '#0F172A' },
     orderItemQty: { fontSize: 12, color: '#64748B' },
     orderItemPrice: { fontSize: 12, fontWeight: '600', color: '#2563EB' },
-    // Machine picker
-    machineSection: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-    machineHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-    machineHeaderText: { fontSize: 13, fontWeight: '700' },
-    machineGrid: { gap: 8 },
-    machineCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
-    machineIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-    machineName: { fontSize: 13, fontWeight: '600', color: '#374151' },
-    machineMeta: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
-    machineCheck: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-    // Preview
     previewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
     previewIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     previewId: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
     previewType: { fontSize: 12, fontWeight: '600', marginTop: 2 },
-    statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
-    statusDot: { width: 6, height: 6, borderRadius: 3 },
-    previewMachine: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 4 },
-    previewMachineText: { fontSize: 12, fontWeight: '600' },
     previewCustomer: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 4 },
     previewCustomerText: { fontSize: 12, color: '#64748B' },
     submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 14, shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
     submitBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 });
 
+// ── Mobile Styles ─────────────────────────────────────────────
 const M = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F5F7FA' },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
     headerTitle: { fontSize: 17, fontWeight: '800', color: '#0F172A' },
-    headerAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+    headerAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
     scroll: { paddingBottom: 16 },
     banner: { backgroundColor: '#0F172A', margin: 16, borderRadius: 18, height: 140, alignItems: 'center', justifyContent: 'center', gap: 10 },
     bannerIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
@@ -562,9 +492,10 @@ const M = StyleSheet.create({
     card: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 18, marginHorizontal: 16, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
     sectionTitle: { fontSize: 12, fontWeight: '800', color: '#2563EB', letterSpacing: 0.8, marginBottom: 14 },
     typeScroll: { marginBottom: 4 },
-    typeTab: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 25, marginRight: 8, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: 'transparent' },
-    typeTabActive: { backgroundColor: '#EFF6FF' },
-    typeTabText: { fontSize: 13, fontWeight: '600', color: '#94A3B8' },
+    typeTab: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 25, marginRight: 8, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: 'transparent' },
+    typeTabActive: { backgroundColor: '#EFF6FF', borderColor: '#2563EB' },
+    typeTabText: { fontSize: 14, fontWeight: '600', color: '#94A3B8' },
+    typeTabTextActive: { color: '#2563EB' },
     fieldLabel: { fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.8, marginBottom: 8, marginTop: 6 },
     inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 4 },
     input: { flex: 1, fontSize: 15, color: '#0F172A' },
@@ -574,16 +505,6 @@ const M = StyleSheet.create({
     orderItemRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     orderItemName: { flex: 1, fontSize: 12, color: '#374151' },
     orderItemQty: { fontSize: 12, color: '#64748B' },
-    // Machine picker mobile
-    machineSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-    machineHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-    machineHeaderText: { fontSize: 13, fontWeight: '700' },
-    machineGrid: { gap: 8 },
-    machineCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
-    machineIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-    machineName: { fontSize: 13, fontWeight: '600', color: '#374151' },
-    machineMeta: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
-    machineCheck: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
     bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
     submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#2563EB', borderRadius: 16, paddingVertical: 17, shadowColor: '#2563EB', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
     submitBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', letterSpacing: 0.2 },

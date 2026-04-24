@@ -1,0 +1,144 @@
+{
+    "mien_bac": [
+        {
+            "id": 1,
+            "ten": "Hà Nội"
+        },
+        {
+            "id": 2,
+            "ten": "Hải Phòng"
+        },
+        {
+            "id": 3,
+            "ten": "Quảng Ninh"
+        },
+        {
+            "id": 4,
+            "ten": "Lạng Sơn"
+        },
+        {
+            "id": 5,
+            "ten": "Cao Bằng"
+        },
+        {
+            "id": 6,
+            "ten": "Tuyên Quang"
+        },
+        {
+            "id": 7,
+            "ten": "Thái Nguyên"
+        },
+        {
+            "id": 8,
+            "ten": "Lào Cai"
+        },
+        {
+            "id": 9,
+            "ten": "Điện Biên"
+        },
+        {
+            "id": 10,
+            "ten": "Lai Châu"
+        },
+        {
+            "id": 11,
+            "ten": "Sơn La"
+        },
+        {
+            "id": 12,
+            "ten": "Phú Thọ"
+        },
+        {
+            "id": 13,
+            "ten": "Bắc Ninh"
+        },
+        {
+            "id": 14,
+            "ten": "Hưng Yên"
+        },
+        {
+            "id": 15,
+            "ten": "Ninh Bình"
+        }
+    ],
+    "mien_trung": [
+        {
+            "id": 16,
+            "ten": "Thanh Hoá"
+        },
+        {
+            "id": 17,
+            "ten": "Nghệ An"
+        },
+        {
+            "id": 18,
+            "ten": "Hà Tĩnh"
+        },
+        {
+            "id": 19,
+            "ten": "Quảng Trị"
+        },
+        {
+            "id": 20,
+            "ten": "Huế"
+        },
+        {
+            "id": 21,
+            "ten": "Đà Nẵng"
+        },
+        {
+            "id": 22,
+            "ten": "Quảng Ngãi"
+        },
+        {
+            "id": 23,
+            "ten": "Gia Lai"
+        },
+        {
+            "id": 24,
+            "ten": "Đắk Lắk"
+        },
+        {
+            "id": 25,
+            "ten": "Khánh Hoà"
+        },
+        {
+            "id": 26,
+            "ten": "Lâm Đồng"
+        }
+    ],
+    "mien_nam": [
+        {
+            "id": 27,
+            "ten": "Hồ Chí Minh"
+        },
+        {
+            "id": 28,
+            "ten": "Đồng Nai"
+        },
+        {
+            "id": 29,
+            "ten": "Tây Ninh"
+        },
+        {
+            "id": 30,
+            "ten": "An Giang"
+        },
+        {
+            "id": 31,
+            "ten": "Đồng Tháp"
+        },
+        {
+            "id": 32,
+            "ten": "Vĩnh Long"
+        },
+        {
+            "id": 33,
+            "ten": "Cần Thơ"
+        },
+        {
+            "id": 34,
+            "ten": "Cà Mau"
+        }
+    ]
+}

@@ -6,6 +6,7 @@ import { useContext, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
+    Image,
     Platform,
     RefreshControl,
     ScrollView,
@@ -19,13 +20,14 @@ import { showSuccess } from '../../components/Main/showSuccess';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
+const BG_IMAGE = require('../../assets/images/logo-light.png')
 
 // ── Helpers ──────────────────────────────────────────────────
 const ROLE_CONFIG = {
     'đại lý': { color: '#2563EB', bg: '#EFF6FF', icon: 'storefront-outline', label: 'Đại lý' },
     'dealer': { color: '#2563EB', bg: '#EFF6FF', icon: 'storefront-outline', label: 'Đại lý' },
-    'nhà phân phối': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'Nhà phân phối' },
-    'distributor': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'Nhà phân phối' },
+    'đối tác': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'đối tác' },
+    'distributor': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'đối tác' },
     'cộng tác viên': { color: '#059669', bg: '#ECFDF5', icon: 'people-outline', label: 'Cộng tác viên' },
     'ctv': { color: '#059669', bg: '#ECFDF5', icon: 'people-outline', label: 'Cộng tác viên' },
 };
@@ -280,118 +282,139 @@ export default function UsersView() {
     ];
 
     return (
-        <View style={S.container}>
+        <View style={S.root}>
 
-            {/* ── LEFT / MAIN panel ── */}
-            <View style={[S.listPanel, selected && isWeb && S.listPanelNarrow]}>
+            {/* ✅ Watermark — cố định chính giữa, mờ nhạt */}
+            <Image
+                source={BG_IMAGE}
+                style={S.watermark}
+                resizeMode="contain"
+            />
+            <View style={S.container}>
 
-                {/* Header */}
-                <View style={S.header}>
-                    <View>
-                        <Text style={S.headerTitle}>Quản lý tài khoản</Text>
-                        <Text style={S.headerSub}>{users.length} người dùng</Text>
-                    </View>
-                    <TouchableOpacity
-                        onPress={() => { setRefreshing(true); fetchUsers(); }}
-                        style={S.refreshBtn}
-                    >
-                        <Ionicons name="refresh-outline" size={17} color="#64748B" />
-                    </TouchableOpacity>
-                </View>
+                {/* ── LEFT / MAIN panel ── */}
+                <View style={[S.listPanel, selected && isWeb && S.listPanelNarrow]}>
 
-                {/* Stats */}
-                <View style={S.statsRow}>
-                    {[
-                        { label: 'Chờ xác thực', count: unverified.length, color: '#F59E0B' },
-                        { label: 'Đã xác thực', count: verified.length, color: '#059669' },
-                        { label: 'Tổng', count: users.length, color: '#2563EB' },
-                    ].map(s => (
-                        <View key={s.label} style={[S.statCard, { borderLeftColor: s.color }]}>
-                            <Text style={S.statNum}>{s.count}</Text>
-                            <Text style={S.statLabel}>{s.label}</Text>
+                    {/* Header */}
+                    <View style={S.header}>
+                        <View>
+                            <Text style={S.headerTitle}>Quản lý tài khoản</Text>
+                            <Text style={S.headerSub}>{users.length} người dùng</Text>
                         </View>
-                    ))}
-                </View>
-
-                {/* Search */}
-                <View style={S.searchWrap}>
-                    <Ionicons name="search-outline" size={15} color="#94A3B8" />
-                    <TextInput
-                        style={S.searchInput}
-                        placeholder="Tìm tên, email, SĐT..."
-                        placeholderTextColor="#94A3B8"
-                        value={search}
-                        onChangeText={setSearch}
-                    />
-                    {search.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearch('')}>
-                            <Ionicons name="close-circle" size={15} color="#94A3B8" />
+                        <TouchableOpacity
+                            onPress={() => { setRefreshing(true); fetchUsers(); }}
+                            style={S.refreshBtn}
+                        >
+                            <Ionicons name="refresh-outline" size={17} color="#64748B" />
                         </TouchableOpacity>
+                    </View>
+
+                    {/* Stats */}
+                    <View style={S.statsRow}>
+                        {[
+                            { label: 'Chờ xác thực', count: unverified.length, color: '#F59E0B' },
+                            { label: 'Đã xác thực', count: verified.length, color: '#059669' },
+                            { label: 'Tổng', count: users.length, color: '#2563EB' },
+                        ].map(s => (
+                            <View key={s.label} style={[S.statCard, { borderLeftColor: s.color }]}>
+                                <Text style={S.statNum}>{s.count}</Text>
+                                <Text style={S.statLabel}>{s.label}</Text>
+                            </View>
+                        ))}
+                    </View>
+
+                    {/* Search */}
+                    <View style={S.searchWrap}>
+                        <Ionicons name="search-outline" size={15} color="#94A3B8" />
+                        <TextInput
+                            style={S.searchInput}
+                            placeholder="Tìm tên, email, SĐT..."
+                            placeholderTextColor="#94A3B8"
+                            value={search}
+                            onChangeText={setSearch}
+                        />
+                        {search.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearch('')}>
+                                <Ionicons name="close-circle" size={15} color="#94A3B8" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* Tabs */}
+                    <View style={S.tabRow}>
+                        {TABS.map(t => (
+                            <TouchableOpacity
+                                key={t.key}
+                                style={[S.tab, tab === t.key && S.tabActive]}
+                                onPress={() => { setTab(t.key); setSelected(null); }}
+                            >
+                                <Text style={[S.tabText, tab === t.key && S.tabTextActive]}>{t.label}</Text>
+                                <View style={[S.tabBadge, { backgroundColor: tab === t.key ? t.color : '#E2E8F0' }]}>
+                                    <Text style={[S.tabBadgeText, { color: tab === t.key ? '#fff' : '#64748B' }]}>{t.count}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    {/* List */}
+                    {loading ? (
+                        <View style={S.loadingWrap}>
+                            <ActivityIndicator color="#2563EB" />
+                            <Text style={S.loadingText}>Đang tải...</Text>
+                        </View>
+                    ) : (
+                        <FlatList
+                            data={activeList}
+                            keyExtractor={(item, i) => item.email || String(i)}
+                            showsVerticalScrollIndicator={false}
+                            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchUsers(); }} />}
+                            contentContainerStyle={{ paddingBottom: isWeb ? 32 : 100 }}
+                            renderItem={renderUser}
+                            ListEmptyComponent={
+                                <View style={S.empty}>
+                                    <View style={S.emptyIcon}>
+                                        <Ionicons name="people-outline" size={28} color="#94A3B8" />
+                                    </View>
+                                    <Text style={S.emptyText}>
+                                        {search ? 'Không tìm thấy kết quả' : tab === 'unverified' ? 'Không có tài khoản chờ xác thực' : 'Chưa có tài khoản được xác thực'}
+                                    </Text>
+                                </View>
+                            }
+                        />
                     )}
                 </View>
 
-                {/* Tabs */}
-                <View style={S.tabRow}>
-                    {TABS.map(t => (
-                        <TouchableOpacity
-                            key={t.key}
-                            style={[S.tab, tab === t.key && S.tabActive]}
-                            onPress={() => { setTab(t.key); setSelected(null); }}
-                        >
-                            <Text style={[S.tabText, tab === t.key && S.tabTextActive]}>{t.label}</Text>
-                            <View style={[S.tabBadge, { backgroundColor: tab === t.key ? t.color : '#E2E8F0' }]}>
-                                <Text style={[S.tabBadgeText, { color: tab === t.key ? '#fff' : '#64748B' }]}>{t.count}</Text>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
-                {/* List */}
-                {loading ? (
-                    <View style={S.loadingWrap}>
-                        <ActivityIndicator color="#2563EB" />
-                        <Text style={S.loadingText}>Đang tải...</Text>
-                    </View>
-                ) : (
-                    <FlatList
-                        data={activeList}
-                        keyExtractor={(item, i) => item.email || String(i)}
-                        showsVerticalScrollIndicator={false}
-                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchUsers(); }} />}
-                        contentContainerStyle={{ paddingBottom: isWeb ? 32 : 100 }}
-                        renderItem={renderUser}
-                        ListEmptyComponent={
-                            <View style={S.empty}>
-                                <View style={S.emptyIcon}>
-                                    <Ionicons name="people-outline" size={28} color="#94A3B8" />
-                                </View>
-                                <Text style={S.emptyText}>
-                                    {search ? 'Không tìm thấy kết quả' : tab === 'unverified' ? 'Không có tài khoản chờ xác thực' : 'Chưa có tài khoản được xác thực'}
-                                </Text>
-                            </View>
-                        }
+                {/* ── RIGHT / DETAIL panel ── */}
+                {selected && (
+                    // Web: hiện bên phải inline
+                    // Mobile: hiện overlay toàn màn
+                    <UserDetailPanel
+                        user={selected}
+                        onClose={() => setSelected(null)}
+                        onApprove={handleApprove}
+                        onReject={handleReject}
+                        loading={actionLoading}
                     />
                 )}
             </View>
-
-            {/* ── RIGHT / DETAIL panel ── */}
-            {selected && (
-                // Web: hiện bên phải inline
-                // Mobile: hiện overlay toàn màn
-                <UserDetailPanel
-                    user={selected}
-                    onClose={() => setSelected(null)}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                    loading={actionLoading}
-                />
-            )}
         </View>
     );
 }
 
 const S = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8FAFC', flexDirection: isWeb ? 'row' : 'column' },
+    root: {
+        flex: 1,
+        backgroundColor: "#F8FAFC",
+    },
+    watermark: {
+        position: "absolute",
+        width: "80%",           // ← to nhỏ tuỳ ý
+        height: "60%",          // ← cao thấp tuỳ ý
+        top: "20%",             // ← căn giữa dọc
+        left: "10%",            // ← căn giữa ngang
+        opacity: 0.05,          // ← 0.05 rất mờ / 0.15 rõ hơn
+    },
+    container: { flex: 1, backgroundColor: 'transparent', flexDirection: isWeb ? 'row' : 'column' },
 
     // List panel
     listPanel: { flex: 1, paddingHorizontal: isWeb ? 24 : 16, paddingTop: isWeb ? 24 : 30 },
@@ -461,13 +484,13 @@ const S = StyleSheet.create({
         maxHeight: undefined,
     },
     detailHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
-    detailTitle: { fontSize: 15, fontWeight: '700', color: '#F8FAFC' },          // ← text sáng
+    detailTitle: { fontSize: 15, fontWeight: '700', color: '#64748B' },          // ← text sáng
     detailCloseBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' },
 
     detailIdentity: { alignItems: 'center', paddingVertical: 20, gap: 6, borderBottomWidth: 1, borderBottomColor: '#1E293B', marginBottom: 14 },
     detailAvatar: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
     detailAvatarText: { color: '#FFFFFF', fontSize: 20, fontWeight: '800' },
-    detailName: { fontSize: 16, fontWeight: '800', color: '#F8FAFC' },           // ← text sáng
+    detailName: { fontSize: 16, fontWeight: '800', color: '#64748B' },           // ← text sáng
     detailEmail: { fontSize: 12, color: '#64748B' },
     rolePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
     rolePillText: { fontSize: 15, fontWeight: '700' },

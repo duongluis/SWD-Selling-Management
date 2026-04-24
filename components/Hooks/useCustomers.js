@@ -8,7 +8,7 @@ export const getRole = (userDetail) => {
     const r = (userDetail?.role || userDetail?.member || '').toLowerCase();
     if (r === 'admin') return 'admin';
     if (['đại lý', 'daily', 'dealer'].includes(r)) return 'daily';
-    if (['nhà phân phối', 'phantan', 'distributor'].includes(r)) return 'phantan';
+    if (['đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
     if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
     return 'other';
 };

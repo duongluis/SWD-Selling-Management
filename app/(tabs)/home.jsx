@@ -4,11 +4,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import { useContext, useEffect, useState } from "react";
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Image,
+  Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View
+} from "react-native";
 import { useCustomers } from "../../components/Hooks/useCustomers";
 import { db } from "../../config/firebaseConfig";
 
 const isWeb = Platform.OS === "web";
+
+// ✅ Link ảnh nền — thay bằng URL của bạn
+const BG_IMAGE = require('../../assets/images/logo-light.png')
 
 function StatCard({ icon, label, value, color, bg }) {
   return (
@@ -27,8 +33,6 @@ function StatCard({ icon, label, value, color, bg }) {
 export default function HomeView() {
   const router = useRouter();
   const { userDetail } = useContext(UserDetailContext);
-
-  // ✅ Hook tự fetch theo role, dùng field createdBy
   const { customers: customerList, loading: customerLoading } = useCustomers();
 
   const [totalRevenue, setTotalRevenue] = useState(0);
@@ -37,12 +41,10 @@ export default function HomeView() {
 
   useEffect(() => {
     if (!userDetail || customerLoading || customerList.length === 0) return;
-
     const fetchOrders = async () => {
       try {
         const phones = customerList.map(c => c.phone).filter(Boolean);
         const allOrders = [];
-
         await Promise.all(phones.map(async (phone) => {
           try {
             const snap = await getDoc(doc(db, "orders", phone));
@@ -50,17 +52,14 @@ export default function HomeView() {
             (snap.data().orders || []).forEach(o => allOrders.push(o));
           } catch (_) { }
         }));
-
         const revenue = allOrders.reduce((sum, o) =>
           sum + (o.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0), 0);
-
         allOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         setTotalOrders(allOrders.length);
         setTotalRevenue(revenue);
         setRecentOrders(allOrders.slice(0, 5));
       } catch (e) { console.error(e); }
     };
-
     fetchOrders();
   }, [userDetail, customerList, customerLoading]);
 
@@ -76,124 +75,166 @@ export default function HomeView() {
   const quickActions = [
     { name: "Đơn hàng mới", icon: "add-circle-outline", action: () => router.push("/addOrder"), color: "#3B82F6", bg: "#EFF6FF" },
     { name: "Thêm khách", icon: "person-add-outline", action: () => router.push("/addCustomer"), color: "#8B5CF6", bg: "#F5F3FF" },
-    { name: "Báo cáo", icon: "bar-chart-outline", action: () => router.push("/revenue"), color: "#10B981", bg: "#ECFDF5" },
+    { name: "Báo cáo", icon: "bar-chart-outline", action: () => router.push("/analytics"), color: "#10B981", bg: "#ECFDF5" },
     { name: "Dịch vụ", icon: "construct-outline", action: () => router.push("/addService"), color: "#F59E0B", bg: "#FFFBEB" },
   ];
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-      {!isWeb && (
-        <View style={styles.mobileHeader}>
-          <View>
-            <Text style={styles.greeting}>Xin chào 👋</Text>
-            <Text style={styles.userName}>{userDetail?.name}</Text>
-          </View>
-          <TouchableOpacity style={styles.notifBtn}>
-            <Ionicons name="notifications-outline" size={22} color={Colors.TextPrimary} />
-          </TouchableOpacity>
-        </View>
-      )}
 
-      {isWeb && (
-        <View style={styles.welcomeBanner}>
-          <View>
-            <Text style={styles.welcomeTitle}>Xin chào, {userDetail?.name}</Text>
-            <Text style={styles.welcomeSub}>Tổng quan hoạt động kinh doanh của bạn hôm nay.</Text>
-          </View>
-          <TouchableOpacity style={styles.welcomeBtn} onPress={() => router.push("/addOrder")}>
-            <Ionicons name="add" size={16} color={Colors.White} />
-            <Text style={styles.welcomeBtnText}>Đơn hàng mới</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+    <View style={styles.root}>
 
-      <View style={[styles.statsGrid, isWeb && styles.statsGridWeb]}>
-        <StatCard icon="cash-outline" label="Doanh Thu" value={fmt(totalRevenue)} color="#10B981" bg="#ECFDF5" />
-        <StatCard icon="receipt-outline" label="Tổng Đơn Hàng" value={String(totalOrders)} color="#3B82F6" bg="#EFF6FF" />
-        <StatCard icon="people-outline" label="Khách Hàng" value={String(customerList.length)} color="#8B5CF6" bg="#F5F3FF" />
-        <StatCard icon="trending-up-outline" label="Doanh Thu TB/Đơn" value={totalOrders > 0 ? fmt(totalRevenue / totalOrders) : "0đ"} color="#F59E0B" bg="#FFFBEB" />
-      </View>
+      {/* ✅ Watermark — cố định chính giữa, mờ nhạt */}
+      <Image
+        source={BG_IMAGE}
+        style={styles.watermark}
+        resizeMode="contain"
+      />
 
-      <View style={[styles.contentGrid, isWeb && styles.contentGridWeb]}>
-        {/* Quick actions */}
-        <View style={[styles.card, isWeb && { flex: 1 }]}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Thao tác nhanh</Text>
-          </View>
-          <View style={styles.quickGrid}>
-            {quickActions.map(a => (
-              <TouchableOpacity key={a.name} style={styles.quickItem} onPress={a.action} activeOpacity={0.7}>
-                <View style={[styles.quickIcon, { backgroundColor: a.bg }]}>
-                  <Ionicons name={a.icon} size={20} color={a.color} />
-                </View>
-                <Text style={styles.quickLabel}>{a.name}</Text>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {
+          !isWeb && (
+            <View style={styles.mobileHeader}>
+              <View>
+                <Text style={styles.greeting}>👋 Xin chào {userDetail?.role}</Text>
+                <Text style={styles.userName}>{userDetail?.name}</Text>
+              </View>
+              <TouchableOpacity style={styles.notifBtn}>
+                <Ionicons name="notifications-outline" size={22} color={Colors.TextPrimary} />
               </TouchableOpacity>
+            </View>
+          )
+        }
+
+        {
+          isWeb && (
+            <View style={styles.welcomeBanner}>
+              <View>
+                <Text style={styles.welcomeTitle}>
+                  Xin chào <Text style={{ color: "#10B981" }}>{userDetail?.role}</Text> {userDetail?.name} 👋
+                </Text>
+                <Text style={styles.welcomeSub}>Tổng quan hoạt động kinh doanh của bạn hôm nay.</Text>
+              </View>
+              <TouchableOpacity style={styles.welcomeBtn} onPress={() => router.push("/addOrder")}>
+                <Ionicons name="add" size={16} color={Colors.White} />
+                <Text style={styles.welcomeBtnText}>Đơn hàng mới</Text>
+              </TouchableOpacity>
+            </View>
+          )
+        }
+
+        <View style={[styles.statsGrid, isWeb && styles.statsGridWeb]}>
+          <StatCard icon="cash-outline" label="Doanh Thu" value={fmt(totalRevenue)} color="#10B981" bg="#ECFDF5" />
+          <StatCard icon="receipt-outline" label="Tổng Đơn Hàng" value={String(totalOrders)} color="#3B82F6" bg="#EFF6FF" />
+          <StatCard icon="people-outline" label="Khách Hàng" value={String(customerList.length)} color="#8B5CF6" bg="#F5F3FF" />
+          <StatCard icon="trending-up-outline" label="Doanh Thu TB/Đơn" value={totalOrders > 0 ? fmt(totalRevenue / totalOrders) : "0đ"} color="#F59E0B" bg="#FFFBEB" />
+        </View>
+
+        <View style={[styles.contentGrid, isWeb && styles.contentGridWeb]}>
+          {/* Quick actions */}
+          <View style={[styles.card, isWeb && { flex: 1 }]}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>Thao tác nhanh</Text>
+            </View>
+            <View style={styles.quickGrid}>
+              {quickActions.map(a => (
+                <TouchableOpacity key={a.name} style={styles.quickItem} onPress={a.action} activeOpacity={0.7}>
+                  <View style={[styles.quickIcon, { backgroundColor: a.bg }]}>
+                    <Ionicons name={a.icon} size={20} color={a.color} />
+                  </View>
+                  <Text style={styles.quickLabel}>{a.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.cardDivider} />
+            <Text style={styles.cardSubtitle}>Khách hàng gần đây</Text>
+            {customerLoading ? (
+              <Text style={styles.emptyText}>Đang tải...</Text>
+            ) : customerList.length === 0 ? (
+              <Text style={styles.emptyText}>Chưa có khách hàng</Text>
+            ) : customerList.slice(0, 3).map((c, i) => (
+              <View key={c.docId || i} style={styles.customerRow}>
+                <View style={[styles.customerAvatar, { backgroundColor: ["#3B82F6", "#8B5CF6", "#10B981"][i % 3] }]}>
+                  <Text style={styles.customerAvatarText}>
+                    {(c.name || "?").trim().split(/\s+/).map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.customerName}>{c.name}</Text>
+                  <Text style={styles.customerPhone}>{c.phone || "Chưa có SĐT"}</Text>
+                </View>
+              </View>
             ))}
           </View>
 
-          <View style={styles.cardDivider} />
-          <Text style={styles.cardSubtitle}>Khách hàng gần đây</Text>
-          {customerLoading ? (
-            <Text style={styles.emptyText}>Đang tải...</Text>
-          ) : customerList.length === 0 ? (
-            <Text style={styles.emptyText}>Chưa có khách hàng</Text>
-          ) : customerList.slice(0, 3).map((c, i) => (
-            <View key={c.docId || i} style={styles.customerRow}>
-              <View style={[styles.customerAvatar, { backgroundColor: ["#3B82F6", "#8B5CF6", "#10B981"][i % 3] }]}>
-                <Text style={styles.customerAvatarText}>
-                  {(c.name || "?").trim().split(/\s+/).map(n => n[0]).join("").toUpperCase().slice(0, 2)}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.customerName}>{c.name}</Text>
-                <Text style={styles.customerPhone}>{c.phone || "Chưa có SĐT"}</Text>
-              </View>
+          {/* Recent orders */}
+          <View style={[styles.card, isWeb && { flex: 2 }]}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>Đơn Hàng Gần Đây</Text>
+              <TouchableOpacity onPress={() => router.push("/(tabs)/order")}>
+                <Text style={styles.cardLink}>Xem tất cả →</Text>
+              </TouchableOpacity>
             </View>
-          ))}
-        </View>
-
-        {/* Recent orders */}
-        <View style={[styles.card, isWeb && { flex: 2 }]}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Đơn Hàng Gần Đây</Text>
-            <TouchableOpacity onPress={() => router.push("/(tabs)/order")}>
-              <Text style={styles.cardLink}>Xem tất cả →</Text>
-            </TouchableOpacity>
-          </View>
-          {recentOrders.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Ionicons name="receipt-outline" size={32} color="#CBD5E1" />
-              <Text style={styles.emptyText}>Chưa có đơn hàng</Text>
-            </View>
-          ) : recentOrders.map(order => {
-            const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
-            const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
-            return (
-              <View key={order.id} style={styles.orderRow}>
-                <View style={[styles.orderDot, { backgroundColor: cfg.color }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.orderRowId}>#{order.id}</Text>
-                  <Text style={styles.orderRowCustomer}>{order.customer}</Text>
-                </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.orderRowAmount}>{fmt(total)}</Text>
-                  <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
-                    <Text style={[styles.statusPillText, { color: cfg.color }]}>{cfg.label}</Text>
+            {recentOrders.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="receipt-outline" size={32} color="#CBD5E1" />
+                <Text style={styles.emptyText}>Chưa có đơn hàng</Text>
+              </View>
+            ) : recentOrders.map(order => {
+              const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
+              const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
+              return (
+                <View key={order.id} style={styles.orderRow}>
+                  <View style={[styles.orderDot, { backgroundColor: cfg.color }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.orderRowId}>#{order.id}</Text>
+                    <Text style={styles.orderRowCustomer}>{order.customer}</Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={styles.orderRowAmount}>{fmt(total)}</Text>
+                    <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
+                      <Text style={[styles.statusPillText, { color: cfg.color }]}>{cfg.label}</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            );
-          })}
+              );
+            })}
+          </View>
         </View>
-      </View>
 
-      <View style={{ height: isWeb ? 32 : 100 }} />
-    </ScrollView>
+        <View style={{ height: isWeb ? 32 : 100 }} />
+      </ScrollView >
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
+  root: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
+  watermark: {
+    position: "absolute",
+    width: "80%",           // ← to nhỏ tuỳ ý
+    height: "60%",          // ← cao thấp tuỳ ý
+    top: "20%",             // ← căn giữa dọc
+    left: "10%",            // ← căn giữa ngang
+    opacity: 0.05,          // ← 0.05 rất mờ / 0.15 rõ hơn
+  },
+
+  // Sửa lại container
+  container: { flex: 1, backgroundColor: "transparent" },
+
+  // card: { backgroundColor: "rgba(255,255,255,0.92)", borderRadius: 14, padding: 20, borderWidth: 1, borderColor: "#E2E8F0" },
+  // statCard: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "rgba(255,255,255,0.92)", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#E2E8F0" },
+
+
+  // Giữ nguyên tất cả styles cũ
+  container: { flex: 1, backgroundColor: "transparent" }, // ← đổi thành transparent
   scrollContent: { paddingHorizontal: isWeb ? 32 : 16, paddingTop: isWeb ? 28 : 16 },
   mobileHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   greeting: { fontSize: 12, color: "#64748B", fontWeight: "500" },
@@ -206,14 +247,14 @@ const styles = StyleSheet.create({
   welcomeBtnText: { color: "#FFFFFF", fontSize: 13, fontWeight: "600" },
   statsGrid: { flexDirection: "column", gap: 10, marginBottom: 20 },
   statsGridWeb: { flexDirection: "row", gap: 16, marginBottom: 24 },
-  statCard: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#FFFFFF", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#E2E8F0" },
+  statCard: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "rgba(255,255,255,0.85)", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#E2E8F0" },
   statCardWeb: { flex: 1 },
   statIconWrap: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   statLabel: { fontSize: 12, color: "#64748B", fontWeight: "500", marginBottom: 2 },
   statValue: { fontSize: 20, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5 },
   contentGrid: { flexDirection: "column", gap: 16 },
   contentGridWeb: { flexDirection: "row", gap: 16, alignItems: "flex-start" },
-  card: { backgroundColor: "#FFFFFF", borderRadius: 14, padding: 20, borderWidth: 1, borderColor: "#E2E8F0" },
+  card: { backgroundColor: "rgba(255,255,255,0.88)", borderRadius: 14, padding: 20, borderWidth: 1, borderColor: "#E2E8F0" }, // ← hơi trong suốt
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
   cardTitle: { fontSize: 15, fontWeight: "700", color: "#0F172A" },
   cardLink: { fontSize: 13, color: "#3B82F6", fontWeight: "500" },

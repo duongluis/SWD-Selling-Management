@@ -6,40 +6,42 @@ import { Tabs, useRouter, useSegments } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { doc, writeBatch } from 'firebase/firestore';
 import { useContext, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { showInfo } from '../../components/Main/showInfo';
 import auth, { db } from '../../config/firebaseConfig';
 
 // ── Web-compatible alert helper ───────────────────────────────
 
 const DESKTOP_BREAKPOINT = 768; // px — dưới mức này dùng tab bar thay vì sidebar
-
+const ICON_IMAGE = require('../../assets/images/logo-dark.png')
 // ── Dữ liệu sản phẩm ────────────────────────────────────────
 const PRODUCTS_DATA = require('../../config/price.json')
 const SERVICE_DATA = require('../../config/service.json')
 
 const NAV_ITEMS = [
-  { key: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
-  { key: '(tabs)/order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
-  { key: '(tabs)/customer', label: 'KHÁCH HÀNG', icon: 'people-outline', activeIcon: 'people' },
-  { key: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
-  { key: '(tabs)/leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
-  { key: 'information', label: 'Bảng giá', icon: 'cash-outline', activeIcon: 'cash' },
+  { key: 'home', link: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
+  { key: 'order', link: '(tabs)/order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
+  { key: 'customer', link: '(tabs)/customer', label: 'KHÁCH HÀNG', icon: 'people-outline', activeIcon: 'people' },
+  { key: 'service', link: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
+  { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
+  { key: 'information', link: 'information', label: 'Bảng giá', icon: 'cash-outline', activeIcon: 'cash' },
 ];
 
 const WEB_NAV_ITEMS = [
-  { key: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
-  { key: '(tabs)/order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
-  { key: '(tabs)/customer', label: 'KHÁCH HÀNG', icon: 'people-outline', activeIcon: 'people' },
-  { key: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
-  { key: '(tabs)/leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
-  { key: 'information', label: 'Bảng giá', icon: 'cash-outline', activeIcon: 'cash' },
+  { key: 'home', link: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
+  { key: 'order', link: '(tabs)/order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
+  { key: 'customer', link: '(tabs)/customer', label: 'KHÁCH HÀNG', icon: 'people-outline', activeIcon: 'people' },
+  { key: 'service', link: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
+  { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
+  { key: 'information', link: 'information', label: 'Bảng giá', icon: 'cash-outline', activeIcon: 'cash' },
 ];
 
 function getInitials(name) {
   if (!name) return 'U';
   return name.trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
+
+
 
 const isAdmin = (userDetail) =>
   userDetail?.role === 'admin' || userDetail?.member === 'admin';
@@ -122,6 +124,7 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
     setShowLogout(false);
   };
 
+  const isUsersActive = activeTab === 'users' || activeTab === 'user';
 
   return (
     <View style={[S.sidebar, collapsed && S.sidebarCollapsed]}>
@@ -131,7 +134,8 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
         {!collapsed && (
           <View style={S.workspaceName}>
             <View style={S.workspaceLogo}>
-              <Ionicons name="storefront" size={14} color={Colors.White} />
+              <Image style={S.icon} source={ICON_IMAGE} resizeMode='contain' />
+              {/* <Ionicons name="storefront" size={14} color={Colors.White} /> */}
             </View>
             <Text style={S.workspaceText}>SWD Seller Manager</Text>
           </View>
@@ -145,7 +149,11 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
       {!collapsed && (
         <Pressable style={S.searchBar}>
           <Ionicons name="search-outline" size={14} color="#64748B" />
-          <Text style={S.searchText}>Search...</Text>
+          <TextInput
+            style={S.searchText}
+            placeholder="Search..."
+            placeholderTextColor={Colors.LightGray}
+          />
         </Pressable>
       )}
 
@@ -155,8 +163,8 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
         {WEB_NAV_ITEMS.map(item => {
           const isActive = activeTab === item.key;
           return (
-            <Pressable key={item.key} style={[S.navItem, isActive && S.navItemActive]} onPress={() => onNavigate(item.key)}>
-              <Ionicons name={isActive ? item.activeIcon : item.icon} size={16} color={isActive ? '#64748B' : '#ffffff'} style={S.navIcon} />
+            <Pressable key={item.key} style={[S.navItem, isActive && S.navItemActive]} onPress={() => onNavigate(item.link)}>
+              <Ionicons name={isActive ? item.activeIcon : item.icon} size={16} color={isActive ? '#64748B' : '#fff'} style={S.navIcon} />
               {!collapsed && <Text style={[S.navLabel, isActive && S.navLabelActive]}>{item.label}</Text>}
             </Pressable>
           );
@@ -191,19 +199,19 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
             </View>
           )}
 
-          {/* Danh sách tài khoản */}
+
           <Pressable
-            style={[S.navItem, activeTab === 'users' && S.navItemActive]}
+            style={[S.navItem, isUsersActive && S.navItemActive]}
             onPress={() => router.push('/(tabs)/user')}
           >
             <Ionicons
-              name={activeTab === 'users' ? 'people-outline' : 'people-outline'}
+              name={isUsersActive ? 'people' : 'people-outline'}
               size={16}
-              color={activeTab === 'users' ? '#ffffff' : '#64748B '}
+              color={isUsersActive ? '#64748B' : '#fff'}
               style={S.navIcon}
             />
             {!collapsed && (
-              <Text style={[S.navLabel, activeTab === 'users' && S.navLabelActive]}>
+              <Text style={[S.navLabel, isUsersActive && S.navLabelActive]}>
                 Danh sách người dùng
               </Text>
             )}
@@ -337,7 +345,7 @@ function CustomTabBar({ state, descriptors, navigation, isMobileWeb }) {
           const tab = NAV_ITEMS[index];
           const isFocused = state.index === index;
           const onPress = () => {
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            const event = navigation.emit({ type: 'tabPress', target: route.link, canPreventDefault: true });
             if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
           };
           return (
@@ -443,11 +451,19 @@ export default function TabLayout() {
 // ── Web Styles ───────────────────────────────────────────────
 const S = StyleSheet.create({
   root: { flex: 1, flexDirection: 'row', backgroundColor: '#F8FAFC', height: '100vh' },
+  icon: {
+    position: "absolute",
+    width: "100%",           // ← to nhỏ tuỳ ý
+    height: "100%",          // ← cao thấp tuỳ ý
+    // top: "100%",             // ← căn giữa dọc
+    // left: "100%",            // ← căn giữa ngang
+    opacity: 1,          // ← 0.05 rất mờ / 0.15 rõ hơn
+  },
   sidebar: { width: 240, backgroundColor: '#40668d', paddingTop: 16, paddingBottom: 12, paddingHorizontal: 12, flexDirection: 'column', borderRightWidth: 1, borderRightColor: '#1E293B' },
   sidebarCollapsed: { width: 60, paddingHorizontal: 10 },
   workspaceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingHorizontal: 4 },
   workspaceName: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  workspaceLogo: { width: 24, height: 24, borderRadius: 6, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center' },
+  workspaceLogo: { width: 24, height: 24, borderRadius: 6, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
   workspaceText: { color: '#F8FAFC', fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
   collapseBtn: { width: 24, height: 24, borderRadius: 5, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#1E293B', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 16 },
@@ -506,9 +522,9 @@ const M = StyleSheet.create({
   tabBarWrapWeb: { paddingBottom: 8, backgroundColor: '#F8FAFC' },
   tabBar: { flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, backgroundColor: Colors.White, paddingVertical: 6, borderRadius: 50, borderWidth: 10, borderColor: Colors.White, shadowColor: Colors.Black, shadowOpacity: 0.08, shadowRadius: 10, elevation: 4 },
   tabItem: { flex: 1, alignItems: 'center', paddingVertical: 5, borderRadius: 50 },
-  activeTabItem: { borderWidth: 2, borderColor: Colors.LightBlue, backgroundColor: Colors.BlueSky },
+  activeTabItem: { borderWidth: 2, borderColor: Colors.Black, backgroundColor: Colors.Black },
   tabLabel: { color: Colors.LightGray, fontWeight: '600', textAlign: 'center', fontSize: 10, marginTop: 2 },
-  activeTabLabel: { color: Colors.Blue },
+  activeTabLabel: { color: '#F8FAFC' },
   icon: { marginBottom: 2 },
 
   // Logout popup (mobile)
