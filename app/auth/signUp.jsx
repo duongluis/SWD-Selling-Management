@@ -1,5 +1,4 @@
 import { getFirebaseErrorMessage } from '@/components/Main/getFirebaseErrorMessage';
-import { showAlert } from '@/components/Main/showAlert';
 import Colors from '@/constant/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { createUserWithEmailAndPassword } from '@firebase/auth';
@@ -16,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import auth from '../../config/firebaseConfig';
+import { markRegistrationPending } from '../_layout';
 
 // ✅ KHÔNG lưu DB ở đây — chỉ tạo Firebase Auth account
 // DB chỉ được lưu sau khi user điền xong thông tin ở userInfoView
@@ -45,14 +45,13 @@ export default function SignUp() {
     if (!validate()) return;
     setLoading(true);
     try {
-      // ✅ Chỉ tạo Firebase Auth — KHÔNG ghi DB
+      // ✅ Đặt cờ TRƯỚC khi tạo tài khoản
+      // onAuthStateChanged bắn ngay sau create → guard phải thấy cờ đã có sẵn
+      markRegistrationPending();
       await createUserWithEmailAndPassword(auth, gmail.trim(), password);
-
-      // ✅ Chuyển thẳng sang userInfo để điền thông tin
-      // DB sẽ được ghi ở userInfoView sau khi user hoàn tất
       router.replace('/auth/userInfo');
     } catch (e) {
-      showAlert('Lỗi đăng ký', getFirebaseErrorMessage(e));
+      Alert.alert('Lỗi đăng ký', getFirebaseErrorMessage(e));
     } finally {
       setLoading(false);
     }

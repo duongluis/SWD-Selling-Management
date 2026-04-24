@@ -2,24 +2,53 @@ import auth, { db } from "@/config/firebaseConfig";
 import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 import { UserDetailContext } from "../context/UserDetailContext";
 
 SplashScreen.preventAutoHideAsync();
 
-const PUBLIC_ROUTES = ['auth', 'index'];
-const ADMIN_ROUTES = ['users'];
+// ── Session flag helpers (sessionStorage on web, module var on native) ──
+// Cờ này bị XÓA khi reload trang → phân biệt "vừa đăng ký" vs "reload"
+const SESSION_KEY = 'swd_reg_pending';
+let _nativeRegPending = false; // fallback cho React Native
 
-// 3 trạng thái rõ ràng thay vì null-ambiguous
-// 'pending'        → chưa biết (Firebase đang kiểm tra)
-// null             → chắc chắn chưa đăng nhập
-// { ...userData }  → đã đăng nhập
+export const markRegistrationPending = () => {
+  if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
+    sessionStorage.setItem(SESSION_KEY, '1');
+  } else {
+    _nativeRegPending = true;
+  }
+};
+
+export const clearRegistrationPending = () => {
+  if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem(SESSION_KEY);
+  } else {
+    _nativeRegPending = false;
+  }
+};
+
+const isRegistrationPending = () => {
+  if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
+    return sessionStorage.getItem(SESSION_KEY) === '1';
+  }
+  return _nativeRegPending;
+};
+
+SplashScreen.preventAutoHideAsync();
+
+// ── Route groups ─────────────────────────────────────────────
+const PUBLIC_ROUTES = ['auth', 'index'];          // ai cũng vào được
+const ADMIN_ROUTES = ['users'];                   // chỉ admin
+const APP_ROUTES = ['(tabs)', 'addOrder', 'addCustomer',
+  'addService', 'CustomerView', 'ServiceView',
+  'OrderView', 'revenue', 'information'];
 
 export default function RootLayout() {
-  const [userDetail, setUserDetail] = useState('pending'); // ← key change
+  const [userDetail, setUserDetail] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const router = useRouter();
   const segments = useSegments();
@@ -40,6 +69,7 @@ export default function RootLayout() {
           if (snap.exists()) {
             setUserDetail(snap.data());
           } else {
+            // Auth có nhưng chưa điền thông tin (bỏ dở bước 2)
             setUserDetail({ email: user.email, _incomplete: true });
           }
         } catch (e) {
@@ -47,61 +77,79 @@ export default function RootLayout() {
           setUserDetail(null);
         }
       } else {
-        setUserDetail(null); // chắc chắn chưa đăng nhập
+        setUserDetail(null);
       }
       setAuthChecked(true);
     });
     return () => unsub();
   }, []);
 
+  // ── Redirect logic ────────────────────────────────────────
   useEffect(() => {
     if (!loaded || !authChecked) return;
-    if (userDetail === 'pending') return;
-
     SplashScreen.hideAsync();
 
     const segment = segments[0] || '';
-
-    // ✅ '' (root) cũng được coi là public
-    const inPublic = !segment || PUBLIC_ROUTES.includes(segment);
+    const fullPath = segments.join('/');
     const isAdmin = userDetail?.role === 'admin' || userDetail?.member === 'admin';
 
+    // Các route không cần redirect khi chưa đăng nhập
+    const ALLOW_UNAUTHENTICATED = [
+      'index', '',          // màn landing
+      'auth/signIn',        // đăng nhập
+      'auth/signUp',        // đăng ký
+    ];
+    const isAllowedUnauthenticated =
+      ALLOW_UNAUTHENTICATED.includes(segment) ||
+      ALLOW_UNAUTHENTICATED.includes(fullPath);
+
+    // ── Chưa đăng nhập ──────────────────────────────────────
+    // Luôn về index, trừ khi đang ở signIn/signUp
     if (!userDetail) {
-      if (!inPublic) router.replace('/auth/signIn');
+      if (!isAllowedUnauthenticated) router.replace('/');
       return;
     }
 
+    // ── Có Auth nhưng chưa điền thông tin ───────────────────
     if (userDetail._incomplete) {
-      router.replace('/auth/userInfo');
+      if (isRegistrationPending()) {
+        // Vừa đăng ký trong session này → vào userInfo
+        router.replace('/auth/userInfo');
+      } else {
+        // Reload trang / session cũ → navigate trước, signOut sau
+        // (nếu signOut trước, guard sẽ chạy lại với null và override navigation)
+        router.replace('/auth/signIn');
+        signOut(auth);
+      }
       return;
     }
 
+    // ── Chưa xác thực (không phải admin) ────────────────────
     if (!userDetail.verified && !isAdmin) {
       if (segment !== 'auth') router.replace('/auth/pendingVerification');
       return;
     }
 
-    const currentPath = segments.join('/');
-    const accessingAdmin = ADMIN_ROUTES.some(r => currentPath.includes(r));
+    // ── Chặn non-admin truy cập route admin ─────────────────
+    const accessingAdmin = ADMIN_ROUTES.some(r => fullPath.includes(r));
     if (accessingAdmin && !isAdmin) {
+      console.warn('🚫 Truy cập trái phép:', fullPath);
       router.replace('/(tabs)/home');
       return;
     }
 
-    if (inPublic) {
+    // ── Đã xác thực đang ở trang auth/index → vào app ───────
+    if (segment === 'auth' || segment === 'index' || segment === '') {
       router.replace('/(tabs)/home');
     }
 
   }, [loaded, authChecked, userDetail, segments]);
 
-  // Loading screen — hiển thị khi font hoặc auth chưa xong
-  if (!loaded || !authChecked || userDetail === 'pending') {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F172A' }}>
-        <ActivityIndicator size="large" color="#2563EB" />
-      </View>
-    );
-  }
+  if (!loaded || !authChecked) return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F172A' }}>
+      <ActivityIndicator size="large" color="#2563EB" />
+    </View>
+  );
 
   return (
     <UserDetailContext.Provider value={{ userDetail, setUserDetail }}>

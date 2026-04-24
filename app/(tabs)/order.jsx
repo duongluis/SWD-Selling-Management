@@ -1,37 +1,36 @@
-import Colors from "@/constant/Colors";
-import { UserDetailContext } from "@/context/UserDetailContext";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { collection, doc, getDoc, getDocs, query, updateDoc, where } from "firebase/firestore";
-import { useCallback, useContext, useEffect, useState } from "react";
+import Colors from '@/constant/Colors';
+import { UserDetailContext } from '@/context/UserDetailContext';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Modal, Platform, Pressable,
+  ActivityIndicator, FlatList, Image, Modal, Platform, Pressable,
   RefreshControl, ScrollView, StyleSheet, Text,
-  TextInput, TouchableOpacity, View
-} from "react-native";
+  TextInput, TouchableOpacity, View,
+} from 'react-native';
 import { showAlert } from '../../components/Main/showAlert';
-import { db } from "../../config/firebaseConfig";
+import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
-const BG_IMAGE = require('../../assets/images/logo-light.png')
+const BG_IMAGE = require('../../assets/images/logo-light.png');
 
 const getRole = (u) => {
   const r = (u?.role || u?.member || '').toLowerCase();
   if (r === 'admin') return 'admin';
   if (['đại lý', 'daily', 'dealer'].includes(r)) return 'daily';
-  if (['Đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
+  if (['đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
   if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
   return 'other';
 };
 
-const STATUS_CONFIG = {
-  PENDING: { color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', label: 'Chờ lắp đặt', icon: 'time-outline' },
-  SHIPPED: { color: '#3B82F6', bg: '#EFF6FF', border: '#BFDBFE', label: 'Đang giao hàng', icon: 'car-outline' },
-  CONFIRMED: { color: '#8B5CF6', bg: '#F5F3FF', border: '#DDD6FE', label: 'Đã thanh toán', icon: 'card-outline' },
-  COMPLETED: { color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0', label: 'Hoàn thành', icon: 'checkmark-circle' },
+// ── Fallback STATUS_CONFIG (dùng khi chưa load từ DB) ────────
+const STATUS_CONFIG_FALLBACK = {
+  PENDING: { color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', label: 'Chờ lắp đặt', icon: 'time-outline', changeable: true },
+  SHIPPED: { color: '#3B82F6', bg: '#EFF6FF', border: '#BFDBFE', label: 'Đang giao hàng', icon: 'car-outline', changeable: true },
+  CONFIRMED: { color: '#8B5CF6', bg: '#F5F3FF', border: '#DDD6FE', label: 'Đã thanh toán', icon: 'card-outline', changeable: true },
+  COMPLETED: { color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0', label: 'Hoàn thành', icon: 'checkmark-circle', changeable: true },
+  CANCELLED: { color: '#EF4444', bg: '#FEF2F2', border: '#FECACA', label: 'Đã hủy', icon: 'close-circle-outline', changeable: true },
 };
 
 const SVC_TYPE_CONFIG = {
@@ -55,32 +54,49 @@ const ORDER_TYPE_CONFIG = {
 };
 
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
-
 function getInitials(name) {
   if (!name) return '?';
   return name.trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
-
 const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4'];
+const TABS = ['All', 'PENDING', 'SHIPPED', 'CONFIRMED', 'COMPLETED', 'CANCELLED'];
+const TAB_LABELS = { All: 'Tất cả', PENDING: 'Chờ lắp đặt', SHIPPED: 'Đang giao hàng', CONFIRMED: 'Đã thanh toán', COMPLETED: 'Hoàn thành', CANCELLED: 'Đã hủy' };
 
-const TABS = ['All', 'PENDING', 'SHIPPED', 'CONFIRMED', 'COMPLETED'];
-const TAB_LABELS = { All: 'Tất cả', PENDING: 'Chờ lắp đặt', SHIPPED: 'Đang giao hàng', CONFIRMED: 'Đã thanh toán', COMPLETED: 'Hoàn thành' };
+// ── Status Picker Modal Styles ────────────────────────────────
+const PM = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  sheet: { backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: 340, overflow: 'hidden' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  title: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  closeBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  itemActive: { backgroundColor: '#F8FAFC' },
+  itemIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  itemText: { flex: 1, fontSize: 14, color: '#374151', fontWeight: '500' },
+  lockedTag: { backgroundColor: '#FEF2F2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  lockedText: { fontSize: 10, color: '#EF4444', fontWeight: '600' },
+  cancelItem: { borderTopWidth: 2, borderTopColor: '#FEE2E2' },
+  cancelIcon: { backgroundColor: '#FEF2F2', width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+});
 
-// ── Order Detail Panel (web) ──────────────────────────────────
+// ── Order Detail Panel ────────────────────────────────────────
 function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) {
   const [order, setOrder] = useState(initialOrder);
   const [services, setServices] = useState([]);
   const [svcLoading, setSvcLoading] = useState(true);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  // db/status config for this order type
+  const [statusConfig, setStatusConfig] = useState(STATUS_CONFIG_FALLBACK);
 
   const isAdmin = (userDetail?.role || userDetail?.member || '').toLowerCase() === 'admin';
 
   useEffect(() => { setOrder(initialOrder); }, [initialOrder?.id]);
 
+  // Fetch services
   useEffect(() => {
     if (!order?.id) return;
-    const fetchServices = async () => {
+    const fetch = async () => {
       setSvcLoading(true);
       try {
         const snap = await getDocs(query(collection(db, 'service'), where('orderId', '==', order.id)));
@@ -88,48 +104,90 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
       } catch (e) { console.error(e); }
       finally { setSvcLoading(false); }
     };
-    fetchServices();
+    fetch();
   }, [order?.id]);
 
-  // ── Cập nhật trạng thái đơn hàng ─────────────────────────
-  // Orders lưu dạng array trong doc, cần đọc → sửa → ghi lại
+  // Fetch status config từ db/status/{orderType}
+  // Cấu trúc: db/status/{buon|le} collection → docs với fields: id, status, service, changeable, type
+  useEffect(() => {
+    if (!order?.orderType) return;
+    const fetchStatusConfig = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'status', order.orderType, 'statuses'));
+        if (snap.empty) return; // giữ fallback
+        const cfg = { ...STATUS_CONFIG_FALLBACK };
+        snap.docs.forEach(d => {
+          const data = d.data();
+          if (data.status && cfg[data.status]) {
+            cfg[data.status] = { ...cfg[data.status], ...data };
+          }
+        });
+        setStatusConfig(cfg);
+      } catch (e) {
+        // silently fallback
+      }
+    };
+    fetchStatusConfig();
+  }, [order?.orderType]);
+
+  // ── Hủy tất cả dịch vụ đính kèm ─────────────────────────
+  const cancelLinkedServices = async (orderId) => {
+    try {
+      const snap = await getDocs(query(collection(db, 'service'), where('orderId', '==', orderId)));
+      await Promise.all(snap.docs.map(d => updateDoc(doc(db, 'service', d.id), { status: 'CANCELLED' })));
+      setServices(prev => prev.map(s => ({ ...s, status: 'CANCELLED' })));
+    } catch (e) { console.error('Lỗi hủy dịch vụ:', e); }
+  };
+
+  // ── Cập nhật trạng thái ───────────────────────────────────
   const handleUpdateStatus = (newStatus) => {
     setShowStatusPicker(false);
     if (newStatus === order.status) return;
+
+    // Kiểm tra changeable của trạng thái HIỆN TẠI
+    const currentCfg = statusConfig[order.status];
+    if (currentCfg?.changeable === false) {
+      showAlert('Không thể thay đổi', 'Trạng thái hiện tại không cho phép chuyển đổi thủ công.');
+      return;
+    }
+
+    const isCancelling = newStatus === 'CANCELLED';
+    const newCfg = statusConfig[newStatus] || STATUS_CONFIG_FALLBACK[newStatus];
+
     showAlert(
-      'Đổi trạng thái',
-      `Cập nhật sang "${STATUS_CONFIG[newStatus]?.label}"?`,
+      isCancelling ? '⚠️ Hủy đơn hàng' : 'Đổi trạng thái',
+      isCancelling
+        ? `Hủy đơn hàng #${order.id}? Tất cả dịch vụ đính kèm cũng sẽ bị hủy.`
+        : `Cập nhật sang "${newCfg?.label}"?`,
       async () => {
         setUpdatingStatus(true);
         try {
-          // Dùng _phone được gán lúc fetch — nhanh và chính xác
           const phone = order._phone;
           if (!phone) throw new Error('Không xác định được số điện thoại khách hàng');
-
           const orderDoc = await getDoc(doc(db, 'orders', phone));
           if (!orderDoc.exists()) throw new Error('Không tìm thấy đơn hàng');
-
           const orders = orderDoc.data().orders || [];
-          const updated = orders.map(o =>
-            o.id === order.id ? { ...o, status: newStatus } : o
-          );
+          const updated = orders.map(o => o.id === order.id ? { ...o, status: newStatus } : o);
           await updateDoc(doc(db, 'orders', phone), { orders: updated });
           setOrder(prev => ({ ...prev, status: newStatus }));
-        } catch (e) {
-          showAlert('Lỗi', e.message);
-        } finally {
-          setUpdatingStatus(false);
-        }
+
+          // ✅ Auto-hủy dịch vụ khi đơn bị hủy
+          if (isCancelling) await cancelLinkedServices(order.id);
+        } catch (e) { showAlert('Lỗi', e.message); }
+        finally { setUpdatingStatus(false); }
       }
     );
   };
 
   if (!order) return null;
-  const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
+  const statusCfg = statusConfig[order.status] || STATUS_CONFIG_FALLBACK.PENDING;
   const typeCfg = ORDER_TYPE_CONFIG[order.orderType];
   const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
+  const isCancelled = order.status === 'CANCELLED';
 
-  // ── Status picker modal ───────────────────────────────────
+  // Current status changeable?
+  const currentChangeable = statusConfig[order.status]?.changeable !== false;
+
   const StatusPickerModal = () => (
     <Modal transparent animationType="fade" visible={showStatusPicker} onRequestClose={() => setShowStatusPicker(false)}>
       <Pressable style={PM.overlay} onPress={() => setShowStatusPicker(false)}>
@@ -140,37 +198,53 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
               <Ionicons name="close" size={16} color="#64748B" />
             </TouchableOpacity>
           </View>
-          {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
+          {!currentChangeable && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF2F2', padding: 12, borderBottomWidth: 1, borderBottomColor: '#FECACA' }}>
+              <Ionicons name="lock-closed-outline" size={14} color="#EF4444" />
+              <Text style={{ fontSize: 12, color: '#EF4444', flex: 1 }}>Trạng thái hiện tại không cho phép chuyển đổi thủ công</Text>
+            </View>
+          )}
+          {Object.entries(statusConfig).filter(([k]) => k !== 'CANCELLED').map(([key, cfg]) => {
             const active = order.status === key;
+            const locked = !currentChangeable;
             return (
               <TouchableOpacity key={key}
-                style={[PM.item, active && PM.itemActive]}
-                onPress={() => handleUpdateStatus(key)} activeOpacity={0.7}
+                style={[PM.item, active && PM.itemActive, locked && { opacity: 0.4 }]}
+                onPress={() => !locked && handleUpdateStatus(key)} activeOpacity={locked ? 1 : 0.7}
               >
-                <View style={[PM.itemIcon, { backgroundColor: cfg.bg }]}>
-                  <Ionicons name={cfg.icon} size={16} color={cfg.color} />
+                <View style={[PM.itemIcon, { backgroundColor: cfg.bg || '#F1F5F9' }]}>
+                  <Ionicons name={cfg.icon || 'ellipse-outline'} size={16} color={cfg.color || '#94A3B8'} />
                 </View>
                 <Text style={[PM.itemText, active && { color: cfg.color, fontWeight: '700' }]}>{cfg.label}</Text>
                 {active && <Ionicons name="checkmark-circle" size={18} color={cfg.color} />}
               </TouchableOpacity>
             );
           })}
+          {/* CANCELLED — luôn ở cuối, nổi bật */}
+          {!isCancelled && (
+            <TouchableOpacity
+              style={[PM.item, PM.cancelItem, !currentChangeable && { opacity: 0.4 }]}
+              onPress={() => currentChangeable && handleUpdateStatus('CANCELLED')}
+              activeOpacity={currentChangeable ? 0.7 : 1}
+            >
+              <View style={PM.cancelIcon}><Ionicons name="close-circle-outline" size={16} color="#EF4444" /></View>
+              <Text style={[PM.itemText, { color: '#EF4444' }]}>Hủy đơn hàng</Text>
+              <View style={PM.lockedTag}><Text style={PM.lockedText}>Hủy + dịch vụ</Text></View>
+            </TouchableOpacity>
+          )}
         </View>
       </Pressable>
     </Modal>
   );
 
   return (
-    <View style={P.root}>
-
-      {/* ✅ Watermark — cố định chính giữa, mờ nhạt */}
-
+    <View style={[P.root, isCancelled && P.rootCancelled]}>
       <StatusPickerModal />
 
       {/* Header */}
       <View style={P.header}>
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <Text style={P.orderId}>Order #{order.id}</Text>
             {typeCfg && (
               <View style={[P.typeBadge, { backgroundColor: typeCfg.bg }]}>
@@ -178,29 +252,32 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
                 <Text style={[P.typeBadgeText, { color: typeCfg.color }]}>{typeCfg.label}</Text>
               </View>
             )}
+            {/* Cancelled banner */}
+            {isCancelled && (
+              <View style={P.cancelledBadge}>
+                <Ionicons name="close-circle" size={12} color="#EF4444" />
+                <Text style={P.cancelledBadgeText}>Đã hủy</Text>
+              </View>
+            )}
           </View>
           <Text style={P.orderDate}>{order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : '—'}</Text>
         </View>
-        {/* ✅ Action buttons */}
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          {/* Sửa — tất cả đều thấy */}
-          <TouchableOpacity
-            style={P.editBtn}
-            onPress={() => router.push({ pathname: '/editOrder/[orderID]', params: { orderID: order.id, orderParam: JSON.stringify(order) } })}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="create-outline" size={14} color="#2563EB" />
-            <Text style={P.editBtnText}>Sửa</Text>
-          </TouchableOpacity>
-          {/* Đổi trạng thái — chỉ admin */}
-          {isAdmin && (
-            <TouchableOpacity
-              style={[P.statusBtn, { backgroundColor: statusCfg.bg, borderColor: statusCfg.border }, updatingStatus && { opacity: 0.6 }]}
-              onPress={() => setShowStatusPicker(true)}
-              disabled={updatingStatus}
+          {!isCancelled && (
+            <TouchableOpacity style={P.editBtn}
+              onPress={() => router.push({ pathname: '/editOrder/[orderID]', params: { orderID: order.id, orderParam: JSON.stringify(order) } })}
               activeOpacity={0.8}
             >
-              <View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusCfg.color }]} />
+              <Ionicons name="create-outline" size={14} color="#2563EB" />
+              <Text style={P.editBtnText}>Sửa</Text>
+            </TouchableOpacity>
+          )}
+          {isAdmin && !isCancelled && (
+            <TouchableOpacity
+              style={[P.statusBtn, { backgroundColor: statusCfg.bg, borderColor: statusCfg.border }, updatingStatus && { opacity: 0.6 }]}
+              onPress={() => setShowStatusPicker(true)} disabled={updatingStatus} activeOpacity={0.8}
+            >
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusCfg.color }} />
               <Text style={[P.statusBtnText, { color: statusCfg.color }]}>
                 {updatingStatus ? 'Đang cập nhật...' : statusCfg.label}
               </Text>
@@ -214,11 +291,9 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-        {/* Two-column body */}
         <View style={P.body}>
-          {/* LEFT column */}
+          {/* LEFT */}
           <View style={P.leftCol}>
-            {/* Customer info */}
             <View style={P.section}>
               <View style={P.sectionHeader}>
                 <Ionicons name="person-circle-outline" size={14} color="#2563EB" />
@@ -235,8 +310,6 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
                 </View>
               )}
             </View>
-
-            {/* Products */}
             <View style={P.section}>
               <View style={P.sectionHeader}>
                 <Ionicons name="cube-outline" size={14} color="#2563EB" />
@@ -256,33 +329,23 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
             </View>
           </View>
 
-          {/* RIGHT column — Services */}
+          {/* RIGHT — Services */}
           <View style={P.rightCol}>
             <View style={P.section}>
               <View style={P.sectionHeader}>
                 <Ionicons name="construct-outline" size={14} color="#8B5CF6" />
                 <Text style={[P.sectionTitle, { color: '#8B5CF6' }]}>Dịch vụ</Text>
-                {services.length > 0 && (
-                  <View style={[P.countBadge, { backgroundColor: '#F5F3FF' }]}>
-                    <Text style={[P.countText, { color: '#8B5CF6' }]}>{services.length}</Text>
-                  </View>
-                )}
+                {services.length > 0 && <View style={[P.countBadge, { backgroundColor: '#F5F3FF' }]}><Text style={[P.countText, { color: '#8B5CF6' }]}>{services.length}</Text></View>}
               </View>
-
               {svcLoading ? (
-                <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                  <ActivityIndicator size="small" color="#8B5CF6" />
-                </View>
+                <View style={{ alignItems: 'center', paddingVertical: 16 }}><ActivityIndicator size="small" color="#8B5CF6" /></View>
               ) : services.length === 0 ? (
-                <View style={P.svcEmpty}>
-                  <Ionicons name="construct-outline" size={24} color="#E2E8F0" />
-                  <Text style={P.svcEmptyText}>Chưa có dịch vụ</Text>
-                </View>
+                <View style={P.svcEmpty}><Ionicons name="construct-outline" size={24} color="#E2E8F0" /><Text style={P.svcEmptyText}>Chưa có dịch vụ</Text></View>
               ) : services.map((svc, i) => {
                 const svcType = SVC_TYPE_CONFIG[svc.type] || SVC_TYPE_CONFIG.MAINTENANCE;
                 const svcStatus = SVC_STATUS[svc.status] || SVC_STATUS.PENDING;
                 return (
-                  <View key={svc.id || i} style={P.svcCard}>
+                  <View key={svc.id || i} style={[P.svcCard, svc.status === 'CANCELLED' && { opacity: 0.6 }]}>
                     <View style={P.svcCardTop}>
                       <View style={[P.svcIcon, { backgroundColor: svcType.bg }]}>
                         <Ionicons name={svcType.icon} size={13} color={svcType.color} />
@@ -295,7 +358,6 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
                         <Text style={[P.svcStatusText, { color: svcStatus.color }]}>{svcStatus.label}</Text>
                       </View>
                     </View>
-                    {/* Machine */}
                     {svc.machineItem && (
                       <View style={P.svcMachineRow}>
                         <Ionicons name="settings-outline" size={11} color={svcType.color} />
@@ -305,11 +367,8 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
                   </View>
                 );
               })}
-
-              {/* Xem tất cả */}
               {services.length > 0 && (
-                <TouchableOpacity
-                  style={P.svcViewAllBtn}
+                <TouchableOpacity style={P.svcViewAllBtn}
                   onPress={() => router.push({ pathname: '/(tabs)/service', params: { filterOrderId: order.id } })}
                   activeOpacity={0.8}
                 >
@@ -320,8 +379,8 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
           </View>
         </View>
 
-        {/* Total bar */}
-        <View style={P.totalBox}>
+        {/* Total */}
+        <View style={[P.totalBox, isCancelled && { backgroundColor: '#6B7280' }]}>
           <View style={{ flex: 1 }}>
             <Text style={P.totalLabel}>Tổng cộng</Text>
             {order.note && <Text style={P.noteText} numberOfLines={1}>Ghi chú: {order.note}</Text>}
@@ -335,26 +394,19 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
 
 const P = StyleSheet.create({
   root: { width: 680, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', flexShrink: 0 },
-  watermark: {
-    position: "absolute",
-    width: "80%",           // ← to nhỏ tuỳ ý
-    height: "60%",          // ← cao thấp tuỳ ý
-    top: "20%",             // ← căn giữa dọc
-    left: "10%",            // ← căn giữa ngang
-    opacity: 0.05,          // ← 0.05 rất mờ / 0.15 rõ hơn
-  },
+  rootCancelled: { borderColor: '#FECACA', backgroundColor: '#FFFAFA' },
   header: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   orderId: { fontSize: 16, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
   typeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
   typeBadgeText: { fontSize: 10, fontWeight: '700' },
+  cancelledBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF2F2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, borderWidth: 1, borderColor: '#FECACA' },
+  cancelledBadgeText: { fontSize: 10, fontWeight: '800', color: '#EF4444' },
   orderDate: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
   closeBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  statusBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 10, marginBottom: 4, padding: 10, borderRadius: 8, borderWidth: 1 },
-  statusText: { fontSize: 12, fontWeight: '700' },
   body: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 12 },
   leftCol: { flex: 1 },
   rightCol: { flex: 1 },
-  section: { backgroundColor: '#transparent', borderRadius: 10, padding: 12, marginBottom: 10 },
+  section: { borderRadius: 10, padding: 12, marginBottom: 10 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: '#0F172A', flex: 1 },
   countBadge: { backgroundColor: '#EFF6FF', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 8 },
@@ -367,7 +419,6 @@ const P = StyleSheet.create({
   productName: { fontSize: 12, fontWeight: '600', color: '#0F172A' },
   productMeta: { fontSize: 10, color: '#64748B' },
   productTotal: { fontSize: 12, fontWeight: '700', color: '#2563EB' },
-  // Services
   svcEmpty: { alignItems: 'center', paddingVertical: 20, gap: 6 },
   svcEmptyText: { fontSize: 12, color: '#94A3B8' },
   svcCard: { backgroundColor: '#FFFFFF', borderRadius: 8, padding: 10, marginBottom: 7, borderWidth: 1, borderColor: '#E2E8F0' },
@@ -381,29 +432,14 @@ const P = StyleSheet.create({
   svcMachineText: { fontSize: 10, fontWeight: '600', flex: 1 },
   svcViewAllBtn: { alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 4 },
   svcViewAllText: { fontSize: 12, color: '#8B5CF6', fontWeight: '700' },
-  // Total
   totalBox: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 8, backgroundColor: '#1E3A8A', borderRadius: 12, padding: 16 },
   totalLabel: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.7)' },
   noteText: { fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
   totalValue: { fontSize: 22, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
-  // Buttons
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
   editBtnText: { fontSize: 12, color: '#2563EB', fontWeight: '700' },
   statusBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
   statusBtnText: { fontSize: 11, fontWeight: '700' },
-});
-
-// ── Status Picker Modal Styles ────────────────────────────────
-const PM = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  sheet: { backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: 340, overflow: 'hidden' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  title: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
-  closeBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
-  itemActive: { backgroundColor: '#F8FAFC' },
-  itemIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  itemText: { flex: 1, fontSize: 14, color: '#374151', fontWeight: '500' },
 });
 
 // ── Main ─────────────────────────────────────────────────────
@@ -464,8 +500,9 @@ export default function OrderView() {
     SHIPPED: orders.filter(o => o.status === 'SHIPPED').length,
     CONFIRMED: orders.filter(o => o.status === 'CONFIRMED').length,
     COMPLETED: orders.filter(o => o.status === 'COMPLETED').length,
+    CANCELLED: orders.filter(o => o.status === 'CANCELLED').length,
   };
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0), 0);
+  const totalRevenue = orders.filter(o => o.status !== 'CANCELLED').reduce((sum, o) => sum + (o.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0), 0);
 
   const handlePressOrder = (item) => {
     if (isWeb) setSelected(prev => prev?.id === item.id ? null : item);
@@ -473,32 +510,29 @@ export default function OrderView() {
   };
 
   const renderOrder = ({ item, index }) => {
-    const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.PENDING;
+    const cfg = STATUS_CONFIG_FALLBACK[item.status] || STATUS_CONFIG_FALLBACK.PENDING;
     const typeCfg = ORDER_TYPE_CONFIG[item.orderType];
     const isActive = selected?.id === item.id;
+    const isCancelled = item.status === 'CANCELLED';
     return (
       <TouchableOpacity
         activeOpacity={0.75}
-        style={[styles.orderRow, isActive && styles.orderRowActive]}
+        style={[styles.orderRow, isActive && styles.orderRowActive, isCancelled && styles.orderRowCancelled]}
         onPress={() => handlePressOrder(item)}
       >
-        <View style={[styles.orderAvatar, { backgroundColor: AVATAR_COLORS[index % AVATAR_COLORS.length] }]}>
+        <View style={[styles.orderAvatar, { backgroundColor: isCancelled ? '#9CA3AF' : AVATAR_COLORS[index % AVATAR_COLORS.length] }]}>
           <Text style={styles.orderAvatarText}>{getInitials(item.customer)}</Text>
         </View>
         <View style={[styles.orderInfo, isWeb && { flex: 2 }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={styles.orderIdText}>Đơn hàng #{item.id}</Text>
-            {typeCfg && (
-              <View style={[styles.orderTypePill, { backgroundColor: typeCfg.bg }]}>
-                <Text style={[styles.orderTypePillText, { color: typeCfg.color }]}>{typeCfg.label}</Text>
-              </View>
-            )}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Text style={[styles.orderIdText, isCancelled && { textDecorationLine: 'line-through', color: '#9CA3AF' }]}>Đơn hàng #{item.id}</Text>
+            {typeCfg && <View style={[styles.orderTypePill, { backgroundColor: typeCfg.bg }]}><Text style={[styles.orderTypePillText, { color: typeCfg.color }]}>{typeCfg.label}</Text></View>}
           </View>
           <Text style={styles.orderCustomer}>{item.customer}</Text>
         </View>
         {isWeb && <Text style={styles.orderDate}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : '—'}</Text>}
         {isWeb && <Text style={styles.orderItems}>{item.items?.length || 0} sản phẩm</Text>}
-        <Text style={[styles.orderAmount, isWeb && { flex: 1 }]}>
+        <Text style={[styles.orderAmount, isWeb && { flex: 1 }, isCancelled && { color: '#9CA3AF' }]}>
           {(item.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' })}
         </Text>
         <View style={[styles.statusPill, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
@@ -512,13 +546,7 @@ export default function OrderView() {
 
   return (
     <View style={styles.root}>
-
-      {/* ✅ Watermark — cố định chính giữa, mờ nhạt */}
-      <Image
-        source={BG_IMAGE}
-        style={styles.watermark}
-        resizeMode="contain"
-      />
+      <Image source={BG_IMAGE} style={styles.watermark} resizeMode="contain" />
       <View style={styles.container}>
         <View style={styles.header}>
           <View>
@@ -535,7 +563,7 @@ export default function OrderView() {
         {isWeb && (
           <View style={styles.statsRow}>
             {[
-              { icon: 'receipt-outline', color: '#3B82F6', bg: '#EFF6FF', value: orders.length, label: 'Tổng đơn hàng' },
+              { icon: 'receipt-outline', color: '#3B82F6', bg: '#EFF6FF', value: orders.filter(o => o.status !== 'CANCELLED').length, label: 'Đơn hàng' },
               { icon: 'time-outline', color: '#F59E0B', bg: '#FFFBEB', value: counts.PENDING, label: 'Chờ lắp đặt' },
               { icon: 'car-outline', color: '#3B82F6', bg: '#EFF6FF', value: counts.SHIPPED, label: 'Đang giao' },
               { icon: 'cash-outline', color: '#10B981', bg: '#ECFDF5', value: fmt(totalRevenue), label: 'Doanh thu' },
@@ -556,7 +584,7 @@ export default function OrderView() {
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
             {TABS.map(tab => (
-              <TouchableOpacity key={tab} style={[styles.tabItem, filter === tab && styles.activeTabItem]} onPress={() => setFilter(tab)}>
+              <TouchableOpacity key={tab} style={[styles.tabItem, filter === tab && styles.activeTabItem, tab === 'CANCELLED' && filter === tab && { backgroundColor: '#EF4444', borderColor: '#EF4444' }]} onPress={() => setFilter(tab)}>
                 <Text style={[styles.tabText, filter === tab && styles.activeTabText]}>
                   {TAB_LABELS[tab]}
                   {counts[tab] > 0 && filter !== tab && <Text style={styles.tabCount}> {counts[tab]}</Text>}
@@ -566,7 +594,6 @@ export default function OrderView() {
           </ScrollView>
         </View>
 
-        {/* Main area */}
         <View style={styles.mainArea}>
           <View style={[styles.listArea, isWeb && selected && { marginRight: 16 }]}>
             {isWeb && filteredOrders.length > 0 && (
@@ -581,10 +608,7 @@ export default function OrderView() {
               </View>
             )}
             {loading ? (
-              <View style={styles.emptyState}>
-                <ActivityIndicator size="large" color="#2563EB" />
-                <Text style={styles.emptyText}>Đang tải đơn hàng...</Text>
-              </View>
+              <View style={styles.emptyState}><ActivityIndicator size="large" color="#2563EB" /><Text style={styles.emptyText}>Đang tải đơn hàng...</Text></View>
             ) : (
               <FlatList
                 data={filteredOrders}
@@ -603,8 +627,6 @@ export default function OrderView() {
               />
             )}
           </View>
-
-          {/* Detail panel */}
           {isWeb && selected && (
             <OrderDetailPanel order={selected} onClose={() => setSelected(null)} router={router} userDetail={userDetail} />
           )}
@@ -615,18 +637,8 @@ export default function OrderView() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-  },
-  watermark: {
-    position: "absolute",
-    width: "80%",           // ← to nhỏ tuỳ ý
-    height: "60%",          // ← cao thấp tuỳ ý
-    top: "20%",             // ← căn giữa dọc
-    left: "10%",            // ← căn giữa ngang
-    opacity: 0.05,          // ← 0.05 rất mờ / 0.15 rõ hơn
-  },
+  root: { flex: 1, backgroundColor: '#F8FAFC' },
+  watermark: { position: 'absolute', width: '80%', height: '60%', top: '20%', left: '10%', opacity: 0.05 },
   container: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: isWeb ? 32 : 16, paddingTop: isWeb ? 28 : 30 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: isWeb ? 24 : 16 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
@@ -654,6 +666,7 @@ const styles = StyleSheet.create({
   thCell: { fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5 },
   orderRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: '#E2E8F0', gap: 10 },
   orderRowActive: { borderColor: '#2563EB', backgroundColor: '#EFF6FF' },
+  orderRowCancelled: { borderColor: '#FECACA', backgroundColor: '#FFFAFA', opacity: 0.8 },
   orderAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   orderAvatarText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
   orderInfo: { flex: 1 },

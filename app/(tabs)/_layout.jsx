@@ -17,6 +17,8 @@ const ICON_IMAGE = require('../../assets/images/logo-dark.png')
 // ── Dữ liệu sản phẩm ────────────────────────────────────────
 const PRODUCTS_DATA = require('../../config/price.json')
 const SERVICE_DATA = require('../../config/service.json')
+const PROVINCE_DATA = require('../../config/province.json')
+
 
 const NAV_ITEMS = [
   { key: 'home', link: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
@@ -36,6 +38,12 @@ const WEB_NAV_ITEMS = [
   { key: 'information', link: 'information', label: 'Bảng giá', icon: 'cash-outline', activeIcon: 'cash' },
 ];
 
+const REGION_LABELS = {
+  mien_bac: 'Miền Bắc',
+  mien_trung: 'Miền Trung',
+  mien_nam: 'Miền Nam',
+};
+
 function getInitials(name) {
   if (!name) return 'U';
   return name.trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -52,6 +60,7 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
   const [lastSync, setLastSync] = useState(null);
   const [syncOk, setSyncOk] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
+
 
   const handleSync = async () => {
     if (syncing) return;
@@ -70,6 +79,13 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
         batch.set(doc(db, 'servicePrice', String(service.name)), {
           ...service,
           updatedAt: new Date().toISOString(),
+        });
+      });
+
+      Object.entries(PROVINCE_DATA).forEach(([regionId, cities]) => {
+        batch.set(doc(db, 'province', regionId), {
+          name: REGION_LABELS[regionId],
+          cities,
         });
       });
       await batch.commit();
