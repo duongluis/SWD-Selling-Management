@@ -4,11 +4,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useContext, useState } from 'react';
 import {
-    Modal, Platform, Pressable, ScrollView,
+    ActivityIndicator, Modal, Platform, Pressable, ScrollView,
     StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+    SERVICE_TYPE_TO_CATEGORY,
+    getStatusConfig,
+    useStatusList,
+} from '../../../components/Hooks/getStatus';
 import { showAlert } from '../../../components/Main/showAlert';
+import { syncOrderStatusFromService } from '../../../components/Utils/syncOrderStatus';
 import { db } from '../../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
@@ -21,19 +27,13 @@ const SERVICE_TYPES = {
     CONSULTING: { label: 'Tư vấn', icon: 'chatbubbles-outline', color: '#EC4899', bg: '#FDF2F8', border: '#FBCFE8' },
 };
 
-const STATUS_CONFIG = {
-    PENDING: { label: 'Chờ xử lý', color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', icon: 'time-outline' },
-    PROCESSING: { label: 'Đang xử lý', color: '#3B82F6', bg: '#EFF6FF', border: '#BFDBFE', icon: 'reload-outline' },
-    COMPLETED: { label: 'Hoàn thành', color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0', icon: 'checkmark-circle' },
-    CANCELLED: { label: 'Đã hủy', color: '#EF4444', bg: '#FEF2F2', border: '#FECACA', icon: 'close-circle-outline' },
-};
-
-const STATUS_FLOW = ['PENDING', 'PROCESSING', 'COMPLETED'];
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
-// ── Status Picker Modal ───────────────────────────────────────
-function StatusPickerModal({ currentStatus, onSelect, onClose, visible }) {
-    const ALL_STATUSES = ['PENDING', 'PROCESSING', 'COMPLETED', 'CANCELLED'];
+// ── Status Picker Modal — changeable là nguồn duy nhất ──────
+function StatusPickerModal({ currentStatus, statusList, onSelect, onClose, visible }) {
+    const currentCfg = statusList.find(s => s.name === currentStatus);
+    const currentLocked = currentCfg?.changeable === false;
+
     return (
         <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
             <Pressable style={M.overlay} onPress={onClose}>
@@ -44,23 +44,41 @@ function StatusPickerModal({ currentStatus, onSelect, onClose, visible }) {
                             <Ionicons name="close" size={18} color="#64748B" />
                         </TouchableOpacity>
                     </View>
-                    {ALL_STATUSES.map(status => {
-                        const cfg = STATUS_CONFIG[status];
-                        const active = currentStatus === status;
+
+                    {/* Banner: trạng thái hiện tại là auto-only */}
+                    {currentLocked && (
+                        <View style={M.lockedBanner}>
+                            <Ionicons name="lock-closed-outline" size={14} color="#EF4444" />
+                            <Text style={M.lockedBannerText}>
+                                Trạng thái hiện tại được quản lý tự động, không thể thay đổi thủ công.
+                            </Text>
+                        </View>
+                    )}
+
+                    {statusList.map(s => {
+                        const active = currentStatus === s.name;
+                        // Không cho bấm nếu: trạng thái hiện tại bị khóa HOẶC trạng thái đích là auto-only
+                        const locked = currentLocked || s.changeable === false;
                         return (
                             <TouchableOpacity
-                                key={status}
-                                style={[M.statusItem, active && M.statusItemActive]}
-                                onPress={() => onSelect(status)}
-                                activeOpacity={0.7}
+                                key={s.id}
+                                style={[M.statusItem, active && M.statusItemActive, locked && !active && M.statusItemDisabled]}
+                                onPress={() => !locked && onSelect(s.name)}
+                                activeOpacity={locked ? 1 : 0.7}
                             >
-                                <View style={[M.statusIconWrap, { backgroundColor: cfg.bg }]}>
-                                    <Ionicons name={cfg.icon} size={16} color={cfg.color} />
+                                <View style={[M.statusIconWrap, { backgroundColor: s.bg }]}>
+                                    <Ionicons name={s.icon} size={16} color={locked && !active ? '#CBD5E1' : s.color} />
                                 </View>
-                                <Text style={[M.statusItemText, active && { color: cfg.color, fontWeight: '700' }]}>
-                                    {cfg.label}
+                                <Text style={[M.statusItemText, active && { color: s.color, fontWeight: '700' }, locked && !active && { color: '#CBD5E1' }]}>
+                                    {s.label}
                                 </Text>
-                                {active && <Ionicons name="checkmark-circle" size={18} color={cfg.color} />}
+                                {s.changeable === false && (
+                                    <View style={M.autoTag}>
+                                        <Ionicons name="lock-closed-outline" size={10} color="#94A3B8" />
+                                        <Text style={M.autoTagText}>Tự động</Text>
+                                    </View>
+                                )}
+                                {active && <Ionicons name="checkmark-circle" size={18} color={locked ? '#CBD5E1' : s.color} />}
                             </TouchableOpacity>
                         );
                     })}
@@ -77,7 +95,11 @@ const M = StyleSheet.create({
     sheetTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
     sheetClose: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
     statusItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
-    statusItemActive: { backgroundColor: '#F8FAFC' },
+    statusItemDisabled: { opacity: 0.4 },
+    lockedBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#FEF2F2', padding: 12, borderBottomWidth: 1, borderBottomColor: '#FECACA' },
+    lockedBannerText: { flex: 1, fontSize: 12, color: '#EF4444', lineHeight: 17 },
+    autoTag: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+    autoTagText: { fontSize: 10, color: '#94A3B8', fontWeight: '600' },
     statusIconWrap: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
     statusItemText: { flex: 1, fontSize: 14, color: '#374151', fontWeight: '500' },
 });
@@ -94,21 +116,42 @@ export default function ServiceDetailScreen() {
 
     const isAdmin = (userDetail?.role || userDetail?.member || '').toLowerCase() === 'admin';
     const typeCfg = SERVICE_TYPES[service.type] || SERVICE_TYPES.MAINTENANCE;
-    const statusCfg = STATUS_CONFIG[service.status] || STATUS_CONFIG.PENDING;
-    const currentStep = STATUS_FLOW.indexOf(service.status);
+
+    // ✅ Load status list từ DB theo loại dịch vụ
+    const category = SERVICE_TYPE_TO_CATEGORY[service.type] || '';
+    const { statusList, loading: statusLoading } = useStatusList(category);
+
+    // ✅ Lấy config trạng thái hiện tại từ DB list
+    const statusCfg = getStatusConfig(service.status, statusList);
+
+    // Timeline: chỉ show các status có thứ tự (không phải Đã hủy)
+    const timelineStatuses = statusList.filter(s => s.name !== 'Đã hủy' && s.name !== 'Tư vấn thất bại');
+    const currentStep = timelineStatuses.findIndex(s => s.name === service.status);
 
     const handleUpdateStatus = (newStatus) => {
         setShowStatusPicker(false);
         if (newStatus === service.status) return;
 
+        // Trạng thái hiện tại là auto-only → không cho đổi
+        const currentCfg = getStatusConfig(service.status, statusList);
+        if (currentCfg.changeable === false) {
+            showAlert('Không thể thay đổi', 'Trạng thái hiện tại được quản lý tự động, không thể thay đổi thủ công.');
+            return;
+        }
+
+        const newCfg = getStatusConfig(newStatus, statusList);
         showAlert(
             'Xác nhận thay đổi trạng thái',
-            `Cập nhật sang "${STATUS_CONFIG[newStatus]?.label}"?`,
+            `Cập nhật sang "${newCfg.label}"?`,
             async () => {
                 setUpdating(true);
                 try {
                     await updateDoc(doc(db, 'service', service.id), { status: newStatus });
                     setService(prev => ({ ...prev, status: newStatus }));
+                    const newOrderStatus = await syncOrderStatusFromService(service, newStatus);
+                    if (newOrderStatus) {
+                        showAlert('✅ Đã đồng bộ', `Đơn hàng #${service.orderId} tự động chuyển sang "${newOrderStatus}"`);
+                    }
                 } catch (e) {
                     showAlert('Lỗi', e.message);
                 } finally {
@@ -134,6 +177,9 @@ export default function ServiceDetailScreen() {
     };
 
     // ── Shared status section ─────────────────────────────────
+    const cancelledCfg = getStatusConfig('Đã hủy', statusList);
+    const isCurrentLocked = statusCfg?.changeable === false;
+
     const StatusSection = () => (
         <View style={styles.card}>
             <View style={styles.cardHeader}>
@@ -142,11 +188,16 @@ export default function ServiceDetailScreen() {
                 {/* ✅ Chỉ admin được đổi trạng thái */}
                 {isAdmin && (
                     <TouchableOpacity
-                        style={[styles.changeStatusBtn, { backgroundColor: statusCfg.bg, borderColor: statusCfg.border }]}
+                        style={[styles.changeStatusBtn,
+                        { backgroundColor: statusCfg.bg, borderColor: statusCfg.border || '#E2E8F0' },
+                        isCurrentLocked && { opacity: 0.5 },
+                        updating && { opacity: 0.5 },
+                        ]}
                         onPress={() => setShowStatusPicker(true)}
                         disabled={updating}
                         activeOpacity={0.8}
                     >
+                        {isCurrentLocked && <Ionicons name="lock-closed-outline" size={11} color={statusCfg.color} style={{ marginRight: 2 }} />}
                         <View style={[styles.statusDot, { backgroundColor: statusCfg.color }]} />
                         <Text style={[styles.changeStatusText, { color: statusCfg.color }]}>
                             {updating ? 'Đang cập nhật...' : statusCfg.label}
@@ -156,36 +207,48 @@ export default function ServiceDetailScreen() {
                 )}
             </View>
 
-            {/* Timeline */}
-            <View style={styles.timeline}>
-                {STATUS_FLOW.map((status, index) => {
-                    const cfg = STATUS_CONFIG[status];
-                    const done = index <= currentStep;
-                    const curr = index === currentStep;
-                    return (
-                        <View key={status} style={styles.timelineItem}>
-                            <View style={styles.timelineLeft}>
-                                <View style={[styles.timelineDot, done && { backgroundColor: cfg.color, borderColor: cfg.color }, curr && styles.timelineDotCurrent]}>
-                                    {done && <Ionicons name={curr ? cfg.icon : 'checkmark'} size={10} color="#fff" />}
+            {/* ✅ Timeline từ DB — chỉ show status có thứ tự (không phải Đã hủy) */}
+            {statusLoading ? (
+                <ActivityIndicator size="small" color="#2563EB" style={{ padding: 12 }} />
+            ) : (
+                <View style={styles.timeline}>
+                    {timelineStatuses.map((s, index) => {
+                        const done = index <= currentStep;
+                        const curr = index === currentStep;
+                        return (
+                            <View key={s.id} style={styles.timelineItem}>
+                                <View style={styles.timelineLeft}>
+                                    <View style={[styles.timelineDot, done && { backgroundColor: s.color, borderColor: s.color }, curr && styles.timelineDotCurrent]}>
+                                        {done && <Ionicons name={curr ? s.icon : 'checkmark'} size={10} color="#fff" />}
+                                    </View>
+                                    {index < timelineStatuses.length - 1 && (
+                                        <View style={[styles.timelineLine, done && index < currentStep && { backgroundColor: '#10B981' }]} />
+                                    )}
                                 </View>
-                                {index < STATUS_FLOW.length - 1 && (
-                                    <View style={[styles.timelineLine, done && index < currentStep && { backgroundColor: '#10B981' }]} />
-                                )}
+                                <View style={styles.timelineContent}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Text style={[styles.timelineLabel, done && { color: s.color, fontWeight: '700' }]}>{s.label}</Text>
+                                        {s.changeable === false && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#F1F5F9', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 }}>
+                                                <Ionicons name="lock-closed-outline" size={9} color="#94A3B8" />
+                                                <Text style={{ fontSize: 9, color: '#94A3B8', fontWeight: '600' }}>Tự động</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    {curr && <Text style={styles.timelineCurrent}>Trạng thái hiện tại</Text>}
+                                </View>
                             </View>
-                            <View style={styles.timelineContent}>
-                                <Text style={[styles.timelineLabel, done && { color: cfg.color, fontWeight: '700' }]}>{cfg.label}</Text>
-                                {curr && <Text style={styles.timelineCurrent}>Trạng thái hiện tại</Text>}
-                            </View>
-                        </View>
-                    );
-                })}
-            </View>
+                        );
+                    })}
+                </View>
+            )}
 
-            {/* Cancelled badge */}
-            {service.status === 'CANCELLED' && (
-                <View style={[styles.cancelledBanner, { backgroundColor: STATUS_CONFIG.CANCELLED.bg, borderColor: STATUS_CONFIG.CANCELLED.border }]}>
-                    <Ionicons name="close-circle-outline" size={15} color={STATUS_CONFIG.CANCELLED.color} />
-                    <Text style={[styles.cancelledText, { color: STATUS_CONFIG.CANCELLED.color }]}>Dịch vụ này đã bị hủy</Text>
+            {isCurrentLocked && (
+                <View style={[styles.cancelledBanner, { backgroundColor: cancelledCfg.bg, borderColor: cancelledCfg.border || '#E2E8F0' }]}>
+                    <Ionicons name="lock-closed-outline" size={15} color={statusCfg.color} />
+                    <Text style={[styles.cancelledText, { color: statusCfg.color }]}>
+                        Trạng thái này được quản lý tự động
+                    </Text>
                 </View>
             )}
         </View>
@@ -346,6 +409,7 @@ export default function ServiceDetailScreen() {
             <StatusPickerModal
                 visible={showStatusPicker}
                 currentStatus={service.status}
+                statusList={statusList}
                 onSelect={handleUpdateStatus}
                 onClose={() => setShowStatusPicker(false)}
             />
@@ -366,32 +430,9 @@ const styles = StyleSheet.create({
     webGrid: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },
     webCol: { flex: 3 },
     webColRight: { flex: 2, gap: 16 },
-    card: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        padding: isWeb ? 20 : 16,
-        borderWidth: 1,
-        borderColor: '#E7F6FC',
-        marginBottom: 14,
-        overflow: 'hidden', // ✅ giữ bo góc cho header
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 14,
-        paddingBottom: 12,
-        paddingTop: 12,
-        paddingHorizontal: isWeb ? 20 : 16,  // ✅ tự thêm padding ngang
-        borderBottomWidth: 1,
-        borderBottomColor: '#E7F6FC',
-        backgroundColor: '#E7F6FC',
-
-        // ✅ kéo ra bù lại padding của card
-        marginTop: -(isWeb ? 20 : 16),
-        marginHorizontal: -(isWeb ? 20 : 16),
-    },
-    cardTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', flex: 1 },
+    card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: isWeb ? 20 : 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    cardTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', flex: 1 },
     serviceTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
     serviceTypeIcon: { width: isWeb ? 56 : 50, height: isWeb ? 56 : 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
     serviceIdRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' },
@@ -415,7 +456,7 @@ const styles = StyleSheet.create({
     timelineItem: { flexDirection: 'row', gap: 12, minHeight: 50 },
     timelineLeft: { alignItems: 'center', width: 20 },
     timelineDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#E2E8F0', borderWidth: 2, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
-    timelineDotCurrent: { width: 22, height: 22, borderRadius: 11, shadowColor: '#000', shadowopacity: 0.05, shadowRadius: 4, elevation: 3 },
+    timelineDotCurrent: { width: 22, height: 22, borderRadius: 11, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4, elevation: 3 },
     timelineLine: { flex: 1, width: 2, backgroundColor: '#E2E8F0', marginVertical: 2 },
     timelineContent: { flex: 1, paddingBottom: 16, paddingTop: 1 },
     timelineLabel: { fontSize: 13, color: '#94A3B8', fontWeight: '500' },

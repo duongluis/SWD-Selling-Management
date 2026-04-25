@@ -162,10 +162,10 @@ export default function RevenueAnalyticsScreen() {
     // ── Filter by period ────────────────────────────────────────
     const filterOrders = (list) => {
         switch (period) {
-            case 'day': return list.filter(o => o.createdAt && new Date(o.createdAt).toDateString() === new Date().toDateString());
-            case 'week': return list.filter(o => { const d = new Date(o.createdAt); const w = new Date(); w.setDate(w.getDate() - 7); return d >= w; });
-            case 'month': return list.filter(o => isThisMonth(o.createdAt));
-            case 'now': return list.filter(o => isThisQuarter(o.createdAt));
+            case 'ngày': return list.filter(o => o.createdAt && new Date(o.createdAt).toDateString() === new Date().toDateString());
+            case 'tuần': return list.filter(o => { const d = new Date(o.createdAt); const w = new Date(); w.setDate(w.getDate() - 7); return d >= w; });
+            case 'tháng': return list.filter(o => isThisMonth(o.createdAt));
+            case 'tất cả thời gian': return list.filter(o => isThisQuarter(o.createdAt));
             default: return list;
         }
     };
@@ -283,23 +283,23 @@ export default function RevenueAnalyticsScreen() {
                         <View style={styles.statItem}>
                             <Text style={styles.statNum}>{totalOrders}</Text>
                             <Text style={styles.statLbl}>Đơn hàng</Text>
-                            <Text style={styles.statPeriod}>This {period === 'month' ? 'Month' : period}</Text>
+                            <Text style={styles.statPeriod}>Trong {period === 'month' ? 'Tháng' : period}</Text>
                         </View>
                         <View style={styles.statDivider} />
                         <View style={styles.statItem}>
                             <Text style={styles.statNum}>{fmtVND(avgOrderValue)}</Text>
-                            <Text style={styles.statLbl}>AVG ORDER VALUE</Text>
-                            <Text style={styles.statPeriod}>per client</Text>
+                            <Text style={styles.statLbl}>Giá trị trung bình</Text>
+                            <Text style={styles.statPeriod}>Mỗi Đơn hàng</Text>
                         </View>
                     </View>
 
                     <View style={styles.premiumBadge}>
                         <Ionicons name="trophy-outline" size={13} color="#F59E0B" />
                         <Text style={styles.premiumText}>
-                            {totalRevenue >= 500_000_000 ? 'PLATINUM TIER' :
-                                totalRevenue >= 200_000_000 ? 'GOLD TIER' :
-                                    totalRevenue >= 100_000_000 ? 'SILVER TIER' :
-                                        totalRevenue >= 50_000_000 ? 'BRONZE TIER' : 'STARTER'}
+                            {totalRevenue >= 500_000_000 ? 'Bậc Kim Cương' :
+                                totalRevenue >= 200_000_000 ? 'Bậc Vàng' :
+                                    totalRevenue >= 100_000_000 ? 'Bậc Bạc' :
+                                        totalRevenue >= 50_000_000 ? 'Bậc Đồng' : 'Doanh nghiệp mới'}
                         </Text>
                     </View>
                 </View>
@@ -360,8 +360,8 @@ export default function RevenueAnalyticsScreen() {
                         <Text style={styles.emptyText}>Chưa có dữ liệu</Text>
                     ) : topCustomers.map((c, i) => (
                         <View key={i} style={styles.topRow}>
-                            <View style={[styles.topRank, { backgroundColor: ['#18b036', '#4A9EFF', '#861a97'][i] + '22' }]}>
-                                <Text style={[styles.topRankText, { color: ['#18b036', '#4A9EFF', '#861a97'][i] }]}>
+                            <View style={[styles.topRank, { backgroundColor: ['#b24876', '#fd5274', '#ff8d73'][i] + '22' }]}>
+                                <Text style={[styles.topRankText, { color: ['#b24876', '#fd5274', '#ff8d73'][i] }]}>
                                     #{i + 1}
                                 </Text>
                             </View>
@@ -429,7 +429,9 @@ const styles = StyleSheet.create({
     topRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
     topRank: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     topRankText: { fontSize: 12, fontWeight: '800' },
-    topName: { fontSize: 13, fontWeight: '700', color: '#FFF', marginBottom: 2 },
+    topName: {
+        fontSize: 13, fontWeight: '700', color: '#fff', marginBottom: 2
+    },
     topSub: { fontSize: 11, color: '#fff' },
     topRevenue: { fontSize: 13, fontWeight: '700', color: '#4ADE80' },
     emptyText: { fontSize: 13, color: '#fff', textAlign: 'center', paddingVertical: 16 },

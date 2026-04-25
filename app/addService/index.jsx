@@ -8,6 +8,10 @@ import {
     StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+    SERVICE_TYPE_TO_CATEGORY,
+    fetchStatusList,
+} from '../../components/Hooks/getStatus';
 import { useCustomers } from '../../components/Hooks/useCustomers';
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
@@ -106,18 +110,22 @@ export default function AddService() {
 
         setSubmitting(true);
         try {
+            // ── Lấy trạng thái ban đầu từ DB ─────────────────────
+            const category = SERVICE_TYPE_TO_CATEGORY[serviceType]; // 'lap_dat' | 'bao_duong' | ...
+            const statusList = await fetchStatusList(category);
+            const initialStatus = statusList[0]?.name || 'Chờ xử lý'; // status đầu tiên theo id
+
             const newService = {
                 id: serviceId,
                 type: serviceType,
                 orderId: selectedOrder?.id || null,
                 orderItems: selectedOrder?.items || [],
-                // Máy được chọn (cho lắp đặt, bảo dưỡng, tư vấn)
                 machineItem: selectedMachine || null,
                 customer: customerName.trim(),
                 phone: customerPhone.trim(),
                 address: address.trim(),
                 note: note.trim(),
-                status: 'PENDING',
+                status: initialStatus,          // ✅ từ DB, không hardcode
                 createdBy: userDetail?.email || '',
                 createdAt: new Date().toISOString(),
             };
@@ -587,4 +595,4 @@ const M = StyleSheet.create({
     bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
     submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#2563EB', borderRadius: 16, paddingVertical: 17, shadowColor: '#2563EB', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
     submitBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', letterSpacing: 0.2 },
-});
+}); 

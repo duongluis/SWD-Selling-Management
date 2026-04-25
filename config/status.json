@@ -1,106 +1,189 @@
 {
-    "Buon": [
+    "don_buon": [
         {
             "id": 1,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
+            "name": "Chờ xác nhận",
+            "type": "Đơn buôn",
+            "changeable": true
         },
         {
             "id": 2,
-            "type": "don buon",
-            "status": "Chờ giao hàng"
+            "name": "Chờ giao hàng",
+            "type": "Đơn buôn",
+            "changeable": false
         },
         {
             "id": 3,
-            "type": "don buon",
-            "status": "Đang giao hàng"
+            "name": "Đang giao hàng",
+            "type": "Đơn buôn",
+            "changeable": false
         },
         {
             "id": 4,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
+            "name": "Đã giao hàng",
+            "type": "Đơn buôn",
+            "changeable": true
         },
         {
             "id": 5,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
+            "name": "Chờ thanh toán",
+            "type": "Đơn buôn",
+            "changeable": true
         },
         {
             "id": 6,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
+            "name": "Đã thanh toán",
+            "type": "Đơn buôn",
+            "changeable": true
         },
         {
             "id": 7,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
-        },
-        {
-            "id": 8,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
-        },
-        {
-            "id": 9,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
-        },
-        {
-            "id": 10,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
+            "name": "Đã hủy",
+            "type": "Đơn buôn",
+            "changeable": false
         }
     ],
-    "Le": [
-        {
-            "id": 1,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
-        },
-        {
-            "id": 2,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
-        },
-        {
-            "id": 3,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
-        },
-        {
-            "id": 4,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
-        },
-        {
-            "id": 5,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
-        },
-        {
-            "id": 6,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
-        },
-        {
-            "id": 7,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
-        },
+    "don_le": [
         {
             "id": 8,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
+            "name": "Chờ xác nhận",
+            "type": "Đơn lẻ",
+            "changeable": true
         },
         {
             "id": 9,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
+            "name": "Chờ lắp đặt",
+            "type": "Đơn lẻ",
+            "changeable": false
         },
         {
             "id": 10,
-            "type": "don buon",
-            "status": "Chờ xác nhận"
+            "name": "Đang lắp đặt",
+            "type": "Đơn lẻ",
+            "changeable": false
+        },
+        {
+            "id": 11,
+            "name": "Đã lắp đặt",
+            "type": "Đơn lẻ",
+            "changeable": true
+        },
+        {
+            "id": 12,
+            "name": "Chờ thanh toán",
+            "type": "Đơn lẻ",
+            "changeable": true
+        },
+        {
+            "id": 13,
+            "name": "Đã thanh toán",
+            "type": "Đơn lẻ",
+            "changeable": true
+        },
+        {
+            "id": 14,
+            "name": "Đã hủy",
+            "type": "Đơn lẻ",
+            "changeable": false
+        }
+    ],
+    "tu_van": [
+        {
+            "id": 15,
+            "name": "Nhận thông tin khách hàng",
+            "type": "Tư vấn",
+            "changeable": true
+        },
+        {
+            "id": 16,
+            "name": "Tư vấn thành công",
+            "type": "Tư vấn",
+            "changeable": true
+        },
+        {
+            "id": 17,
+            "name": "Tư vấn thất bại",
+            "type": "Tư vấn",
+            "changeable": true,
+            "lyDo": ""
+        }
+    ],
+    "bao_duong": [
+        {
+            "id": 18,
+            "name": "Chờ xử lý",
+            "type": "Bảo dưỡng",
+            "changeable": true
+        },
+        {
+            "id": 19,
+            "name": "Đang xử lý",
+            "type": "Bảo dưỡng",
+            "changeable": true
+        },
+        {
+            "id": 20,
+            "name": "Hoàn thành",
+            "type": "Bảo dưỡng",
+            "changeable": true
+        },
+        {
+            "id": 21,
+            "name": "Đã hủy",
+            "type": "Bảo dưỡng",
+            "changeable": false
+        }
+    ],
+    "lap_dat": [
+        {
+            "id": 22,
+            "name": "Chờ xử lý",
+            "type": "Lắp đặt",
+            "changeable": true
+        },
+        {
+            "id": 23,
+            "name": "Đang xử lý",
+            "type": "Lắp đặt",
+            "changeable": true
+        },
+        {
+            "id": 24,
+            "name": "Hoàn thành",
+            "type": "Lắp đặt",
+            "changeable": true
+        },
+        {
+            "id": 25,
+            "name": "Đã hủy",
+            "type": "Lắp đặt",
+            "changeable": false
+        }
+    ],
+    "giao_hang": [
+        {
+            "id": 26,
+            "name": "Chờ xử lý",
+            "type": "Giao hàng",
+            "changeable": true
+        },
+        {
+            "id": 27,
+            "name": "Đang xử lý",
+            "type": "Giao hàng",
+            "changeable": true
+        },
+        {
+            "id": 28,
+            "name": "Hoàn thành",
+            "type": "Giao hàng",
+            "changeable": true
+        },
+        {
+            "id": 29,
+            "name": "Đã hủy",
+            "type": "Giao hàng",
+            "changeable": false
         }
     ]
 }

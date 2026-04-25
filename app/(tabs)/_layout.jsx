@@ -18,7 +18,7 @@ const ICON_IMAGE = require('../../assets/images/logo-dark.png')
 const PRODUCTS_DATA = require('../../config/price.json')
 const SERVICE_DATA = require('../../config/service.json')
 const PROVINCE_DATA = require('../../config/province.json')
-
+const STATUS_DATA = require('../../config/status.json')
 
 const NAV_ITEMS = [
   { key: 'home', link: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
@@ -88,10 +88,19 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
           cities,
         });
       });
+
+      Object.entries(STATUS_DATA).forEach(([category, statuses]) => {
+        statuses.forEach(status => {
+          batch.set(doc(db, 'status', category, 'list', String(status.id)), {
+            ...status,
+            updatedAt: new Date().toISOString(),
+          });
+        });
+      });
       await batch.commit();
       setLastSync(new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }));
       setSyncOk(true);
-      showInfo('✅ Thành công', `Đã cập nhật ${PRODUCTS_DATA.length + SERVICE_DATA.length} sản phẩm lên Firestore!`);
+      showInfo('✅ Thành công', `Đã cập nhật ${PRODUCTS_DATA.length + SERVICE_DATA.length + (Object.entries(STATUS_DATA)).length + (Object.entries(PROVINCE_DATA)).length} sản phẩm lên Firestore!`);
     } catch (e) {
       console.error('❌ Lỗi sync:', e);
       showInfo('❌ Lỗi', 'Không thể cập nhật: ' + e.message);

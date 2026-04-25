@@ -1,7 +1,7 @@
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useState } from 'react';
 import {
@@ -9,7 +9,13 @@ import {
   RefreshControl, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, View,
 } from 'react-native';
+import {
+  ORDER_TYPE_TO_CATEGORY,
+  getStatusConfig,
+  useStatusList,
+} from '../../components/Hooks/getStatus';
 import { showAlert } from '../../components/Main/showAlert';
+import { trackRevenueOnPaid } from '../../components/Utils/trackRevenue';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
@@ -22,15 +28,6 @@ const getRole = (u) => {
   if (['đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
   if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
   return 'other';
-};
-
-// ── Fallback STATUS_CONFIG (dùng khi chưa load từ DB) ────────
-const STATUS_CONFIG_FALLBACK = {
-  PENDING: { color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', label: 'Chờ lắp đặt', icon: 'time-outline', changeable: true },
-  SHIPPED: { color: '#3B82F6', bg: '#EFF6FF', border: '#BFDBFE', label: 'Đang giao hàng', icon: 'car-outline', changeable: true },
-  CONFIRMED: { color: '#8B5CF6', bg: '#F5F3FF', border: '#DDD6FE', label: 'Đã thanh toán', icon: 'card-outline', changeable: true },
-  COMPLETED: { color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0', label: 'Hoàn thành', icon: 'checkmark-circle', changeable: true },
-  CANCELLED: { color: '#EF4444', bg: '#FEF2F2', border: '#FECACA', label: 'Đã hủy', icon: 'close-circle-outline', changeable: true },
 };
 
 const SVC_TYPE_CONFIG = {
@@ -86,10 +83,15 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
   const [svcLoading, setSvcLoading] = useState(true);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  // db/status config for this order type
-  const [statusConfig, setStatusConfig] = useState(STATUS_CONFIG_FALLBACK);
 
   const isAdmin = (userDetail?.role || userDetail?.member || '').toLowerCase() === 'admin';
+
+  // ✅ Dùng hook chung — fetch db/status/{don_buon|don_le}/list
+  const category = ORDER_TYPE_TO_CATEGORY[order?.orderType];
+  const { statusList } = useStatusList(category);
+
+  // Config của trạng thái hiện tại
+  const statusCfg = getStatusConfig(order?.status, statusList);
 
   useEffect(() => { setOrder(initialOrder); }, [initialOrder?.id]);
 
@@ -107,35 +109,12 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
     fetch();
   }, [order?.id]);
 
-  // Fetch status config từ db/status/{orderType}
-  // Cấu trúc: db/status/{buon|le} collection → docs với fields: id, status, service, changeable, type
-  useEffect(() => {
-    if (!order?.orderType) return;
-    const fetchStatusConfig = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'status', order.orderType, 'statuses'));
-        if (snap.empty) return; // giữ fallback
-        const cfg = { ...STATUS_CONFIG_FALLBACK };
-        snap.docs.forEach(d => {
-          const data = d.data();
-          if (data.status && cfg[data.status]) {
-            cfg[data.status] = { ...cfg[data.status], ...data };
-          }
-        });
-        setStatusConfig(cfg);
-      } catch (e) {
-        // silently fallback
-      }
-    };
-    fetchStatusConfig();
-  }, [order?.orderType]);
-
   // ── Hủy tất cả dịch vụ đính kèm ─────────────────────────
   const cancelLinkedServices = async (orderId) => {
     try {
       const snap = await getDocs(query(collection(db, 'service'), where('orderId', '==', orderId)));
-      await Promise.all(snap.docs.map(d => updateDoc(doc(db, 'service', d.id), { status: 'CANCELLED' })));
-      setServices(prev => prev.map(s => ({ ...s, status: 'CANCELLED' })));
+      await Promise.all(snap.docs.map(d => updateDoc(doc(db, 'service', d.id), { status: 'Đã hủy' })));
+      setServices(prev => prev.map(s => ({ ...s, status: 'Đã hủy' })));
     } catch (e) { console.error('Lỗi hủy dịch vụ:', e); }
   };
 
@@ -144,15 +123,14 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
     setShowStatusPicker(false);
     if (newStatus === order.status) return;
 
-    // Kiểm tra changeable của trạng thái HIỆN TẠI
-    const currentCfg = statusConfig[order.status];
-    if (currentCfg?.changeable === false) {
-      showAlert('Không thể thay đổi', 'Trạng thái hiện tại không cho phép chuyển đổi thủ công.');
+    // Trạng thái hiện tại là auto-only → không cho đổi thủ công
+    if (!currentChangeable) {
+      showAlert('Không thể thay đổi', 'Trạng thái hiện tại được quản lý tự động, không thể thay đổi thủ công.');
       return;
     }
 
-    const isCancelling = newStatus === 'CANCELLED';
-    const newCfg = statusConfig[newStatus] || STATUS_CONFIG_FALLBACK[newStatus];
+    const newCfg = getStatusConfig(newStatus, statusList);
+    const isCancelling = newStatus === 'Đã hủy';
 
     showAlert(
       isCancelling ? '⚠️ Hủy đơn hàng' : 'Đổi trạng thái',
@@ -171,7 +149,11 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
           await updateDoc(doc(db, 'orders', phone), { orders: updated });
           setOrder(prev => ({ ...prev, status: newStatus }));
 
-          // ✅ Auto-hủy dịch vụ khi đơn bị hủy
+          // ✅ Cộng doanh thu khi đổi sang "Đã thanh toán" (chỉ 1 lần duy nhất)
+          if (newStatus === 'Đã thanh toán' && order.createdBy) {
+            await trackRevenueOnPaid(order.createdBy, order, newStatus);
+          }
+
           if (isCancelling) await cancelLinkedServices(order.id);
         } catch (e) { showAlert('Lỗi', e.message); }
         finally { setUpdatingStatus(false); }
@@ -180,13 +162,12 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
   };
 
   if (!order) return null;
-  const statusCfg = statusConfig[order.status] || STATUS_CONFIG_FALLBACK.PENDING;
   const typeCfg = ORDER_TYPE_CONFIG[order.orderType];
   const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
-  const isCancelled = order.status === 'CANCELLED';
+  const isCancelled = statusCfg?.name === 'Đã hủy' || order.status === 'Đã hủy';
 
-  // Current status changeable?
-  const currentChangeable = statusConfig[order.status]?.changeable !== false;
+  // changeable từ DB là nguồn duy nhất
+  const currentChangeable = statusCfg?.changeable !== false;
 
   const StatusPickerModal = () => (
     <Modal transparent animationType="fade" visible={showStatusPicker} onRequestClose={() => setShowStatusPicker(false)}>
@@ -198,40 +179,34 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
               <Ionicons name="close" size={16} color="#64748B" />
             </TouchableOpacity>
           </View>
+
           {!currentChangeable && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF2F2', padding: 12, borderBottomWidth: 1, borderBottomColor: '#FECACA' }}>
               <Ionicons name="lock-closed-outline" size={14} color="#EF4444" />
-              <Text style={{ fontSize: 12, color: '#EF4444', flex: 1 }}>Trạng thái hiện tại không cho phép chuyển đổi thủ công</Text>
+              <Text style={{ fontSize: 12, color: '#EF4444', flex: 1 }}>Trạng thái hiện tại được quản lý tự động, không thể thay đổi thủ công.</Text>
             </View>
           )}
-          {Object.entries(statusConfig).filter(([k]) => k !== 'CANCELLED').map(([key, cfg]) => {
-            const active = order.status === key;
-            const locked = !currentChangeable;
+
+          {statusList.map(s => {
+            const active = order.status === s.name;
+            // locked nếu: trạng thái hiện tại bị khóa HOẶC trạng thái đích là auto-only
+            const locked = !currentChangeable || s.changeable === false;
             return (
-              <TouchableOpacity key={key}
-                style={[PM.item, active && PM.itemActive, locked && { opacity: 0.4 }]}
-                onPress={() => !locked && handleUpdateStatus(key)} activeOpacity={locked ? 1 : 0.7}
+              <TouchableOpacity key={s.id}
+                style={[PM.item, active && PM.itemActive, locked && !active && { opacity: 0.4 }]}
+                onPress={() => !locked && handleUpdateStatus(s.name)} activeOpacity={locked ? 1 : 0.7}
               >
-                <View style={[PM.itemIcon, { backgroundColor: cfg.bg || '#F1F5F9' }]}>
-                  <Ionicons name={cfg.icon || 'ellipse-outline'} size={16} color={cfg.color || '#94A3B8'} />
+                <View style={[PM.itemIcon, { backgroundColor: s.bg }]}>
+                  <Ionicons name={s.icon} size={16} color={s.color} />
                 </View>
-                <Text style={[PM.itemText, active && { color: cfg.color, fontWeight: '700' }]}>{cfg.label}</Text>
-                {active && <Ionicons name="checkmark-circle" size={18} color={cfg.color} />}
+                <Text style={[PM.itemText, active && { color: s.color, fontWeight: '700' }]}>{s.name}</Text>
+                {s.changeable === false && (
+                  <View style={PM.lockedTag}><Text style={PM.lockedText}>Tự động</Text></View>
+                )}
+                {active && <Ionicons name="checkmark-circle" size={18} color={s.color} />}
               </TouchableOpacity>
             );
           })}
-          {/* CANCELLED — luôn ở cuối, nổi bật */}
-          {!isCancelled && (
-            <TouchableOpacity
-              style={[PM.item, PM.cancelItem, !currentChangeable && { opacity: 0.4 }]}
-              onPress={() => currentChangeable && handleUpdateStatus('CANCELLED')}
-              activeOpacity={currentChangeable ? 0.7 : 1}
-            >
-              <View style={PM.cancelIcon}><Ionicons name="close-circle-outline" size={16} color="#EF4444" /></View>
-              <Text style={[PM.itemText, { color: '#EF4444' }]}>Hủy đơn hàng</Text>
-              <View style={PM.lockedTag}><Text style={PM.lockedText}>Hủy + dịch vụ</Text></View>
-            </TouchableOpacity>
-          )}
         </View>
       </Pressable>
     </Modal>
@@ -452,8 +427,25 @@ export default function OrderView() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('All');
+  const [filterType, setFilterType] = useState('all'); // 'all' | 'buon' | 'le'
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
+
+  // ✅ Load status list từ DB theo thể loại đơn đang chọn
+  const { statusList: buonStatuses } = useStatusList(ORDER_TYPE_TO_CATEGORY['buon']); // don_buon
+  const { statusList: leStatuses } = useStatusList(ORDER_TYPE_TO_CATEGORY['le']);   // don_le
+
+  // Status tabs hiển thị tương ứng filterType
+  const activeStatusList = filterType === 'buon' ? buonStatuses
+    : filterType === 'le' ? leStatuses
+      : [];  // filterType==='all' → không hiện tab
+
+  // Reset status filter khi đổi thể loại
+  const handleSetFilterType = (type) => {
+    setFilterType(type);
+    setFilter('All');
+    setSelected(null);
+  };
 
   const fetchOrders = useCallback(async () => {
     if (!userDetail?.email) return;
@@ -486,23 +478,25 @@ export default function OrderView() {
     finally { setLoading(false); setRefreshing(false); }
   }, [userDetail?.email, role]);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  // ✅ Auto-refresh mỗi khi màn hình được focus (navigate tới)
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrders();
+    }, [fetchOrders])
+  );
 
   const filteredOrders = orders.filter(o => {
     const matchFilter = filter === 'All' || o.status === filter;
     const matchSearch = (o.customer || '').toLowerCase().includes(search.toLowerCase()) || (o.id || '').includes(search);
-    return matchFilter && matchSearch;
+    const matchType = filterType === 'all' || o.orderType === filterType;
+    return matchFilter && matchSearch && matchType;
   });
 
-  const counts = {
-    All: orders.length,
-    PENDING: orders.filter(o => o.status === 'PENDING').length,
-    SHIPPED: orders.filter(o => o.status === 'SHIPPED').length,
-    CONFIRMED: orders.filter(o => o.status === 'CONFIRMED').length,
-    COMPLETED: orders.filter(o => o.status === 'COMPLETED').length,
-    CANCELLED: orders.filter(o => o.status === 'CANCELLED').length,
-  };
-  const totalRevenue = orders.filter(o => o.status !== 'CANCELLED').reduce((sum, o) => sum + (o.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0), 0);
+  // Đếm số đơn theo từng status name (dùng cho tab badges)
+  const countByStatus = (statusName) =>
+    orders.filter(o => o.status === statusName && (filterType === 'all' || o.orderType === filterType)).length;
+
+  const totalRevenue = orders.filter(o => o.status !== 'Đã hủy').reduce((sum, o) => sum + (o.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0), 0);
 
   const handlePressOrder = (item) => {
     if (isWeb) setSelected(prev => prev?.id === item.id ? null : item);
@@ -510,7 +504,7 @@ export default function OrderView() {
   };
 
   const renderOrder = ({ item, index }) => {
-    const cfg = STATUS_CONFIG_FALLBACK[item.status] || STATUS_CONFIG_FALLBACK.PENDING;
+    const cfg = getStatusConfig(item.status, []);
     const typeCfg = ORDER_TYPE_CONFIG[item.orderType];
     const isActive = selected?.id === item.id;
     const isCancelled = item.status === 'CANCELLED';
@@ -563,9 +557,9 @@ export default function OrderView() {
         {isWeb && (
           <View style={styles.statsRow}>
             {[
-              { icon: 'receipt-outline', color: '#3B82F6', bg: '#EFF6FF', value: orders.filter(o => o.status !== 'CANCELLED').length, label: 'Đơn hàng' },
-              { icon: 'time-outline', color: '#F59E0B', bg: '#FFFBEB', value: counts.PENDING, label: 'Chờ lắp đặt' },
-              { icon: 'car-outline', color: '#3B82F6', bg: '#EFF6FF', value: counts.SHIPPED, label: 'Đang giao' },
+              { icon: 'receipt-outline', color: '#3B82F6', bg: '#EFF6FF', value: orders.filter(o => o.status !== 'Đã hủy').length, label: 'Đơn hàng' },
+              { icon: 'cube-outline', color: '#2563EB', bg: '#EFF6FF', value: orders.filter(o => o.orderType === 'buon').length, label: 'Đơn buôn' },
+              { icon: 'home-outline', color: '#8B5CF6', bg: '#F5F3FF', value: orders.filter(o => o.orderType === 'le').length, label: 'Đơn lẻ' },
               { icon: 'cash-outline', color: '#10B981', bg: '#ECFDF5', value: fmt(totalRevenue), label: 'Doanh thu' },
             ].map(s => (
               <View key={s.label} style={styles.statCard}>
@@ -582,16 +576,79 @@ export default function OrderView() {
             <TextInput style={styles.searchBar} placeholder="Tìm kiếm đơn hàng..." placeholderTextColor="#94A3B8" value={search} onChangeText={setSearch} />
             {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={16} color="#94A3B8" /></TouchableOpacity>}
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
-            {TABS.map(tab => (
-              <TouchableOpacity key={tab} style={[styles.tabItem, filter === tab && styles.activeTabItem, tab === 'CANCELLED' && filter === tab && { backgroundColor: '#EF4444', borderColor: '#EF4444' }]} onPress={() => setFilter(tab)}>
-                <Text style={[styles.tabText, filter === tab && styles.activeTabText]}>
-                  {TAB_LABELS[tab]}
-                  {counts[tab] > 0 && filter !== tab && <Text style={styles.tabCount}> {counts[tab]}</Text>}
+
+          {/* ✅ Bộ lọc thể loại đơn */}
+          <View style={styles.typeFilterRow}>
+            {[
+              { key: 'all', label: 'Tất cả', icon: 'list-outline', color: '#64748B', activeBg: '#0F172A', activeBorder: '#0F172A' },
+              { key: 'buon', label: 'Đơn buôn', icon: 'cube-outline', color: '#2563EB', activeBg: '#EFF6FF', activeBorder: '#2563EB' },
+              { key: 'le', label: 'Đơn lẻ', icon: 'home-outline', color: '#8B5CF6', activeBg: '#F5F3FF', activeBorder: '#8B5CF6' },
+            ].map(t => {
+              const active = filterType === t.key;
+              const count = t.key === 'buon' ? orders.filter(o => o.orderType === 'buon').length
+                : t.key === 'le' ? orders.filter(o => o.orderType === 'le').length
+                  : null;
+              return (
+                <TouchableOpacity
+                  key={t.key}
+                  style={[styles.typeFilterBtn,
+                  active && { backgroundColor: t.key === 'all' ? '#0F172A' : t.activeBg, borderColor: t.activeBorder },
+                  ]}
+                  onPress={() => handleSetFilterType(t.key)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={t.icon} size={13} color={active ? (t.key === 'all' ? '#fff' : t.color) : '#94A3B8'} />
+                  <Text style={[styles.typeFilterText, active && { color: t.key === 'all' ? '#fff' : t.color, fontWeight: '700' }]}>
+                    {t.label}
+                  </Text>
+                  {count != null && count > 0 && (
+                    <View style={[styles.typeFilterBadge, { backgroundColor: active ? t.color + '33' : '#F1F5F9' }]}>
+                      <Text style={[styles.typeFilterBadgeText, { color: active ? t.color : '#94A3B8' }]}>{count}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* ✅ Status tabs: chỉ hiện khi chọn Đơn buôn hoặc Đơn lẻ */}
+          {filterType !== 'all' && activeStatusList.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
+              {/* Tab Tất cả */}
+              <TouchableOpacity
+                style={[styles.tabItem, filter === 'All' && styles.activeTabItem]}
+                onPress={() => setFilter('All')}
+              >
+                <Text style={[styles.tabText, filter === 'All' && styles.activeTabText]}>
+                  Tất cả
+                  {filter !== 'All' && <Text style={styles.tabCount}> {orders.filter(o => o.orderType === filterType).length}</Text>}
                 </Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
+
+              {/* Tabs từ DB */}
+              {activeStatusList.map(s => {
+                const active = filter === s.name;
+                const count = countByStatus(s.name);
+                const isCancelledTab = s.name === 'Đã hủy';
+                return (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={[
+                      styles.tabItem,
+                      active && styles.activeTabItem,
+                      active && isCancelledTab && { backgroundColor: '#EF4444', borderColor: '#EF4444' },
+                    ]}
+                    onPress={() => setFilter(s.name)}
+                  >
+                    <Text style={[styles.tabText, active && styles.activeTabText]}>
+                      {s.label}
+                      {count > 0 && !active && <Text style={styles.tabCount}> {count}</Text>}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
         </View>
 
         <View style={styles.mainArea}>
@@ -652,6 +709,11 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
   statLabel: { fontSize: 11, color: '#64748B', marginTop: 1 },
   toolbar: { gap: 10, marginBottom: 12 },
+  typeFilterRow: { flexDirection: 'row', gap: 8 },
+  typeFilterBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  typeFilterText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+  typeFilterBadge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 8, backgroundColor: '#F1F5F9' },
+  typeFilterBadgeText: { fontSize: 10, fontWeight: '700' },
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: '#E2E8F0' },
   searchBar: { flex: 1, fontSize: 14, color: '#0F172A' },
   tabsScroll: { flexGrow: 0 },

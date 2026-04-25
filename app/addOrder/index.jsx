@@ -10,6 +10,11 @@ import {
   TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  ORDER_TYPE_TO_CATEGORY,
+  SERVICE_TYPE_TO_CATEGORY,
+  fetchStatusList,
+} from '../../components/Hooks/getStatus';
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { db } from '../../config/firebaseConfig';
@@ -230,17 +235,29 @@ export default function AddOrder() {
     if (products.length === 0) { showAlert('Thông báo', 'Vui lòng thêm ít nhất 1 sản phẩm'); return; }
     setSubmitting(true);
     try {
-      // ── Lưu đơn hàng ────────────────────────────────────
+      // ── Lấy trạng thái ban đầu từ DB ─────────────────────
+      const orderCategory = ORDER_TYPE_TO_CATEGORY[orderType];              // 'don_buon' | 'don_le'
+      const svcCategory = SERVICE_TYPE_TO_CATEGORY[orderTypeCfg.autoSvc]; // 'giao_hang' | 'lap_dat'
+
+      const [orderStatuses, svcStatuses] = await Promise.all([
+        fetchStatusList(orderCategory),
+        autoService ? fetchStatusList(svcCategory) : Promise.resolve([]),
+      ]);
+
+      const initialOrderStatus = orderStatuses[0]?.name || 'Chờ xác nhận';
+      const initialSvcStatus = svcStatuses[0]?.name || 'Chờ xử lý';
+
+      // ── Lưu đơn hàng ─────────────────────────────────────
       const newOrder = {
         id: orderId,
         orderType,
-        paymentMethod,                   // 'customer' | 'company'
+        paymentMethod,
         customer: selectedCustomer.name,
         items: products,
         createdAt: orderDate,
         address: deliveryAddress,
         note: notes,
-        status: 'PENDING',
+        status: initialOrderStatus,   // ✅ từ DB
         createdBy: userDetail?.email || '',
       };
       await setDoc(doc(db, 'orders', selectedCustomer.phone), { orders: arrayUnion(newOrder) }, { merge: true });
@@ -248,17 +265,16 @@ export default function AddOrder() {
       // ── Tự động tạo dịch vụ ──────────────────────────────
       if (autoService) {
         const svcId = 'SV-' + Date.now().toString().slice(-6);
-        const autoSvc = orderTypeCfg.autoSvc; // 'DELIVERY' | 'INSTALLATION'
         await setDoc(doc(db, 'service', svcId), {
           id: svcId,
-          type: autoSvc,
+          type: orderTypeCfg.autoSvc,   // 'DELIVERY' | 'INSTALLATION'
           orderId,
           orderItems: products,
           customer: selectedCustomer.name,
           phone: selectedCustomer.phone,
           address: deliveryAddress,
           note: serviceNote,
-          status: 'PENDING',
+          status: initialSvcStatus,        // ✅ từ DB
           createdBy: userDetail?.email || '',
           createdAt: new Date().toISOString(),
           autoAssigned: true,
