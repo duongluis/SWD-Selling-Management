@@ -1,6 +1,6 @@
-import { showAlert } from '@/components/Main/showAlert';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
@@ -16,18 +16,20 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { showSuccess } from '../../components/Main/showSuccess';
+import { showAlert } from '../../components/Main/showAlert';
+import { sendApprovalEmailViaFirebase } from '../../components/Utils/firebaseMailService';
 import { db } from '../../config/firebaseConfig';
 
+const BG_IMAGE = require('../../assets/images/logo-light.png');
+
 const isWeb = Platform.OS === 'web';
-const BG_IMAGE = require('../../assets/images/logo-light.png')
 
 // ── Helpers ──────────────────────────────────────────────────
 const ROLE_CONFIG = {
     'đại lý': { color: '#2563EB', bg: '#EFF6FF', icon: 'storefront-outline', label: 'Đại lý' },
     'dealer': { color: '#2563EB', bg: '#EFF6FF', icon: 'storefront-outline', label: 'Đại lý' },
-    'đối tác': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'đối tác' },
-    'distributor': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'đối tác' },
+    'nhà phân phối': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'Nhà phân phối' },
+    'distributor': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'Nhà phân phối' },
     'cộng tác viên': { color: '#059669', bg: '#ECFDF5', icon: 'people-outline', label: 'Cộng tác viên' },
     'ctv': { color: '#059669', bg: '#ECFDF5', icon: 'people-outline', label: 'Cộng tác viên' },
 };
@@ -43,96 +45,179 @@ const getInitials = (name) => {
 
 const AVATAR_COLORS = ['#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2'];
 
-// ── Info Row ─────────────────────────────────────────────────
+// ── Info Row (read-only) ──────────────────────────────────────
 function InfoRow({ icon, label, value, color }) {
-    if (!value) return null;
+    if (!value && value !== 0) return null;
     return (
-        <View style={S.infoRow}>
-            <View style={S.infoIcon}>
-                <Ionicons name={icon} size={14} color={color || '#64748B'} />
-            </View>
+        <View style={S.editRow}>
+            <View style={S.infoIcon}><Ionicons name={icon} size={14} color="#64748B" /></View>
             <View style={{ flex: 1 }}>
                 <Text style={S.infoLabel}>{label}</Text>
-                <Text style={S.infoValue}>{value}</Text>
+                <Text style={[S.infoValue, color && { color }]}>{value}</Text>
             </View>
         </View>
     );
 }
 
 // ── User Detail Panel ─────────────────────────────────────────
-function UserDetailPanel({ user, onClose, onApprove, onReject, loading }) {
+function UserDetailPanel({ user, onClose, onApprove, onReject, loading, onEdit }) {
     const roleCfg = getRoleCfg(user.role || user.member);
     const isVerified = user.verified === true;
+    const isCompany = user.bizModel === 'company';
+    const isIndiv = user.bizModel === 'individual';
+    const isDaiLy = (user.role || user.member || '').toLowerCase().includes('đại lý');
+    const needsBank = ['đối tác', 'cộng tác viên', 'ctv', 'partner'].some(r =>
+        (user.role || user.member || '').toLowerCase().includes(r)
+    );
 
     return (
         <View style={[S.detailPanel, isWeb && S.detailPanelWeb]}>
-
-            {/* Panel header */}
+            {/* Header */}
             <View style={S.detailHeader}>
                 <Text style={S.detailTitle}>Chi tiết tài khoản</Text>
-                <TouchableOpacity onPress={onClose} style={S.detailCloseBtn}>
-                    <Ionicons name="close" size={18} color="#64748B" />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                    {/* Nút xem khách hàng — chỉ hiện với CTV */}
+                    {['cộng tác viên', 'ctv'].some(r => (user.role || user.member || '').toLowerCase().includes(r)) && (
+                        <TouchableOpacity
+                            style={[S.editBtn, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
+                            onPress={() => router.push({
+                                pathname: '/ctvCustomers/[email]',
+                                params: { email: user.email, name: user.name || user.email },
+                            })}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="people-outline" size={14} color="#059669" />
+                            <Text style={[S.editBtnText, { color: '#059669' }]}>Khách hàng</Text>
+                        </TouchableOpacity>
+                    )}
+                    {/* Nút sửa — dẫn sang màn editUser */}
+                    <TouchableOpacity style={S.editBtn} onPress={onEdit} activeOpacity={0.8}>
+                        <Ionicons name="create-outline" size={14} color="#2563EB" />
+                        <Text style={S.editBtnText}>Sửa</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onClose} style={S.detailCloseBtn}>
+                        <Ionicons name="close" size={18} color="#64748B" />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
 
-                {/* Identity */}
+                {/* ── Identity ── */}
                 <View style={S.detailIdentity}>
                     <View style={[S.detailAvatar, { backgroundColor: roleCfg.color }]}>
                         <Text style={S.detailAvatarText}>{getInitials(user.name)}</Text>
                     </View>
                     <Text style={S.detailName}>{user.name || '—'}</Text>
                     <Text style={S.detailEmail}>{user.email}</Text>
-                    <View style={[S.rolePill, { backgroundColor: roleCfg.bg }]}>
-                        <Ionicons name={roleCfg.icon} size={12} color={roleCfg.color} />
-                        <Text style={[S.rolePillText, { color: roleCfg.color }]}>{roleCfg.label}</Text>
+                    <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'center', marginTop: 4 }}>
+                        <View style={[S.rolePill, { backgroundColor: roleCfg.bg }]}>
+                            <Ionicons name={roleCfg.icon} size={12} color={roleCfg.color} />
+                            <Text style={[S.rolePillText, { color: roleCfg.color }]}>{roleCfg.label}</Text>
+                        </View>
+                        {user.bizModel && (
+                            <View style={[S.rolePill, { backgroundColor: '#F1F5F9' }]}>
+                                <Ionicons name={isCompany ? 'business-outline' : 'person-outline'} size={12} color="#64748B" />
+                                <Text style={[S.rolePillText, { color: '#64748B' }]}>{isCompany ? 'Công ty/HKD' : 'Cá nhân'}</Text>
+                            </View>
+                        )}
                     </View>
                     {isVerified ? (
                         <View style={S.verifiedBadge}>
                             <Ionicons name="checkmark-circle" size={14} color="#059669" />
-                            <Text style={S.verifiedBadgeText}>Đã xác thực</Text>
+                            <Text style={S.verifiedBadgeText}>Đã xác thực · {user.verifiedAt ? new Date(user.verifiedAt).toLocaleDateString('vi-VN') : ''}</Text>
                         </View>
                     ) : (
                         <View style={S.pendingBadge}>
                             <Ionicons name="time-outline" size={14} color="#F59E0B" />
-                            <Text style={S.pendingBadgeText}>Chờ xác thực</Text>
+                            <Text style={S.pendingBadgeText}>Chờ xác thực · {user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : ''}</Text>
                         </View>
                     )}
                 </View>
 
-                {/* Info */}
+                {/* ── Liên hệ ── */}
                 <View style={S.detailCard}>
-                    <Text style={S.detailCardTitle}>Thông tin cá nhân</Text>
+                    <Text style={S.detailCardTitle}>Thông tin liên hệ</Text>
+                    <InfoRow icon="person-outline" label="Họ và tên" value={user.name} />
                     <InfoRow icon="call-outline" label="Số điện thoại" value={user.phone} color="#2563EB" />
                     <InfoRow icon="location-outline" label="Địa chỉ" value={user.address} />
-                    <InfoRow icon="calendar-outline" label="Ngày đăng ký" value={user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : '—'} />
-                    <InfoRow icon="document-text-outline" label="Ghi chú" value={user.note} />
+                    {user.emailContact && <InfoRow icon="mail-outline" label="Email liên hệ" value={user.emailContact} />}
+                    <InfoRow icon="calendar-outline" label="Ngày đăng ký"
+                        value={user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : '—'} />
                 </View>
 
-                {/* Action buttons — chỉ khi chưa verify */}
+                {/* ── Doanh nghiệp ── */}
+                {isCompany && (
+                    <View style={S.detailCard}>
+                        <Text style={S.detailCardTitle}>Thông tin doanh nghiệp</Text>
+                        <InfoRow icon="business-outline" label="Tên công ty / HKD" value={user.companyName} />
+                        <InfoRow icon="document-text-outline" label="Mã số thuế" value={user.taxCode} />
+                        <InfoRow icon="location-outline" label="Địa chỉ đăng ký KD" value={user.bizAddress} />
+                    </View>
+                )}
+
+                {/* ── Cá nhân ── */}
+                {isIndiv && (
+                    <View style={S.detailCard}>
+                        <Text style={S.detailCardTitle}>Thông tin cá nhân</Text>
+                        <InfoRow icon="card-outline" label="Số CCCD / CMND" value={user.cccd} />
+                        {user.dob && <InfoRow icon="calendar-outline" label="Ngày sinh" value={user.dob} />}
+                    </View>
+                )}
+
+                {/* ── Cam kết đại lý ── */}
+                {isDaiLy && (user.committedRevenue || user.distributionType) && (
+                    <View style={S.detailCard}>
+                        <Text style={S.detailCardTitle}>Cam kết đại lý</Text>
+                        {user.committedRevenue ? (
+                            <InfoRow icon="cash-outline" label="Doanh thu cam kết"
+                                value={(user.committedRevenue).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' })}
+                                color="#2563EB" />
+                        ) : null}
+                        {user.distributionType ? (
+                            <InfoRow icon="git-branch-outline" label="Hình thức phân phối"
+                                value={user.distributionType === 'exclusive' ? 'Độc quyền' : 'Không độc quyền'} />
+                        ) : null}
+                        {user.regionName ? (
+                            <InfoRow icon="map-outline" label="Khu vực"
+                                value={`${user.regionName}${user.province ? ` · ${user.province}` : ''}`} />
+                        ) : null}
+                    </View>
+                )}
+
+                {/* ── Ngân hàng ── */}
+                {needsBank && user.bank && (
+                    <View style={S.detailCard}>
+                        <Text style={S.detailCardTitle}>Thông tin ngân hàng</Text>
+                        <View style={S.bankCard}>
+                            <View style={S.bankBadge}><Text style={S.bankBadgeText}>{user.bank.id}</Text></View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={S.bankName}>{user.bank.name}</Text>
+                                <Text style={S.bankAccount}>{user.bank.accountNo}</Text>
+                                <Text style={S.bankHolder}>{user.bank.accountName}</Text>
+                            </View>
+                        </View>
+                    </View>
+                )}
+
+                {/* ── Admin note ── */}
+                {user.adminNote ? (
+                    <View style={S.detailCard}>
+                        <Text style={S.detailCardTitle}>Ghi chú admin</Text>
+                        <InfoRow icon="create-outline" label="Ghi chú nội bộ" value={user.adminNote} />
+                    </View>
+                ) : null}
+
+                {/* ── Actions ── */}
                 {!isVerified && (
                     <View style={S.actionRow}>
-                        <TouchableOpacity
-                            style={[S.rejectBtn, loading && { opacity: 0.6 }]}
-                            onPress={onReject}
-                            disabled={loading}
-                            activeOpacity={0.85}
-                        >
+                        <TouchableOpacity style={[S.rejectBtn, loading && { opacity: 0.6 }]} onPress={onReject} disabled={loading} activeOpacity={0.85}>
                             <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
                             <Text style={S.rejectBtnText}>Từ chối</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[S.approveBtn, loading && { opacity: 0.6 }]}
-                            onPress={onApprove}
-                            disabled={loading}
-                            activeOpacity={0.85}
-                        >
-                            {loading
-                                ? <ActivityIndicator size="small" color="#fff" />
-                                : <Ionicons name="shield-checkmark-outline" size={16} color="#fff" />
-                            }
-                            <Text style={S.approveBtnText}>{loading ? 'Đang xử lý...' : 'Chấp thuận'}</Text>
+                        <TouchableOpacity style={[S.approveBtn, loading && { opacity: 0.6 }]} onPress={() => onApprove(user)} disabled={loading} activeOpacity={0.85}>
+                            {loading ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="shield-checkmark-outline" size={16} color="#fff" />}
+                            <Text style={S.approveBtnText}>{loading ? 'Đang xử lý...' : 'Chấp thuận & Gửi mail'}</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -142,8 +227,9 @@ function UserDetailPanel({ user, onClose, onApprove, onReject, loading }) {
 }
 
 // ── Main Screen ───────────────────────────────────────────────
-export default function UsersView() {
+export default function UsersAdminScreen() {
     const { userDetail } = useContext(UserDetailContext);
+    const router = useRouter();
 
     const [tab, setTab] = useState('unverified');
     const [users, setUsers] = useState([]);
@@ -194,22 +280,35 @@ export default function UsersView() {
         );
 
     // ── Approve ───────────────────────────────────────────────
-    const handleApprove = () => {
+    const handleApprove = (approvedDraft) => {
+        const name = approvedDraft?.name || selected?.name;
         showAlert(
             '✅ Chấp thuận tài khoản',
-            `Xác thực tài khoản "${selected?.name}"?`,
+            `Xác thực tài khoản "${name}"?\nEmail thông báo sẽ được gửi tự động.`,
             async () => {
                 setActionLoading(true);
                 try {
                     await updateDoc(doc(db, 'users', selected.email), {
                         verified: true,
                         verifiedAt: new Date().toISOString(),
+                        ...(approvedDraft?.name && { name: approvedDraft.name }),
+                        ...(approvedDraft?.phone && { phone: approvedDraft.phone }),
+                        ...(approvedDraft?.address && { address: approvedDraft.address }),
+                        ...(approvedDraft?.adminNote && { adminNote: approvedDraft.adminNote }),
+                        ...(approvedDraft?.companyName && { companyName: approvedDraft.companyName }),
+                        ...(approvedDraft?.taxCode && { taxCode: approvedDraft.taxCode }),
+                        ...(approvedDraft?.bizAddress && { bizAddress: approvedDraft.bizAddress }),
+                        ...(approvedDraft?.cccd && { cccd: approvedDraft.cccd }),
                     });
                     setUsers(prev => prev.map(u =>
-                        u.email === selected.email ? { ...u, verified: true } : u
+                        u.email === selected.email ? { ...u, ...(approvedDraft || {}), verified: true } : u
                     ));
-                    setSelected(prev => ({ ...prev, verified: true }));
-                    showSuccess('✅ Thành công', `Đã xác thực "${selected.name}"`);
+                    setSelected(prev => ({ ...prev, ...(approvedDraft || {}), verified: true }));
+
+                    // ✅ Gửi email qua Firebase Extension
+                    await sendApprovalEmailViaFirebase({ ...selected, ...(approvedDraft || {}) });
+
+                    showAlert('✅ Thành công', `Đã xác thực "${name}". Email thông báo đã được gửi.`);
                 } catch (e) {
                     showAlert('Lỗi', e.message);
                 } finally {
@@ -217,6 +316,14 @@ export default function UsersView() {
                 }
             }
         );
+    };
+
+    const handleEdit = () => {
+        if (!selected) return;
+        router.push({
+            pathname: '/editUser/[userEmail]',
+            params: { userEmail: selected.email, userParam: JSON.stringify(selected) },
+        });
     };
 
     // ── Reject ────────────────────────────────────────────────
@@ -283,13 +390,7 @@ export default function UsersView() {
 
     return (
         <View style={S.root}>
-
-            {/* ✅ Watermark — cố định chính giữa, mờ nhạt */}
-            <Image
-                source={BG_IMAGE}
-                style={S.watermark}
-                resizeMode="contain"
-            />
+            <Image source={BG_IMAGE} style={S.watermark} resizeMode="contain" />
             <View style={S.container}>
 
                 {/* ── LEFT / MAIN panel ── */}
@@ -386,13 +487,12 @@ export default function UsersView() {
 
                 {/* ── RIGHT / DETAIL panel ── */}
                 {selected && (
-                    // Web: hiện bên phải inline
-                    // Mobile: hiện overlay toàn màn
                     <UserDetailPanel
                         user={selected}
                         onClose={() => setSelected(null)}
                         onApprove={handleApprove}
                         onReject={handleReject}
+                        onEdit={handleEdit}
                         loading={actionLoading}
                     />
                 )}
@@ -402,18 +502,8 @@ export default function UsersView() {
 }
 
 const S = StyleSheet.create({
-    root: {
-        flex: 1,
-        backgroundColor: "#F8FAFC",
-    },
-    watermark: {
-        position: "absolute",
-        width: "80%",           // ← to nhỏ tuỳ ý
-        height: "60%",          // ← cao thấp tuỳ ý
-        top: "20%",             // ← căn giữa dọc
-        left: "10%",            // ← căn giữa ngang
-        opacity: 0.05,          // ← 0.05 rất mờ / 0.15 rõ hơn
-    },
+    root: { flex: 1, backgroundColor: '#F8FAFC' },
+    watermark: { position: 'absolute', width: '80%', height: '60%', top: '20%', left: '10%', opacity: 0.05 },
     container: { flex: 1, backgroundColor: 'transparent', flexDirection: isWeb ? 'row' : 'column' },
 
     // List panel
@@ -438,7 +528,7 @@ const S = StyleSheet.create({
     // Tabs — active dùng màu sidebar #0F172A
     tabRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
     tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
-    tabActive: { backgroundColor: '#40668d', borderColor: '#40668d' },
+    tabActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
     tabText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
     tabTextActive: { color: '#FFFFFF' },
     tabBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 20, minWidth: 20, alignItems: 'center' },
@@ -470,7 +560,7 @@ const S = StyleSheet.create({
 
     // ── Detail panel — tông tối giống sidebar ──────────────────
     detailPanel: {
-        backgroundColor: '#d1e2f2',              // ← màu sidebar
+        backgroundColor: '#0F172A',              // ← màu sidebar
         borderTopWidth: 1,
         borderTopColor: '#1E293B',
         padding: 16,
@@ -484,28 +574,28 @@ const S = StyleSheet.create({
         maxHeight: undefined,
     },
     detailHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
-    detailTitle: { fontSize: 15, fontWeight: '700', color: '#64748B' },          // ← text sáng
+    detailTitle: { fontSize: 15, fontWeight: '700', color: '#F8FAFC' },          // ← text sáng
     detailCloseBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' },
 
     detailIdentity: { alignItems: 'center', paddingVertical: 20, gap: 6, borderBottomWidth: 1, borderBottomColor: '#1E293B', marginBottom: 14 },
     detailAvatar: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
     detailAvatarText: { color: '#FFFFFF', fontSize: 20, fontWeight: '800' },
-    detailName: { fontSize: 16, fontWeight: '800', color: '#64748B' },           // ← text sáng
+    detailName: { fontSize: 16, fontWeight: '800', color: '#F8FAFC' },           // ← text sáng
     detailEmail: { fontSize: 12, color: '#64748B' },
     rolePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-    rolePillText: { fontSize: 15, fontWeight: '700' },
+    rolePillText: { fontSize: 12, fontWeight: '700' },
     verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#064E3B', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
     verifiedBadgeText: { fontSize: 12, color: '#34D399', fontWeight: '600' },           // ← xanh lá sáng trên nền tối
     pendingBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#451A03', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
     pendingBadgeText: { fontSize: 12, color: '#FCD34D', fontWeight: '600' },           // ← vàng sáng trên nền tối
 
     detailCard: { marginBottom: 14 },
-    detailCardTitle: { fontSize: 10, fontWeight: '700', color: '#334155', letterSpacing: 0.8, marginBottom: 10 },
+    detailCardTitle: { fontSize: 10, fontWeight: '700', color: '#fff', letterSpacing: 0.8, marginBottom: 10 },
 
-    infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
-    infoIcon: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-    infoLabel: { fontSize: 10, color: '#475569', marginBottom: 2 },
-    infoValue: { fontSize: 13, color: '#475569', fontWeight: '600' },           // ← text sáng trên nền tối
+    infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#fff' },
+    infoIcon: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+    infoLabel: { fontSize: 10, color: '#fff', marginBottom: 2 },
+    infoValue: { fontSize: 13, color: '#E2E8F0', fontWeight: '600' },           // ← text sáng trên nền tối
 
     // Action buttons — reject giữ đỏ, approve dùng blue accent
     actionRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
@@ -513,4 +603,16 @@ const S = StyleSheet.create({
     rejectBtnText: { color: '#F87171', fontWeight: '700', fontSize: 13 },
     approveBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 10, backgroundColor: '#2563EB', shadowColor: '#2563EB', shadowOpacity: 0.4, shadowRadius: 10, elevation: 4 },
     approveBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+    // Edit button
+    editBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#1E293B', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: '#334155' },
+    editBtnText: { fontSize: 12, color: '#60A5FA', fontWeight: '600' },
+    // Info rows
+    editRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
+    // Bank
+    bankCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#1E293B', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#334155' },
+    bankBadge: { backgroundColor: '#2563EB22', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    bankBadgeText: { fontSize: 12, fontWeight: '800', color: '#60A5FA' },
+    bankName: { fontSize: 13, fontWeight: '700', color: '#F8FAFC' },
+    bankAccount: { fontSize: 13, color: '#94A3B8', marginTop: 2, letterSpacing: 1 },
+    bankHolder: { fontSize: 11, color: '#64748B', marginTop: 2 },
 });

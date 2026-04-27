@@ -45,7 +45,7 @@ const PUBLIC_ROUTES = ['auth', 'index'];          // ai cũng vào được
 const ADMIN_ROUTES = ['users'];                   // chỉ admin
 const APP_ROUTES = ['(tabs)', 'addOrder', 'addCustomer',
   'addService', 'CustomerView', 'ServiceView',
-  'OrderView', 'revenue', 'information'];
+  'OrderView', 'revenue', 'information', 'editUser', 'ctvCustomers'];
 
 export default function RootLayout() {
   const [userDetail, setUserDetail] = useState(null);

@@ -83,6 +83,9 @@ export default function ServiceView() {
   const [search, setSearch] = useState("");
 
   const { services, loading, refresh } = useServices();
+  const { userDetail } = useContext(UserDetailContext);
+  const role = getRole(userDetail);
+  const isCTV = role === 'ctv';
 
   // ✅ Load tất cả 4 category status một lần, có cache
   const { statusMap } = useMultiStatusList(ALL_SVC_CATEGORIES);
@@ -150,10 +153,12 @@ export default function ServiceView() {
             <Text style={styles.headerTitle}>Dịch vụ</Text>
             <Text style={styles.headerCount}>{loading ? "Đang tải..." : `${services.length} dịch vụ`}</Text>
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => router.push("/addService")}>
-            <Ionicons name="add" size={18} color={Colors.White} />
-            {isWeb && <Text style={styles.addBtnText}>Đăng kí dịch vụ</Text>}
-          </TouchableOpacity>
+          {!isCTV && (
+            <TouchableOpacity style={styles.addBtn} onPress={() => router.push("/addService")}>
+              <Ionicons name="add" size={18} color={Colors.White} />
+              {isWeb && <Text style={styles.addBtnText}>Đăng kí dịch vụ</Text>}
+            </TouchableOpacity>
+          )}
         </View>
 
         {isWeb && (
@@ -212,10 +217,12 @@ export default function ServiceView() {
                 <View style={styles.emptyIconWrap}><Ionicons name="build-outline" size={32} color="#94A3B8" /></View>
                 <Text style={styles.emptyTitle}>{services.length === 0 ? "Chưa có dịch vụ nào" : "Không tìm thấy"}</Text>
                 <Text style={styles.emptySub}>Tạo dịch vụ mới để bắt đầu</Text>
-                <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push("/addService")}>
-                  <Ionicons name="add" size={16} color={Colors.White} />
-                  <Text style={styles.emptyBtnText}>Tạo dịch vụ</Text>
-                </TouchableOpacity>
+                {!isCTV && (
+                  <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push("/addService")}>
+                    <Ionicons name="add" size={16} color={Colors.White} />
+                    <Text style={styles.emptyBtnText}>Tạo dịch vụ</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             }
           />

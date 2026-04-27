@@ -238,7 +238,7 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
           <Text style={P.orderDate}>{order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : '—'}</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          {!isCancelled && (
+          {!isCancelled && isAdmin && (
             <TouchableOpacity style={P.editBtn}
               onPress={() => router.push({ pathname: '/editOrder/[orderID]', params: { orderID: order.id, orderParam: JSON.stringify(order) } })}
               activeOpacity={0.8}
@@ -548,10 +548,13 @@ export default function OrderView() {
             <Text style={styles.title}>Đơn hàng</Text>
             <Text style={styles.headerCount}>{orders.length} đơn hàng</Text>
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/addOrder')} activeOpacity={0.85}>
-            <Ionicons name="add" size={18} color={Colors.White} />
-            {isWeb && <Text style={styles.addBtnText}>Tạo đơn hàng</Text>}
-          </TouchableOpacity>
+          {/* ✅ CTV chỉ đọc — không cho tạo đơn */}
+          {role !== 'ctv' && (
+            <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/addOrder')} activeOpacity={0.85}>
+              <Ionicons name="add" size={18} color={Colors.White} />
+              {isWeb && <Text style={styles.addBtnText}>Tạo đơn hàng</Text>}
+            </TouchableOpacity>
+          )}
         </View>
 
         {isWeb && (

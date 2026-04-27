@@ -1,0 +1,198 @@
+[
+    {
+        "id": "VCB",
+        "name": "Vietcombank",
+        "shortName": "VCB",
+        "minLen": 13,
+        "maxLen": 13
+    },
+    {
+        "id": "BIDV",
+        "name": "BIDV",
+        "shortName": "BIDV",
+        "minLen": 14,
+        "maxLen": 14
+    },
+    {
+        "id": "VTB",
+        "name": "VietinBank",
+        "shortName": "CTG",
+        "minLen": 13,
+        "maxLen": 14
+    },
+    {
+        "id": "AGR",
+        "name": "Agribank",
+        "shortName": "AGR",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "TCB",
+        "name": "Techcombank",
+        "shortName": "TCB",
+        "minLen": 9,
+        "maxLen": 14
+    },
+    {
+        "id": "MB",
+        "name": "MB Bank",
+        "shortName": "MB",
+        "minLen": 10,
+        "maxLen": 16
+    },
+    {
+        "id": "ACB",
+        "name": "ACB",
+        "shortName": "ACB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "VPB",
+        "name": "VPBank",
+        "shortName": "VPB",
+        "minLen": 10,
+        "maxLen": 16
+    },
+    {
+        "id": "TPB",
+        "name": "TPBank",
+        "shortName": "TPB",
+        "minLen": 10,
+        "maxLen": 14
+    },
+    {
+        "id": "STB",
+        "name": "Sacombank",
+        "shortName": "STB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "HDB",
+        "name": "HDBank",
+        "shortName": "HDB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "OCB",
+        "name": "OCB",
+        "shortName": "OCB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "MSB",
+        "name": "MSB (Maritime Bank)",
+        "shortName": "MSB",
+        "minLen": 12,
+        "maxLen": 12
+    },
+    {
+        "id": "EIB",
+        "name": "Eximbank",
+        "shortName": "EIB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "SHB",
+        "name": "SHB",
+        "shortName": "SHB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "LPB",
+        "name": "LienVietPostBank",
+        "shortName": "LPB",
+        "minLen": 10,
+        "maxLen": 16
+    },
+    {
+        "id": "BAB",
+        "name": "BacA Bank",
+        "shortName": "BAB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "NAB",
+        "name": "Nam A Bank",
+        "shortName": "NAB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "PGB",
+        "name": "PGBank",
+        "shortName": "PGB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "VIB",
+        "name": "VIB",
+        "shortName": "VIB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "ABB",
+        "name": "ABBank",
+        "shortName": "ABB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "BVB",
+        "name": "BaoViet Bank",
+        "shortName": "BVB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "KLB",
+        "name": "KienLong Bank",
+        "shortName": "KLB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "IVB",
+        "name": "IndoVinaBank",
+        "shortName": "IVB",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "SEA",
+        "name": "SeABank",
+        "shortName": "SEA",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "WOO",
+        "name": "Woori Bank Việt Nam",
+        "shortName": "WOO",
+        "minLen": 9,
+        "maxLen": 16
+    },
+    {
+        "id": "CAKE",
+        "name": "CAKE by VPBank",
+        "shortName": "CAKE",
+        "minLen": 10,
+        "maxLen": 16
+    },
+    {
+        "id": "TIMO",
+        "name": "Timo by Bản Việt",
+        "shortName": "TIMO",
+        "minLen": 10,
+        "maxLen": 16
+    }
+]

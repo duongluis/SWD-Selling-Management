@@ -1,689 +1,634 @@
-import Colors from '@/constant/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { getAuth } from 'firebase/auth';
-import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
-    ActivityIndicator, KeyboardAvoidingView, Platform,
+    KeyboardAvoidingView, Modal, Platform, Pressable,
     ScrollView, StatusBar, StyleSheet, Text, TextInput,
     TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../../components/Main/showAlert';
+import BANKS from '../../config/banks.json';
 import { db } from '../../config/firebaseConfig';
 import { clearRegistrationPending } from '../_layout';
 
 const isWeb = Platform.OS === 'web';
 
-const ROLES = [
-    { key: 'đại lý', label: 'Đại lý', icon: 'storefront-outline', color: '#2563EB', bg: '#EFF6FF', desc: 'Phân phối trực tiếp tới khách hàng cuối', advisor: false, extraFields: true },
-    { key: 'Đối tác', label: 'Đối tác', icon: 'car-outline', color: '#7C3AED', bg: '#F5F3FF', desc: 'Bán hàng trong khu vực lớn', advisor: false },
-    { key: 'cộng tác viên', label: 'Cộng tác viên', icon: 'people-outline', color: '#059669', bg: '#ECFDF5', desc: 'Giới thiệu và hỗ trợ bán hàng theo hoa hồng', advisor: false },
-];
-
-const ADVISOR_ROLES = {};
-const COMMITTED_REVENUE_MIN = 100_000_000; // 100 triệu VNĐ
+const COMMITTED_REVENUE_MIN = 100_000_000;
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
-function getInitials(name) {
-    if (!name) return '?';
-    return name.trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2);
+const ROLES = [
+    { key: 'daily', label: 'Đại lý / NPP', icon: 'storefront-outline', color: '#2563EB', bg: '#EFF6FF', desc: 'Phân phối trực tiếp, cam kết doanh thu' },
+    { key: 'partner', label: 'Đối tác', icon: 'briefcase-outline', color: '#7C3AED', bg: '#F5F3FF', desc: 'Hợp tác kinh doanh theo hoa hồng' },
+    { key: 'ctv', label: 'Cộng tác viên', icon: 'people-outline', color: '#059669', bg: '#ECFDF5', desc: 'Giới thiệu và hỗ trợ bán hàng' },
+];
+const BIZ_MODELS = [
+    { key: 'company', label: 'Công ty / Hộ kinh doanh', icon: 'business-outline', color: '#0F172A', bg: '#F1F5F9', desc: 'Có đăng ký kinh doanh' },
+    { key: 'individual', label: 'Cá nhân', icon: 'person-outline', color: '#0F172A', bg: '#F1F5F9', desc: 'Cá nhân không có đăng ký' },
+];
+const DISTRIBUTION_TYPES = [
+    { key: 'exclusive', label: 'Độc quyền', icon: 'lock-closed-outline', color: '#DC2626', bg: '#FEF2F2' },
+    { key: 'nonexclusive', label: 'Không độc quyền', icon: 'lock-open-outline', color: '#059669', bg: '#ECFDF5' },
+];
+
+const validateCCCD = (v) => /^(\d{9}|\d{12})$/.test(v.trim());
+
+const toDateStr = (d) => {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+};
+const toDisplayStr = (s) => { if (!s) return ''; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+
+function DateField({ value, onChange }) {
+    const [show, setShow] = useState(false);
+    const [sel, setSel] = useState(new Date());
+    if (isWeb) return (
+        <View style={F.inputBox}>
+            <Ionicons name="calendar-outline" size={15} color="#94A3B8" />
+            <input type="date" value={value || ''} style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: '#0F172A', backgroundColor: 'transparent', cursor: 'pointer' }}
+                onChange={e => { if (!e.target.value) return; onChange(e.target.value); const [y, m, d] = e.target.value.split('-').map(Number); setSel(new Date(y, m - 1, d, 12)); }} />
+        </View>
+    );
+    const DateTimePicker = require('@react-native-community/datetimepicker').default;
+    return (
+        <>
+            <TouchableOpacity style={F.inputBox} onPress={() => setShow(true)} activeOpacity={0.8}>
+                <Ionicons name="calendar-outline" size={15} color="#94A3B8" />
+                <Text style={{ flex: 1, fontSize: 14, color: value ? '#0F172A' : '#94A3B8' }}>{value ? toDisplayStr(value) : 'Chọn ngày sinh...'}</Text>
+            </TouchableOpacity>
+            {show && Platform.OS === 'ios' && (
+                <Modal transparent animationType="slide">
+                    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setShow(false)} />
+                    <View style={{ backgroundColor: '#fff', padding: 16 }}>
+                        <DateTimePicker value={sel} mode="date" display="spinner"
+                            onChange={(_, date) => { if (date) { setSel(date); onChange(toDateStr(date)); } }} />
+                        <Pressable onPress={() => setShow(false)} style={{ alignItems: 'center', padding: 12 }}>
+                            <Text style={{ color: '#2563EB', fontWeight: '600' }}>Xong</Text>
+                        </Pressable>
+                    </View>
+                </Modal>
+            )}
+            {show && Platform.OS === 'android' && (
+                <DateTimePicker value={sel} mode="date" display="default"
+                    onChange={(_, date) => { setShow(false); if (date) { setSel(date); onChange(toDateStr(date)); } }} />
+            )}
+        </>
+    );
 }
-const AVATAR_COLORS = ['#2563EB', '#7C3AED', '#059669', '#D97706'];
+
+function StepBar({ current, total, labels }) {
+    return (
+        <View style={S.stepBarWrap}>
+            <View style={S.stepBar}>
+                {Array.from({ length: total }).map((_, i) => (
+                    <View key={i} style={S.stepSegWrap}>
+                        <View style={[S.stepDot,
+                        i < current && { backgroundColor: '#2563EB' },
+                        i === current && { backgroundColor: '#2563EB', width: 24, height: 24, borderRadius: 12 },
+                        i > current && { backgroundColor: '#E2E8F0' },
+                        ]}>
+                            {i < current && <Ionicons name="checkmark" size={10} color="#fff" />}
+                            {i === current && <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{i + 1}</Text>}
+                        </View>
+                        {i < total - 1 && <View style={[S.stepLine, i < current && { backgroundColor: '#2563EB' }]} />}
+                    </View>
+                ))}
+            </View>
+            {labels && current < labels.length && <Text style={S.stepLabel}>{labels[current]}</Text>}
+        </View>
+    );
+}
 
 export default function UserInfoView() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
-
-    const [form, setForm] = useState({ name: '', phone: '', address: '', note: '' });
-    const [selectedRole, setSelectedRole] = useState('');
-    const [selectedAdvisor, setSelectedAdvisor] = useState(null);
-    const [advisorList, setAdvisorList] = useState([]);
-    const [advisorLoading, setAdvisorLoading] = useState(false);
-    const [showAdvisorDrop, setShowAdvisorDrop] = useState(false);
-    const [advisorSearch, setAdvisorSearch] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-
-    // ── Đại lý extra fields ───────────────────────────────────
+    const [step, setStep] = useState(0);
+    const [role, setRole] = useState('');
+    const [bizModel, setBizModel] = useState('');
+    const [phone, setPhone] = useState('');
+    const [emailContact, setEmailContact] = useState('');
+    const [address, setAddress] = useState('');
+    const [companyName, setCompanyName] = useState('');
+    const [taxCode, setTaxCode] = useState('');
+    const [bizAddress, setBizAddress] = useState('');
+    const [fullName, setFullName] = useState('');
+    const [cccd, setCccd] = useState('');
+    const [cccdError, setCccdError] = useState('');
+    const [dob, setDob] = useState('');
     const [committedRevenue, setCommittedRevenue] = useState('');
     const [revenueError, setRevenueError] = useState('');
     const [revenueTouched, setRevenueTouched] = useState(false);
+    const [distributionType, setDistributionType] = useState('');
     const [showAreaPicker, setShowAreaPicker] = useState(false);
-    const [regions, setRegions] = useState([]);   // [{id, name}]
-    const [regionsLoading, setRegionsLoading] = useState(false);
-    const [selectedRegion, setSelectedRegion] = useState(null); // {id, name}
-    const [showRegionDrop, setShowRegionDrop] = useState(false);
-    const [provinces, setProvinces] = useState([]);   // string[]
-    const [provincesLoading, setProvincesLoading] = useState(false);
+    const [regions, setRegions] = useState([]);
+    const [regLoading, setRegLoading] = useState(false);
+    const [selectedRegion, setSelectedRegion] = useState(null);
     const [selectedProvince, setSelectedProvince] = useState('');
+    const [showRegionDrop, setShowRegionDrop] = useState(false);
     const [showProvinceDrop, setShowProvinceDrop] = useState(false);
     const [provinceSearch, setProvinceSearch] = useState('');
+    const [provinces, setProvinces] = useState([]);
+    const [selectedBank, setSelectedBank] = useState(null);
+    const [bankSearch, setBankSearch] = useState('');
+    const [showBankDrop, setShowBankDrop] = useState(false);
+    const [accountNo, setAccountNo] = useState('');
+    const [accountNoErr, setAccountNoErr] = useState('');
+    const [accountName, setAccountName] = useState('');
+    const [submitting, setSubmitting] = useState(false);
 
-    const set = (field, value) => setForm(p => ({ ...p, [field]: value }));
+    const isDaiLy = role === 'daily';
+    const needsBank = role === 'partner' || role === 'ctv';
+    const rev = parseInt(committedRevenue) || 0;
+
+    const STEP_LABELS = isDaiLy
+        ? ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD', 'Cam kết']
+        : needsBank
+            ? ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD', 'Ngân hàng']
+            : ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD'];
+    const TOTAL_STEPS = STEP_LABELS.length;
 
     const handleSignOut = async () => {
         try {
-            const authInstance = getAuth();
-            const user = authInstance.currentUser;
-            // ✅ Xóa cờ session trước
+            const auth = getAuth(); const user = auth.currentUser;
             clearRegistrationPending();
-            // ✅ Navigate TRƯỚC khi delete/signOut để route guard không can thiệp
             router.replace('/auth/signIn');
-            // ✅ Xóa tài khoản Firebase Auth (tài khoản chưa hoàn thành đăng ký)
-            if (user) {
-                await user.delete(); // xóa hẳn, không chỉ sign out
-            }
-        } catch (e) {
-            console.error('Lỗi xóa tài khoản:', e);
-        }
+            if (user) await user.delete();
+        } catch (e) { console.error(e); }
     };
 
-    // ── Fetch regions from db/province ───────────────────────
-    // Cấu trúc: province/{regionId} → { name: string, cities: string[] }
     const fetchRegions = async () => {
         if (regions.length > 0) return;
-        setRegionsLoading(true);
+        setRegLoading(true);
         try {
             const snap = await getDocs(collection(db, 'province'));
             setRegions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         } catch (e) { console.error(e); }
-        finally { setRegionsLoading(false); }
+        finally { setRegLoading(false); }
     };
-
-    const handleSelectRegion = (region) => {
-        setSelectedRegion(region);
-        setSelectedProvince('');
-        setShowRegionDrop(false);
-        // cities là [{id, ten}] → lấy chỉ tên để hiển thị và lưu
-        setProvinces((region.cities || []).map(c => c.ten));
+    const handleSelectRegion = (r) => {
+        setSelectedRegion(r); setSelectedProvince(''); setShowRegionDrop(false);
+        setProvinces((r.cities || []).map(c => c.ten));
     };
-
     const handleToggleArea = () => {
-        const next = !showAreaPicker;
-        setShowAreaPicker(next);
-        if (next) fetchRegions();
-        else { setSelectedRegion(null); setSelectedProvince(''); }
+        const next = !showAreaPicker; setShowAreaPicker(next);
+        if (next) fetchRegions(); else { setSelectedRegion(null); setSelectedProvince(''); }
     };
+    const filteredProvinces = provinces.filter(p => p.toLowerCase().includes(provinceSearch.toLowerCase()));
+    const filteredBanks = BANKS.filter(b => b.name.toLowerCase().includes(bankSearch.toLowerCase()) || b.shortName.toLowerCase().includes(bankSearch.toLowerCase()));
 
-    // ── Revenue input handler ─────────────────────────────────
-    const handleRevenueChange = (text) => {
-        const raw = text.replace(/\D/g, '');
-        setCommittedRevenue(raw);
-        setRevenueError(''); // xóa lỗi khi đang nhập
-    };
-
+    const handleRevenueChange = (text) => { setCommittedRevenue(text.replace(/\D/g, '')); setRevenueError(''); };
     const handleRevenueBlur = () => {
         setRevenueTouched(true);
-        const num = parseInt(committedRevenue) || 0;
-        if (num > 0 && num < COMMITTED_REVENUE_MIN) {
-            setRevenueError(`Tối thiểu ${fmt(COMMITTED_REVENUE_MIN)}`);
-        } else {
-            setRevenueError('');
+        if (rev > 0 && rev < COMMITTED_REVENUE_MIN) setRevenueError(`Tối thiểu ${fmt(COMMITTED_REVENUE_MIN)}`);
+        else setRevenueError('');
+    };
+    const handleAccountNoChange = (text) => {
+        const digits = text.replace(/\D/g, ''); setAccountNo(digits);
+        if (selectedBank && digits.length > 0) {
+            const { minLen, maxLen } = selectedBank;
+            if (digits.length < minLen || digits.length > maxLen)
+                setAccountNoErr(`Số TK ${selectedBank.name} phải có ${minLen === maxLen ? minLen : `${minLen}–${maxLen}`} chữ số`);
+            else setAccountNoErr('');
+        } else setAccountNoErr('');
+    };
+
+    const validateStep = () => {
+        switch (step) {
+            case 0: if (!role) { showAlert('Thông báo', 'Vui lòng chọn vai trò'); return false; } return true;
+            case 1: if (!bizModel) { showAlert('Thông báo', 'Vui lòng chọn mô hình kinh doanh'); return false; } return true;
+            case 2:
+                if (!phone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại'); return false; }
+                if (!address.trim()) { showAlert('Thông báo', 'Vui lòng nhập địa chỉ'); return false; }
+                return true;
+            case 3:
+                if (bizModel === 'company') {
+                    if (!companyName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên công ty/hộ KD'); return false; }
+                    if (!taxCode.trim()) { showAlert('Thông báo', 'Vui lòng nhập mã số thuế'); return false; }
+                    if (!bizAddress.trim()) { showAlert('Thông báo', 'Vui lòng nhập địa chỉ đăng ký KD'); return false; }
+                } else {
+                    if (!fullName.trim()) { showAlert('Thông báo', 'Vui lòng nhập họ và tên'); return false; }
+                    if (!cccd.trim()) { showAlert('Thông báo', 'Vui lòng nhập số CCCD/CMND'); return false; }
+                    if (!validateCCCD(cccd)) { showAlert('Thông báo', 'Số CCCD phải có 12 chữ số (hoặc CMND 9 chữ số)'); return false; }
+                }
+                return true;
+            case 4:
+                if (isDaiLy) {
+                    if (!rev) { showAlert('Thông báo', 'Vui lòng nhập doanh thu cam kết'); return false; }
+                    if (rev < COMMITTED_REVENUE_MIN) { showAlert('Thông báo', `Doanh thu tối thiểu là ${fmt(COMMITTED_REVENUE_MIN)}`); return false; }
+                    if (!distributionType) { showAlert('Thông báo', 'Vui lòng chọn hình thức phân phối'); return false; }
+                    return true;
+                } else if (needsBank) {
+                    if (!selectedBank) { showAlert('Thông báo', 'Vui lòng chọn ngân hàng'); return false; }
+                    if (accountNoErr) { showAlert('Thông báo', accountNoErr); return false; }
+                    if (!accountNo.trim()) { showAlert('Thông báo', 'Vui lòng nhập số tài khoản'); return false; }
+                    if (!accountName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên chủ tài khoản'); return false; }
+                    return true;
+                }
+                return true;
+            default: return true;
         }
     };
 
-    // ── Role select ───────────────────────────────────────────
-    const handleSelectRole = async (roleKey) => {
-        setSelectedRole(roleKey);
-        setSelectedAdvisor(null);
-        setAdvisorSearch('');
-        setShowAdvisorDrop(false);
-        // Reset đại lý extra fields
-        setCommittedRevenue(''); setRevenueError('');
-        setShowAreaPicker(false); setSelectedRegion(null); setSelectedProvince('');
+    const goNext = () => { if (!validateStep()) return; if (step < TOTAL_STEPS - 1) setStep(s => s + 1); else handleSubmit(); };
+    const goBack = () => { if (step > 0) setStep(s => s - 1); };
 
-        const roleCfg = ROLES.find(r => r.key === roleKey);
-        if (!roleCfg?.advisor) { setAdvisorList([]); return; }
-        const allowedRoles = ADVISOR_ROLES[roleKey] || [];
-        if (!allowedRoles.length) return;
-        setAdvisorLoading(true);
-        try {
-            const snaps = await Promise.all(allowedRoles.map(r =>
-                getDocs(query(collection(db, 'users'), where('role', 'in', [r]), where('verified', '==', true)))
-            ));
-            const users = [];
-            snaps.forEach(snap => snap.docs.forEach(d => {
-                const u = d.data();
-                if (u.email) users.push({ email: u.email, name: u.name || u.email, role: u.role || u.member });
-            }));
-            setAdvisorList(users);
-        } catch (e) { console.error(e); }
-        finally { setAdvisorLoading(false); }
-    };
-
-    const filteredAdvisors = advisorList.filter(u =>
-        (u.name || '').toLowerCase().includes(advisorSearch.toLowerCase()) ||
-        (u.email || '').toLowerCase().includes(advisorSearch.toLowerCase())
-    );
-    const filteredProvinces = provinces.filter(p =>
-        p.toLowerCase().includes(provinceSearch.toLowerCase())
-    );
-
-    const needsAdvisor = ROLES.find(r => r.key === selectedRole)?.advisor === true;
-    const isDaiLy = selectedRole === 'đại lý';
-
-    // ── Submit ────────────────────────────────────────────────
     const handleSubmit = async () => {
-        if (!form.name.trim()) { showAlert('Thông báo', 'Vui lòng nhập họ và tên'); return; }
-        if (!form.phone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại'); return; }
-        if (!selectedRole) { showAlert('Thông báo', 'Vui lòng chọn vị trí'); return; }
-        if (needsAdvisor && !selectedAdvisor) { showAlert('Thông báo', 'Vui lòng chọn đại lý / Đối tác quản lý'); return; }
-
-        if (isDaiLy) {
-            const rev = parseInt(committedRevenue) || 0;
-            if (!rev) { showAlert('Thông báo', 'Vui lòng nhập doanh thu cam kết'); return; }
-            if (rev < COMMITTED_REVENUE_MIN) { showAlert('Thông báo', `Doanh thu tối thiểu là ${fmt(COMMITTED_REVENUE_MIN)}`); return; }
-        }
-
+        if (!validateStep()) return;
         setSubmitting(true);
         try {
             const auth = getAuth();
+            const uid = auth.currentUser?.uid;
             const email = auth.currentUser?.email;
-            if (!email) throw new Error('Không tìm thấy tài khoản. Vui lòng đăng ký lại.');
-
+            if (!email) throw new Error('Không tìm thấy tài khoản.');
+            const roleMap = { daily: 'đại lý', partner: 'Đối tác', ctv: 'cộng tác viên' };
             const payload = {
-                uid: auth.currentUser.uid,
-                email,
-                name: form.name.trim(),
-                phone: form.phone.trim(),
-                address: form.address.trim(),
-                note: form.note.trim(),
-                role: selectedRole,
-                member: selectedRole,
-                advisor: selectedAdvisor?.email || null,
-                verified: false,
+                uid, email,
+                phone: phone.trim(), address: address.trim(),
+                role: roleMap[role], member: roleMap[role],
+                bizModel, verified: false,
                 createdAt: new Date().toISOString(),
             };
-
+            if (emailContact.trim()) payload.emailContact = emailContact.trim();
+            if (bizModel === 'company') {
+                payload.companyName = companyName.trim();
+                payload.taxCode = taxCode.trim();
+                payload.bizAddress = bizAddress.trim();
+                payload.name = companyName.trim();
+            } else {
+                payload.name = fullName.trim();
+                payload.cccd = cccd.trim();
+                if (dob) payload.dob = dob;
+            }
             if (isDaiLy) {
-                payload.committedRevenue = parseInt(committedRevenue) || 0;
+                payload.committedRevenue = rev;
+                payload.distributionType = distributionType;
                 if (showAreaPicker && selectedRegion) {
                     payload.region = selectedRegion.id;
                     payload.regionName = selectedRegion.name;
                     payload.province = selectedProvince || null;
                 }
             }
-
+            if (needsBank) {
+                payload.bank = {
+                    id: selectedBank.id, name: selectedBank.name,
+                    accountNo: accountNo.trim(), accountName: accountName.trim(),
+                };
+            }
             await setDoc(doc(db, 'users', email), payload);
-            clearRegistrationPending(); // ← đăng ký hoàn tất, xóa cờ
+            clearRegistrationPending();
             router.replace('/auth/pendingVerification');
         } catch (e) { showAlert('Lỗi', e.message); }
         finally { setSubmitting(false); }
     };
 
-    // ── Role Card ─────────────────────────────────────────────
-    const RoleCard = ({ role }) => {
-        const active = selectedRole === role.key;
-        return (
-            <TouchableOpacity
-                style={[styles.roleCard, active && { borderColor: role.color, backgroundColor: role.bg }]}
-                onPress={() => handleSelectRole(role.key)} activeOpacity={0.7}
-            >
-                <View style={[styles.roleIcon, { backgroundColor: active ? role.color + '22' : '#F1F5F9' }]}>
-                    <Ionicons name={role.icon} size={22} color={active ? role.color : '#94A3B8'} />
-                </View>
-                <View style={{ flex: 1 }}>
-                    <Text style={[styles.roleLabel, active && { color: role.color }]}>{role.label}</Text>
-                    <Text style={styles.roleDesc}>{role.desc}</Text>
-                </View>
-                <View style={[styles.roleCheck, active && { backgroundColor: role.color, borderColor: role.color }]}>
-                    {active && <Ionicons name="checkmark" size={12} color="#fff" />}
-                </View>
-            </TouchableOpacity>
-        );
-    };
-
-    // ── Đại lý Extra Fields ───────────────────────────────────
-    // ── Đại lý extra fields — JSX variable, KHÔNG phải inner component
-    // (inner component bị re-create mỗi render → TextInput mất focus)
-    const rev = parseInt(committedRevenue) || 0;
-
-    const dailyFieldsJSX = (ws) => !isDaiLy ? null : (
-        <View style={ws ? W.extraSection : styles.extraSection}>
-            <View style={ws ? W.extraHeader : styles.extraHeader}>
-                <Ionicons name="trending-up-outline" size={15} color="#2563EB" />
-                <Text style={ws ? W.extraTitle : styles.extraTitle}>Thông tin đại lý</Text>
+    // ── Step renderers ────────────────────────────────────────
+    const renderStepRole = () => (
+        <View style={S.stepContent}>
+            <Text style={S.stepTitle}>Bạn muốn tham gia với vai trò gì?</Text>
+            <Text style={S.stepSub}>Chọn vai trò phù hợp với mô hình kinh doanh của bạn</Text>
+            <View style={S.cardList}>
+                {ROLES.map(r => {
+                    const active = role === r.key;
+                    return (
+                        <TouchableOpacity key={r.key} style={[S.selCard, active && { borderColor: r.color, backgroundColor: r.bg }]} onPress={() => setRole(r.key)} activeOpacity={0.7}>
+                            <View style={[S.selIcon, { backgroundColor: active ? r.color + '22' : '#F1F5F9' }]}>
+                                <Ionicons name={r.icon} size={24} color={active ? r.color : '#94A3B8'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[S.selLabel, active && { color: r.color }]}>{r.label}</Text>
+                                <Text style={S.selDesc}>{r.desc}</Text>
+                            </View>
+                            <View style={[S.selCheck, active && { backgroundColor: r.color, borderColor: r.color }]}>
+                                {active && <Ionicons name="checkmark" size={12} color="#fff" />}
+                            </View>
+                        </TouchableOpacity>
+                    );
+                })}
             </View>
+        </View>
+    );
 
-            {/* Doanh thu cam kết */}
-            <View style={ws ? W.inputGroup : styles.inputGroup}>
-                <Text style={ws ? W.label : styles.label}>
-                    Doanh thu cam kết (năm) <Text style={ws ? W.required : styles.required}>*</Text>
-                </Text>
-                <Text style={ws ? W.labelSub : styles.labelSub}>Tối thiểu {fmt(COMMITTED_REVENUE_MIN)}</Text>
-                <View style={[ws ? W.inputBox : styles.inputBox, revenueError && { borderColor: '#EF4444' }]}>
-                    <Ionicons name="cash-outline" size={15} color={revenueError ? '#EF4444' : '#94A3B8'} />
-                    <TextInput
-                        style={ws ? W.input : styles.input}
-                        placeholder="Nhập số tiền (VNĐ)..."
-                        placeholderTextColor="#94A3B8"
-                        keyboardType="numeric"
-                        value={committedRevenue ? parseInt(committedRevenue).toLocaleString('vi-VN') : ''}
-                        onChangeText={handleRevenueChange}
-                        onBlur={handleRevenueBlur}
+    const renderStepBizModel = () => (
+        <View style={S.stepContent}>
+            <Text style={S.stepTitle}>Mô hình kinh doanh</Text>
+            <Text style={S.stepSub}>Chọn loại hình phù hợp để điền thông tin tiếp theo</Text>
+            <View style={S.cardList}>
+                {BIZ_MODELS.map(m => {
+                    const active = bizModel === m.key;
+                    return (
+                        <TouchableOpacity key={m.key} style={[S.selCard, active && { borderColor: '#2563EB', backgroundColor: '#EFF6FF' }]} onPress={() => setBizModel(m.key)} activeOpacity={0.7}>
+                            <View style={[S.selIcon, { backgroundColor: active ? '#BFDBFE' : '#F1F5F9' }]}>
+                                <Ionicons name={m.icon} size={24} color={active ? '#2563EB' : '#94A3B8'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[S.selLabel, active && { color: '#2563EB' }]}>{m.label}</Text>
+                                <Text style={S.selDesc}>{m.desc}</Text>
+                            </View>
+                            <View style={[S.selCheck, active && { backgroundColor: '#2563EB', borderColor: '#2563EB' }]}>
+                                {active && <Ionicons name="checkmark" size={12} color="#fff" />}
+                            </View>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        </View>
+    );
+
+    const renderStepCommon = () => (
+        <View style={S.stepContent}>
+            <Text style={S.stepTitle}>Thông tin liên hệ</Text>
+            <Text style={S.stepSub}>Điền thông tin để chúng tôi liên hệ với bạn</Text>
+            <View style={S.fg}><Text style={S.label}>Số điện thoại <Text style={S.req}>*</Text></Text>
+                <View style={F.inputBox}><Ionicons name="call-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={phone} onChangeText={setPhone} /></View>
+            </View>
+            <View style={S.fg}><Text style={S.label}>Email liên hệ <Text style={S.optional}>(tuỳ chọn)</Text></Text>
+                <View style={F.inputBox}><Ionicons name="mail-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="email@example.com" placeholderTextColor="#94A3B8" keyboardType="email-address" autoCapitalize="none" value={emailContact} onChangeText={setEmailContact} /></View>
+            </View>
+            <View style={S.fg}><Text style={S.label}>Địa chỉ <Text style={S.req}>*</Text></Text>
+                <View style={[F.inputBox, { alignItems: 'flex-start', minHeight: 80 }]}><Ionicons name="location-outline" size={15} color="#94A3B8" style={{ marginTop: 2 }} /><TextInput style={[F.input, { textAlignVertical: 'top' }]} placeholder="Số nhà, đường, quận/huyện, tỉnh/thành..." placeholderTextColor="#94A3B8" multiline value={address} onChangeText={setAddress} /></View>
+            </View>
+        </View>
+    );
+
+    const renderStepBizInfo = () => bizModel === 'company' ? (
+        <View style={S.stepContent}>
+            <Text style={S.stepTitle}>Thông tin doanh nghiệp</Text>
+            <Text style={S.stepSub}>Theo giấy đăng ký kinh doanh</Text>
+            <View style={S.fg}><Text style={S.label}>Tên công ty / Hộ kinh doanh <Text style={S.req}>*</Text></Text>
+                <View style={F.inputBox}><Ionicons name="business-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="Công ty TNHH ABC..." placeholderTextColor="#94A3B8" value={companyName} onChangeText={setCompanyName} /></View>
+            </View>
+            <View style={S.fg}><Text style={S.label}>Mã số thuế <Text style={S.req}>*</Text></Text>
+                <View style={F.inputBox}><Ionicons name="document-text-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="0123456789" placeholderTextColor="#94A3B8" keyboardType="numeric" value={taxCode} onChangeText={setTaxCode} /></View>
+            </View>
+            <View style={S.fg}><Text style={S.label}>Địa chỉ đăng ký kinh doanh <Text style={S.req}>*</Text></Text>
+                <View style={[F.inputBox, { alignItems: 'flex-start', minHeight: 80 }]}><Ionicons name="location-outline" size={15} color="#94A3B8" style={{ marginTop: 2 }} /><TextInput style={[F.input, { textAlignVertical: 'top' }]} placeholder="Địa chỉ theo ĐKKD..." placeholderTextColor="#94A3B8" multiline value={bizAddress} onChangeText={setBizAddress} /></View>
+            </View>
+        </View>
+    ) : (
+        <View style={S.stepContent}>
+            <Text style={S.stepTitle}>Thông tin cá nhân</Text>
+            <Text style={S.stepSub}>Theo giấy tờ tùy thân hợp lệ</Text>
+            <View style={S.fg}><Text style={S.label}>Họ và tên <Text style={S.req}>*</Text></Text>
+                <View style={F.inputBox}><Ionicons name="person-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={fullName} onChangeText={setFullName} /></View>
+            </View>
+            <View style={S.fg}>
+                <Text style={S.label}>Số CCCD / CMND <Text style={S.req}>*</Text></Text>
+                <Text style={S.hint}>12 chữ số (CCCD mới) hoặc 9 chữ số (CMND cũ)</Text>
+                <View style={[F.inputBox, cccdError && { borderColor: '#EF4444' }]}>
+                    <Ionicons name="card-outline" size={15} color={cccdError ? '#EF4444' : '#94A3B8'} />
+                    <TextInput style={F.input} placeholder="001234567890" placeholderTextColor="#94A3B8" keyboardType="numeric" maxLength={12} value={cccd}
+                        onChangeText={v => { setCccd(v.replace(/\D/g, '')); setCccdError(''); }}
+                        onBlur={() => { if (cccd && !validateCCCD(cccd)) setCccdError('Số CCCD không hợp lệ (12 hoặc 9 chữ số)'); }}
                     />
-                    {revenueTouched && rev > 0 && (
-                        <Text style={{ fontSize: 11, color: rev >= COMMITTED_REVENUE_MIN ? '#059669' : '#EF4444', fontWeight: '600' }}>
-                            {fmt(rev)}
-                        </Text>
-                    )}
                 </View>
-                {revenueError ? <Text style={ws ? W.errorText : styles.errorText}>{revenueError}</Text> : null}
+                {cccdError ? <Text style={S.errText}>{cccdError}</Text> : null}
             </View>
+            <View style={S.fg}><Text style={S.label}>Ngày sinh <Text style={S.optional}>(tuỳ chọn)</Text></Text>
+                <DateField value={dob} onChange={setDob} />
+            </View>
+        </View>
+    );
 
-            {/* Khu vực — optional, toggle */}
-            <View style={ws ? W.areaToggleRow : styles.areaToggleRow}>
-                <View style={{ flex: 1 }}>
-                    <Text style={ws ? W.areaToggleLabel : styles.areaToggleLabel}>Chọn khu vực phụ trách</Text>
-                    <Text style={ws ? W.areaToggleSub : styles.areaToggleSub}>Tuỳ chọn</Text>
+    const renderStepCommitment = () => (
+        <View style={S.stepContent}>
+            <Text style={S.stepTitle}>Thông tin cam kết</Text>
+            <Text style={S.stepSub}>Áp dụng với Đại lý / NPP</Text>
+            <View style={S.fg}>
+                <Text style={S.label}>Doanh thu cam kết (năm) <Text style={S.req}>*</Text></Text>
+                <Text style={S.hint}>Tối thiểu {fmt(COMMITTED_REVENUE_MIN)}</Text>
+                <View style={[F.inputBox, revenueError && { borderColor: '#EF4444' }]}>
+                    <Ionicons name="cash-outline" size={15} color={revenueError ? '#EF4444' : '#94A3B8'} />
+                    <TextInput style={F.input} placeholder="Nhập số tiền (VNĐ)..." placeholderTextColor="#94A3B8" keyboardType="numeric"
+                        value={committedRevenue ? parseInt(committedRevenue).toLocaleString('vi-VN') : ''}
+                        onChangeText={handleRevenueChange} onBlur={handleRevenueBlur}
+                    />
+                    {revenueTouched && rev > 0 && <Text style={{ fontSize: 11, color: rev >= COMMITTED_REVENUE_MIN ? '#059669' : '#EF4444', fontWeight: '600' }}>{fmt(rev)}</Text>}
                 </View>
-                <TouchableOpacity
-                    style={[ws ? W.toggleSwitch : styles.toggleSwitch, showAreaPicker && (ws ? W.toggleOn : styles.toggleOn)]}
-                    onPress={handleToggleArea} activeOpacity={0.8}
-                >
-                    <View style={[ws ? W.toggleThumb : styles.toggleThumb, showAreaPicker && (ws ? W.toggleThumbOn : styles.toggleThumbOn)]} />
-                </TouchableOpacity>
+                {revenueError ? <Text style={S.errText}>{revenueError}</Text> : null}
             </View>
-
-            {showAreaPicker && (
-                <View style={ws ? W.areaFields : styles.areaFields}>
-                    {/* Region picker */}
-                    <View style={ws ? W.inputGroup : styles.inputGroup}>
-                        <Text style={ws ? W.label : styles.label}>Vùng / Miền</Text>
-                        <TouchableOpacity
-                            style={[ws ? W.inputBox : styles.inputBox, showRegionDrop && { borderColor: '#2563EB' }]}
-                            onPress={() => setShowRegionDrop(p => !p)} activeOpacity={0.8}
-                        >
+            <View style={S.fg}>
+                <Text style={S.label}>Hình thức phân phối <Text style={S.req}>*</Text></Text>
+                <View style={{ gap: 8 }}>
+                    {DISTRIBUTION_TYPES.map(dt => {
+                        const active = distributionType === dt.key;
+                        return (
+                            <TouchableOpacity key={dt.key} style={[F.inputBox, { borderWidth: 2, borderColor: active ? dt.color : '#E2E8F0' }, active && { backgroundColor: dt.bg }]} onPress={() => setDistributionType(dt.key)} activeOpacity={0.8}>
+                                <Ionicons name={dt.icon} size={16} color={active ? dt.color : '#94A3B8'} />
+                                <Text style={[{ flex: 1, fontSize: 14, fontWeight: '600', color: '#374151' }, active && { color: dt.color }]}>{dt.label}</Text>
+                                {active && <Ionicons name="checkmark-circle" size={18} color={dt.color} />}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </View>
+            <View style={S.fg}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <View><Text style={S.label}>Khu vực phụ trách</Text><Text style={S.hint}>Tuỳ chọn</Text></View>
+                    <TouchableOpacity style={[S.toggle, showAreaPicker && S.toggleOn]} onPress={handleToggleArea} activeOpacity={0.8}>
+                        <View style={[S.toggleThumb, showAreaPicker && S.toggleThumbOn]} />
+                    </TouchableOpacity>
+                </View>
+                {showAreaPicker && (
+                    <View style={{ gap: 8 }}>
+                        <TouchableOpacity style={[F.inputBox, showRegionDrop && { borderColor: '#2563EB' }]} onPress={() => setShowRegionDrop(p => !p)} activeOpacity={0.8}>
                             <Ionicons name="map-outline" size={15} color="#94A3B8" />
-                            <Text style={selectedRegion ? [ws ? W.input : styles.input] : [ws ? W.inputPlaceholder : styles.inputPlaceholder]}>
-                                {selectedRegion?.name || 'Chọn vùng / miền...'}
-                            </Text>
+                            <Text style={selectedRegion ? F.input : F.placeholder}>{selectedRegion?.name || 'Chọn vùng / miền...'}</Text>
                             <Ionicons name={showRegionDrop ? 'chevron-up' : 'chevron-down'} size={15} color="#94A3B8" />
                         </TouchableOpacity>
                         {showRegionDrop && (
-                            <View style={styles.dropdownBox}>
-                                {regionsLoading
-                                    ? <Text style={styles.dropdownEmpty}>Đang tải...</Text>
-                                    : regions.length === 0
-                                        ? <Text style={styles.dropdownEmpty}>Chưa có dữ liệu vùng miền</Text>
-                                        : regions.map(r => (
-                                            <TouchableOpacity key={r.id}
-                                                style={[styles.dropdownItem, selectedRegion?.id === r.id && styles.dropdownItemActive]}
-                                                onPress={() => handleSelectRegion(r)} activeOpacity={0.7}
-                                            >
-                                                <Ionicons name="location-outline" size={13} color={selectedRegion?.id === r.id ? '#2563EB' : '#94A3B8'} />
-                                                <Text style={[styles.dropdownItemText, selectedRegion?.id === r.id && { color: '#2563EB', fontWeight: '700' }]}>{r.name}</Text>
-                                                {selectedRegion?.id === r.id && <Ionicons name="checkmark-circle" size={14} color="#2563EB" />}
-                                            </TouchableOpacity>
-                                        ))
+                            <View style={S.drop}>
+                                {regLoading ? <Text style={S.dropEmpty}>Đang tải...</Text> : regions.length === 0 ? <Text style={S.dropEmpty}>Chưa có dữ liệu</Text>
+                                    : regions.map(r => (<TouchableOpacity key={r.id} style={[S.dropItem, selectedRegion?.id === r.id && S.dropActive]} onPress={() => handleSelectRegion(r)} activeOpacity={0.7}>
+                                        <Ionicons name="location-outline" size={13} color={selectedRegion?.id === r.id ? '#2563EB' : '#94A3B8'} />
+                                        <Text style={[S.dropText, selectedRegion?.id === r.id && { color: '#2563EB', fontWeight: '700' }]}>{r.name}</Text>
+                                        {selectedRegion?.id === r.id && <Ionicons name="checkmark-circle" size={14} color="#2563EB" />}
+                                    </TouchableOpacity>))
                                 }
                             </View>
                         )}
-                    </View>
-
-                    {/* Province picker */}
-                    {selectedRegion && (
-                        <View style={ws ? W.inputGroup : styles.inputGroup}>
-                            <Text style={ws ? W.label : styles.label}>Tỉnh / Thành phố</Text>
-                            <TouchableOpacity
-                                style={[ws ? W.inputBox : styles.inputBox, showProvinceDrop && { borderColor: '#2563EB' }]}
-                                onPress={() => setShowProvinceDrop(p => !p)} activeOpacity={0.8}
-                            >
+                        {selectedRegion && (<>
+                            <TouchableOpacity style={[F.inputBox, showProvinceDrop && { borderColor: '#2563EB' }]} onPress={() => setShowProvinceDrop(p => !p)} activeOpacity={0.8}>
                                 <Ionicons name="business-outline" size={15} color="#94A3B8" />
-                                <Text style={selectedProvince ? [ws ? W.input : styles.input] : [ws ? W.inputPlaceholder : styles.inputPlaceholder]}>
-                                    {selectedProvince || 'Chọn tỉnh / thành phố...'}
-                                </Text>
+                                <Text style={selectedProvince ? F.input : F.placeholder}>{selectedProvince || 'Chọn tỉnh / thành phố...'}</Text>
                                 <Ionicons name={showProvinceDrop ? 'chevron-up' : 'chevron-down'} size={15} color="#94A3B8" />
                             </TouchableOpacity>
                             {showProvinceDrop && (
-                                <View style={styles.dropdownBox}>
-                                    <View style={styles.dropdownSearch}>
-                                        <Ionicons name="search-outline" size={13} color="#94A3B8" />
-                                        <TextInput style={styles.dropdownSearchInput} placeholder="Tìm tỉnh thành..." placeholderTextColor="#94A3B8" value={provinceSearch} onChangeText={setProvinceSearch} />
-                                    </View>
-                                    <ScrollView style={{ maxHeight: 180 }} showsVerticalScrollIndicator={false}>
-                                        {filteredProvinces.length === 0
-                                            ? <Text style={styles.dropdownEmpty}>{provinceSearch ? 'Không tìm thấy' : 'Chưa có dữ liệu'}</Text>
-                                            : filteredProvinces.map(p => (
-                                                <TouchableOpacity key={p}
-                                                    style={[styles.dropdownItem, selectedProvince === p && styles.dropdownItemActive]}
-                                                    onPress={() => { setSelectedProvince(p); setShowProvinceDrop(false); setProvinceSearch(''); }} activeOpacity={0.7}
-                                                >
-                                                    <Ionicons name="location-outline" size={13} color={selectedProvince === p ? '#2563EB' : '#94A3B8'} />
-                                                    <Text style={[styles.dropdownItemText, selectedProvince === p && { color: '#2563EB', fontWeight: '700' }]}>{p}</Text>
-                                                    {selectedProvince === p && <Ionicons name="checkmark-circle" size={14} color="#2563EB" />}
-                                                </TouchableOpacity>
-                                            ))
+                                <View style={S.drop}>
+                                    <View style={S.dropSearchRow}><Ionicons name="search-outline" size={13} color="#94A3B8" /><TextInput style={{ flex: 1, fontSize: 13, color: '#0F172A' }} placeholder="Tìm tỉnh thành..." placeholderTextColor="#94A3B8" value={provinceSearch} onChangeText={setProvinceSearch} /></View>
+                                    <ScrollView style={{ maxHeight: 160 }} showsVerticalScrollIndicator={false}>
+                                        {filteredProvinces.length === 0 ? <Text style={S.dropEmpty}>{provinceSearch ? 'Không tìm thấy' : 'Chưa có dữ liệu'}</Text>
+                                            : filteredProvinces.map(p => (<TouchableOpacity key={p} style={[S.dropItem, selectedProvince === p && S.dropActive]} onPress={() => { setSelectedProvince(p); setShowProvinceDrop(false); setProvinceSearch(''); }} activeOpacity={0.7}>
+                                                <Ionicons name="location-outline" size={13} color={selectedProvince === p ? '#2563EB' : '#94A3B8'} />
+                                                <Text style={[S.dropText, selectedProvince === p && { color: '#2563EB', fontWeight: '700' }]}>{p}</Text>
+                                                {selectedProvince === p && <Ionicons name="checkmark-circle" size={14} color="#2563EB" />}
+                                            </TouchableOpacity>))
                                         }
                                     </ScrollView>
                                 </View>
                             )}
-                        </View>
-                    )}
-                </View>
-            )}
-        </View>
-    );
-
-    // ── Advisor Picker ────────────────────────────────────────
-    const AdvisorPicker = () => {
-        if (!needsAdvisor) return null;
-        const roleCfg = ROLES.find(r => r.key === selectedRole);
-        return (
-            <View style={styles.advisorSection}>
-                <View style={styles.advisorHeader}>
-                    <Ionicons name="person-circle-outline" size={16} color={roleCfg?.color || '#2563EB'} />
-                    <Text style={[styles.advisorHeaderText, { color: roleCfg?.color || '#2563EB' }]}>
-                        Chọn đại lý / Đối tác quản lý <Text style={{ color: '#EF4444' }}>*</Text>
-                    </Text>
-                </View>
-                <TouchableOpacity
-                    style={[styles.advisorTrigger, showAdvisorDrop && { borderColor: roleCfg?.color }]}
-                    onPress={() => setShowAdvisorDrop(p => !p)} activeOpacity={0.8}
-                >
-                    {selectedAdvisor ? (
-                        <View style={styles.advisorSelected}>
-                            <View style={[styles.advisorAvatar, { backgroundColor: roleCfg?.color || '#2563EB' }]}>
-                                <Text style={styles.advisorAvatarText}>{getInitials(selectedAdvisor.name)}</Text>
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.advisorSelectedName}>{selectedAdvisor.name}</Text>
-                                <Text style={styles.advisorSelectedEmail}>{selectedAdvisor.email}</Text>
-                            </View>
-                            <TouchableOpacity onPress={() => { setSelectedAdvisor(null); setShowAdvisorDrop(false); }}>
-                                <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <>
-                            <Ionicons name="search-outline" size={15} color="#94A3B8" />
-                            <Text style={styles.advisorPlaceholder}>Tìm và chọn người quản lý...</Text>
-                            <Ionicons name={showAdvisorDrop ? 'chevron-up' : 'chevron-down'} size={15} color="#94A3B8" />
-                        </>
-                    )}
-                </TouchableOpacity>
-                {showAdvisorDrop && (
-                    <View style={styles.advisorDropdown}>
-                        <View style={styles.advisorSearchBox}>
-                            <Ionicons name="search-outline" size={14} color="#94A3B8" />
-                            <TextInput style={styles.advisorSearchInput} placeholder="Tìm tên hoặc email..." placeholderTextColor="#94A3B8" value={advisorSearch} onChangeText={setAdvisorSearch} autoFocus />
-                        </View>
-                        {advisorLoading ? (
-                            <View style={styles.advisorLoading}><ActivityIndicator size="small" color="#2563EB" /><Text style={styles.advisorLoadingText}>Đang tải...</Text></View>
-                        ) : filteredAdvisors.length === 0 ? (
-                            <Text style={styles.advisorEmpty}>{advisorSearch ? 'Không tìm thấy' : 'Chưa có đại lý / Đối tác nào'}</Text>
-                        ) : (
-                            <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
-                                {filteredAdvisors.map((u, i) => (
-                                    <TouchableOpacity key={u.email}
-                                        style={[styles.advisorItem, selectedAdvisor?.email === u.email && styles.advisorItemActive]}
-                                        onPress={() => { setSelectedAdvisor(u); setShowAdvisorDrop(false); setAdvisorSearch(''); }} activeOpacity={0.7}
-                                    >
-                                        <View style={[styles.advisorAvatar, { backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }]}>
-                                            <Text style={styles.advisorAvatarText}>{getInitials(u.name)}</Text>
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.advisorItemName}>{u.name}</Text>
-                                            <Text style={styles.advisorItemEmail}>{u.email}</Text>
-                                        </View>
-                                        <View style={styles.advisorRoleBadge}><Text style={styles.advisorRoleBadgeText}>{u.role}</Text></View>
-                                        {selectedAdvisor?.email === u.email && <Ionicons name="checkmark-circle" size={16} color="#2563EB" />}
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                        )}
+                        </>)}
                     </View>
                 )}
             </View>
-        );
-    };
-
-    // ─────────────────────────────────────────────────────────
-    // WEB
-    // ─────────────────────────────────────────────────────────
-    if (isWeb) return (
-        <View style={W.root}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
-                <View style={W.header}>
-                    <View style={W.logoWrap}><Ionicons name="person-add" size={28} color="#2563EB" /></View>
-                    <Text style={W.title}>Hoàn thiện hồ sơ</Text>
-                    <Text style={W.sub}>Điền đầy đủ thông tin để admin xét duyệt tài khoản của bạn</Text>
-                    <TouchableOpacity onPress={handleSignOut} style={W.signOutBtn} activeOpacity={0.8}>
-                        <Ionicons name="log-out-outline" size={15} color="#EF4444" />
-                        <Text style={W.signOutText}>Đăng xuất</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <View style={W.grid}>
-                    {/* LEFT */}
-                    <View style={W.col}>
-                        <View style={W.card}>
-                            <View style={W.cardHeader}>
-                                <Ionicons name="person-circle-outline" size={16} color="#2563EB" />
-                                <Text style={W.cardTitle}>Thông tin cá nhân</Text>
-                            </View>
-                            <View style={W.row2}>
-                                <View style={[W.inputGroup, { flex: 1 }]}>
-                                    <Text style={W.label}>Họ và tên <Text style={W.required}>*</Text></Text>
-                                    <View style={W.inputBox}><Ionicons name="person-outline" size={15} color="#94A3B8" /><TextInput style={W.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={form.name} onChangeText={v => set('name', v)} /></View>
-                                </View>
-                                <View style={[W.inputGroup, { flex: 1 }]}>
-                                    <Text style={W.label}>Số điện thoại <Text style={W.required}>*</Text></Text>
-                                    <View style={W.inputBox}><Ionicons name="call-outline" size={15} color="#94A3B8" /><TextInput style={W.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={form.phone} onChangeText={v => set('phone', v)} /></View>
-                                </View>
-                            </View>
-                            <View style={W.inputGroup}>
-                                <Text style={W.label}>Địa chỉ</Text>
-                                <View style={W.inputBox}><Ionicons name="location-outline" size={15} color="#94A3B8" /><TextInput style={W.input} placeholder="Số nhà, đường, quận/huyện..." placeholderTextColor="#94A3B8" value={form.address} onChangeText={v => set('address', v)} /></View>
-                            </View>
-                            <View style={W.inputGroup}>
-                                <Text style={W.label}>Ghi chú (tuỳ chọn)</Text>
-                                <View style={[W.inputBox, { alignItems: 'flex-start', minHeight: 80 }]}><TextInput style={[W.input, { textAlignVertical: 'top' }]} placeholder="Thông tin thêm..." placeholderTextColor="#94A3B8" multiline value={form.note} onChangeText={v => set('note', v)} /></View>
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* RIGHT */}
-                    <View style={W.colRight}>
-                        <View style={W.card}>
-                            <View style={W.cardHeader}>
-                                <Ionicons name="briefcase-outline" size={16} color="#2563EB" />
-                                <Text style={W.cardTitle}>Chọn vị trí <Text style={W.required}>*</Text></Text>
-                            </View>
-                            {ROLES.map(role => <RoleCard key={role.key} role={role} />)}
-                            <AdvisorPicker />
-                        </View>
-
-                        {/* ✅ Đại lý extra fields */}
-                        {dailyFieldsJSX(true)}
-
-                        <View style={W.infoBanner}>
-                            <Ionicons name="shield-checkmark-outline" size={18} color="#2563EB" />
-                            <Text style={W.infoBannerText}>Thông tin sẽ được gửi đến admin xét duyệt. Bạn có thể sử dụng app sau khi được xác thực.</Text>
-                        </View>
-                        <TouchableOpacity style={[W.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
-                            <Ionicons name={submitting ? 'hourglass-outline' : 'send-outline'} size={16} color="#fff" />
-                            <Text style={W.submitBtnText}>{submitting ? 'Đang lưu...' : 'Hoàn tất đăng ký'}</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </ScrollView>
         </View>
     );
 
-    // ─────────────────────────────────────────────────────────
-    // MOBILE
-    // ─────────────────────────────────────────────────────────
-    return (
-        <View style={[styles.container, { paddingTop: insets.top }]}>
-            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-            <View style={styles.header}>
-                <View style={styles.headerIcon}><Ionicons name="person-add" size={22} color="#2563EB" /></View>
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.headerTitle}>Hoàn thiện hồ sơ</Text>
-                    <Text style={styles.headerSub}>Bước 2/3 — Thông tin cá nhân</Text>
+    const renderStepBank = () => (
+        <View style={S.stepContent}>
+            <Text style={S.stepTitle}>Thông tin ngân hàng</Text>
+            <Text style={S.stepSub}>Dùng để nhận hoa hồng và thanh toán</Text>
+            <View style={S.fg}>
+                <Text style={S.label}>Ngân hàng <Text style={S.req}>*</Text></Text>
+                <TouchableOpacity style={[F.inputBox, showBankDrop && { borderColor: '#2563EB' }]} onPress={() => setShowBankDrop(p => !p)} activeOpacity={0.8}>
+                    {selectedBank ? (
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>{selectedBank.shortName}</Text>
+                            </View>
+                            <Text style={{ flex: 1, fontSize: 14, color: '#0F172A', fontWeight: '600' }}>{selectedBank.name}</Text>
+                            <TouchableOpacity onPress={() => { setSelectedBank(null); setAccountNo(''); setAccountNoErr(''); }}>
+                                <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <><Ionicons name="search-outline" size={15} color="#94A3B8" /><Text style={F.placeholder}>Tìm và chọn ngân hàng...</Text><Ionicons name={showBankDrop ? 'chevron-up' : 'chevron-down'} size={15} color="#94A3B8" /></>
+                    )}
+                </TouchableOpacity>
+                {showBankDrop && (
+                    <View style={S.drop}>
+                        <View style={S.dropSearchRow}><Ionicons name="search-outline" size={13} color="#94A3B8" /><TextInput style={{ flex: 1, fontSize: 13, color: '#0F172A' }} placeholder="Tên ngân hàng..." placeholderTextColor="#94A3B8" value={bankSearch} onChangeText={setBankSearch} autoFocus /></View>
+                        <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+                            {filteredBanks.map(b => (
+                                <TouchableOpacity key={b.id} style={[S.dropItem, selectedBank?.id === b.id && S.dropActive]} onPress={() => { setSelectedBank(b); setShowBankDrop(false); setBankSearch(''); setAccountNo(''); setAccountNoErr(''); }} activeOpacity={0.7}>
+                                    <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#2563EB' }}>{b.shortName}</Text>
+                                    </View>
+                                    <Text style={[S.dropText, selectedBank?.id === b.id && { color: '#2563EB', fontWeight: '700' }]}>{b.name}</Text>
+                                    {selectedBank?.id === b.id && <Ionicons name="checkmark-circle" size={14} color="#2563EB" />}
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
+            </View>
+            <View style={S.fg}>
+                <Text style={S.label}>Số tài khoản <Text style={S.req}>*</Text></Text>
+                {selectedBank && <Text style={S.hint}>{selectedBank.minLen === selectedBank.maxLen ? `${selectedBank.minLen} chữ số` : `${selectedBank.minLen}–${selectedBank.maxLen} chữ số`}</Text>}
+                <View style={[F.inputBox, accountNoErr && { borderColor: '#EF4444' }]}>
+                    <Ionicons name="card-outline" size={15} color={accountNoErr ? '#EF4444' : '#94A3B8'} />
+                    <TextInput style={F.input} placeholder="Nhập số tài khoản..." placeholderTextColor="#94A3B8" keyboardType="numeric" value={accountNo} onChangeText={handleAccountNoChange} editable={!!selectedBank} />
                 </View>
-                <TouchableOpacity onPress={handleSignOut} style={styles.signOutBtn} activeOpacity={0.8}>
+                {accountNoErr ? <Text style={S.errText}>{accountNoErr}</Text> : null}
+            </View>
+            <View style={S.fg}>
+                <Text style={S.label}>Tên chủ tài khoản <Text style={S.req}>*</Text></Text>
+                <Text style={S.hint}>Nhập chính xác như trên thẻ ngân hàng (IN HOA)</Text>
+                <View style={F.inputBox}>
+                    <Ionicons name="person-outline" size={15} color="#94A3B8" />
+                    <TextInput style={F.input} placeholder="NGUYEN VAN A" placeholderTextColor="#94A3B8" autoCapitalize="characters" value={accountName} onChangeText={t => setAccountName(t.toUpperCase())} />
+                </View>
+            </View>
+        </View>
+    );
+
+    const renderStep = () => {
+        switch (step) {
+            case 0: return renderStepRole();
+            case 1: return renderStepBizModel();
+            case 2: return renderStepCommon();
+            case 3: return renderStepBizInfo();
+            case 4: return isDaiLy ? renderStepCommitment() : renderStepBank();
+            default: return null;
+        }
+    };
+
+    const isLastStep = step === TOTAL_STEPS - 1;
+    const roleCfg = ROLES.find(r => r.key === role);
+
+    return (
+        <View style={[S.root, { paddingTop: insets.top }]}>
+            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+            <View style={S.header}>
+                {step > 0 ? (<TouchableOpacity onPress={goBack} style={S.headerBtn}><Ionicons name="arrow-back" size={20} color="#0F172A" /></TouchableOpacity>) : (<View style={S.headerBtn} />)}
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={S.headerTitle}>Đăng ký tài khoản</Text>
+                    <Text style={S.headerSub}>Bước {step + 1} / {TOTAL_STEPS}</Text>
+                </View>
+                <TouchableOpacity onPress={handleSignOut} style={[S.headerBtn, { backgroundColor: '#FEF2F2' }]}>
                     <Ionicons name="log-out-outline" size={18} color="#EF4444" />
-                    <Text style={styles.signOutText}>Đăng xuất</Text>
                 </TouchableOpacity>
             </View>
-
+            {role && step > 0 && roleCfg && (
+                <View style={[S.roleBadge, { backgroundColor: roleCfg.bg }]}>
+                    <Ionicons name={roleCfg.icon} size={13} color={roleCfg.color} />
+                    <Text style={[S.roleBadgeText, { color: roleCfg.color }]}>{roleCfg.label}</Text>
+                </View>
+            )}
+            <StepBar current={step} total={TOTAL_STEPS} labels={STEP_LABELS} />
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}><Ionicons name="person-circle-outline" size={18} color="#2563EB" /><Text style={styles.sectionTitle}>Thông tin cá nhân</Text></View>
-                        {[
-                            { label: 'Họ và tên', field: 'name', placeholder: 'Nguyễn Văn A', required: true },
-                            { label: 'Số điện thoại', field: 'phone', placeholder: '0901 234 567', required: true, keyboard: 'phone-pad' },
-                            { label: 'Địa chỉ', field: 'address', placeholder: 'Số nhà, đường...' },
-                        ].map(f => (
-                            <View style={styles.inputGroup} key={f.field}>
-                                <Text style={styles.label}>{f.label}{f.required && <Text style={styles.required}> *</Text>}</Text>
-                                <TextInput style={styles.input} placeholder={f.placeholder} placeholderTextColor="#94A3B8" keyboardType={f.keyboard || 'default'} value={form[f.field]} onChangeText={v => set(f.field, v)} />
-                            </View>
-                        ))}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Ghi chú</Text>
-                            <TextInput style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]} placeholder="Thông tin thêm..." placeholderTextColor="#94A3B8" multiline value={form.note} onChangeText={v => set('note', v)} />
-                        </View>
-                    </View>
-
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}><Ionicons name="briefcase-outline" size={18} color="#2563EB" /><Text style={styles.sectionTitle}>Chọn vị trí <Text style={{ color: '#EF4444' }}>*</Text></Text></View>
-                        {ROLES.map(role => <RoleCard key={role.key} role={role} />)}
-                        <AdvisorPicker />
-                    </View>
-
-                    {/* ✅ Đại lý extra fields */}
-                    {isDaiLy && (
-                        <View style={styles.section}>
-                            {dailyFieldsJSX(false)}
-                        </View>
-                    )}
-
-                    <View style={styles.infoBanner}>
-                        <Ionicons name="shield-checkmark-outline" size={16} color="#2563EB" />
-                        <Text style={styles.infoBannerText}>Tài khoản sẽ chờ admin xét duyệt trước khi sử dụng đầy đủ tính năng.</Text>
-                    </View>
-                    <TouchableOpacity style={[styles.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
-                        <Ionicons name={submitting ? 'hourglass-outline' : 'send-outline'} size={18} color="#fff" />
-                        <Text style={styles.submitBtnText}>{submitting ? 'Đang lưu...' : 'Hoàn tất đăng ký'}</Text>
-                    </TouchableOpacity>
-                    <View style={{ height: insets.bottom + 32 }} />
+                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={S.scrollContent}>
+                    {renderStep()}
+                    <View style={{ height: insets.bottom + 120 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
+            <View style={[S.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+                <TouchableOpacity style={[S.nextBtn, submitting && { opacity: 0.7 }]} onPress={goNext} disabled={submitting} activeOpacity={0.85}>
+                    <Ionicons name={isLastStep ? (submitting ? 'hourglass-outline' : 'send-outline') : 'arrow-forward'} size={20} color="#fff" />
+                    <Text style={S.nextBtnText}>{isLastStep ? (submitting ? 'Đang gửi...' : 'Hoàn tất đăng ký') : 'Tiếp theo'}</Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
 
-// ── Shared role + dropdown styles ────────────────────────────
-const sharedRole = {
-    roleCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: '#E2E8F0', marginBottom: 10, backgroundColor: '#FFFFFF' },
-    roleIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    roleLabel: { fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 2 },
-    roleDesc: { fontSize: 11, color: '#94A3B8' },
-    roleCheck: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
-    advisorTag: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 },
-    advisorTagText: { fontSize: 9, color: '#94A3B8', fontWeight: '600' },
-    advisorSection: { marginTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12 },
-    advisorHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-    advisorHeaderText: { fontSize: 13, fontWeight: '700' },
-    advisorTrigger: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1.5, borderColor: '#E2E8F0' },
-    advisorSelected: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-    advisorAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    advisorAvatarText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-    advisorSelectedName: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
-    advisorSelectedEmail: { fontSize: 11, color: '#64748B' },
-    advisorPlaceholder: { flex: 1, fontSize: 13, color: '#94A3B8' },
-    advisorDropdown: { backgroundColor: '#FFFFFF', borderRadius: 10, marginTop: 4, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 10, elevation: 6 },
-    advisorSearchBox: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-    advisorSearchInput: { flex: 1, fontSize: 13, color: '#0F172A' },
-    advisorLoading: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14, justifyContent: 'center' },
-    advisorLoadingText: { fontSize: 13, color: '#94A3B8' },
-    advisorEmpty: { padding: 14, fontSize: 13, color: '#94A3B8', textAlign: 'center' },
-    advisorItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
-    advisorItemActive: { backgroundColor: '#EFF6FF' },
-    advisorItemName: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
-    advisorItemEmail: { fontSize: 11, color: '#64748B', marginTop: 1 },
-    advisorRoleBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-    advisorRoleBadgeText: { fontSize: 10, color: '#64748B', fontWeight: '600' },
-    // Dropdown shared
-    dropdownBox: { backgroundColor: '#FFFFFF', borderRadius: 10, marginTop: 4, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 10, elevation: 6 },
-    dropdownSearch: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-    dropdownSearchInput: { flex: 1, fontSize: 13, color: '#0F172A' },
-    dropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
-    dropdownItemActive: { backgroundColor: '#EFF6FF' },
-    dropdownItemText: { flex: 1, fontSize: 13, color: '#374151', fontWeight: '500' },
-    dropdownEmpty: { padding: 14, fontSize: 13, color: '#94A3B8', textAlign: 'center' },
-    // Extra fields
-    extraSection: { borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 14, marginTop: 4 },
-    extraHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14 },
-    extraTitle: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
-    areaToggleRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 12 },
-    areaToggleLabel: { fontSize: 13, fontWeight: '600', color: '#374151' },
-    areaToggleSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-    areaFields: { gap: 4, paddingTop: 4 },
-    toggleSwitch: { width: 42, height: 24, borderRadius: 12, backgroundColor: '#E2E8F0', padding: 2, justifyContent: 'center' },
+const S = StyleSheet.create({
+    root: { flex: 1, backgroundColor: '#F8FAFC' },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+    headerBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+    headerSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+    roleBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 8 },
+    roleBadgeText: { fontSize: 12, fontWeight: '700' },
+    stepBarWrap: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    stepBar: { flexDirection: 'row', alignItems: 'center' },
+    stepSegWrap: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    stepDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
+    stepLine: { flex: 1, height: 2, backgroundColor: '#E2E8F0', marginHorizontal: 4 },
+    stepLabel: { fontSize: 12, fontWeight: '600', color: '#2563EB', marginTop: 6, textAlign: 'center' },
+    scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
+    stepContent: { paddingVertical: 8 },
+    stepTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5, marginBottom: 4 },
+    stepSub: { fontSize: 14, color: '#64748B', marginBottom: 20, lineHeight: 20 },
+    cardList: { gap: 10 },
+    selCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 2, borderColor: '#E2E8F0', backgroundColor: '#FFFFFF' },
+    selIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    selLabel: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 2 },
+    selDesc: { fontSize: 12, color: '#94A3B8' },
+    selCheck: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
+    fg: { marginBottom: 16 },
+    label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 4 },
+    hint: { fontSize: 11, color: '#94A3B8', marginBottom: 6 },
+    optional: { fontSize: 11, color: '#94A3B8', fontWeight: '400' },
+    req: { color: '#EF4444' },
+    errText: { fontSize: 11, color: '#EF4444', marginTop: 4, fontWeight: '500' },
+    toggle: { width: 46, height: 26, borderRadius: 13, backgroundColor: '#E2E8F0', padding: 3, justifyContent: 'center' },
     toggleOn: { backgroundColor: '#2563EB' },
     toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFF', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 },
     toggleThumbOn: { alignSelf: 'flex-end' },
-    errorText: { fontSize: 11, color: '#EF4444', marginTop: 4, fontWeight: '500' },
-    labelSub: { fontSize: 11, color: '#94A3B8', marginBottom: 4 },
-    inputPlaceholder: { flex: 1, fontSize: 14, color: '#94A3B8' },
-};
-
-const W = StyleSheet.create({
-    root: { flex: 1, backgroundColor: '#F8FAFC' },
-    scroll: { paddingHorizontal: 32, paddingTop: 36, paddingBottom: 40 },
-    header: { alignItems: 'center', marginBottom: 24 },
-    logoWrap: { width: 64, height: 64, borderRadius: 20, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#BFDBFE' },
-    title: { fontSize: 28, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5, marginBottom: 8 },
-    sub: { fontSize: 15, color: '#64748B', textAlign: 'center', maxWidth: 480, lineHeight: 22 },
-    grid: { flexDirection: 'row', gap: 24, alignItems: 'flex-start' },
-    col: { flex: 3 },
-    colRight: { flex: 2, gap: 16 },
-    card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16 },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 18, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-    cardTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-    row2: { flexDirection: 'row', gap: 12 },
-    inputGroup: { marginBottom: 14 },
-    label: { fontSize: 12, fontWeight: '600', color: '#64748B', marginBottom: 6, letterSpacing: 0.3 },
-    required: { color: '#EF4444' },
-    inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 9, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 8 },
-    input: { flex: 1, fontSize: 14, color: '#0F172A', fontWeight: '500' },
-    inputPlaceholder: { flex: 1, fontSize: 14, color: '#94A3B8' },
-    infoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#EFF6FF', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#BFDBFE' },
-    infoBannerText: { flex: 1, fontSize: 13, color: '#2563EB', lineHeight: 18 },
-    submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', borderRadius: 12, paddingVertical: 15, marginTop: 4, shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
-    submitBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-    signOutBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', marginTop: 12 },
-    signOutText: { fontSize: 13, color: '#EF4444', fontWeight: '600' },
-    ...sharedRole,
+    drop: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', marginTop: 4, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 10, elevation: 6 },
+    dropSearchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    dropItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+    dropActive: { backgroundColor: '#EFF6FF' },
+    dropText: { flex: 1, fontSize: 13, color: '#374151', fontWeight: '500' },
+    dropEmpty: { padding: 14, fontSize: 13, color: '#94A3B8', textAlign: 'center' },
+    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 4 },
+    nextBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#2563EB', borderRadius: 16, paddingVertical: 16, shadowColor: '#2563EB', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+    nextBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.2 },
 });
-
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.Background },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-    headerIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
-    headerSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
-    scroll: { paddingHorizontal: 16, paddingTop: 16 },
-    section: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-    sectionTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-    inputGroup: { marginBottom: 12 },
-    label: { fontSize: 12, fontWeight: '600', color: '#64748B', marginBottom: 6 },
-    required: { color: '#EF4444' },
-    input: { backgroundColor: '#F8FAFC', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0' },
-    inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 8 },
-    inputPlaceholder: { flex: 1, fontSize: 14, color: '#94A3B8' },
-    infoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#EFF6FF', borderRadius: 10, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#BFDBFE' },
-    infoBannerText: { flex: 1, fontSize: 12, color: '#2563EB', lineHeight: 17 },
-    submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', borderRadius: 14, paddingVertical: 16, marginBottom: 12, shadowColor: '#2563EB', shadowOpacity: 0.35, shadowRadius: 10, elevation: 5 },
-    submitBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-    signOutBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#FEF2F2' },
-    signOutText: { fontSize: 12, color: '#EF4444', fontWeight: '600' },
-    ...sharedRole,
+const F = StyleSheet.create({
+    inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, borderWidth: 1.5, borderColor: '#E2E8F0', gap: 8 },
+    input: { flex: 1, fontSize: 14, color: '#0F172A', fontWeight: '500' },
+    placeholder: { flex: 1, fontSize: 14, color: '#94A3B8' },
 });
