@@ -28,8 +28,8 @@ const isWeb = Platform.OS === 'web';
 const ROLE_CONFIG = {
     'đại lý': { color: '#2563EB', bg: '#EFF6FF', icon: 'storefront-outline', label: 'Đại lý' },
     'dealer': { color: '#2563EB', bg: '#EFF6FF', icon: 'storefront-outline', label: 'Đại lý' },
-    'nhà phân phối': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'Nhà phân phối' },
-    'distributor': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'Nhà phân phối' },
+    'đối tác': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'đối tác' },
+    'distributor': { color: '#7C3AED', bg: '#F5F3FF', icon: 'car-outline', label: 'đối tác' },
     'cộng tác viên': { color: '#059669', bg: '#ECFDF5', icon: 'people-outline', label: 'Cộng tác viên' },
     'ctv': { color: '#059669', bg: '#ECFDF5', icon: 'people-outline', label: 'Cộng tác viên' },
 };

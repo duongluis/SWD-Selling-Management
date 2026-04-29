@@ -15,6 +15,7 @@ import {
   useStatusList,
 } from '../../components/Hooks/getStatus';
 import { showAlert } from '../../components/Main/showAlert';
+import { getRoomIdByOrderId, sendStatusUpdateMessage } from '../../components/Utils/chatService';
 import { trackRevenueOnPaid } from '../../components/Utils/trackRevenue';
 import { db } from '../../config/firebaseConfig';
 
@@ -155,6 +156,14 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
           }
 
           if (isCancelling) await cancelLinkedServices(order.id);
+
+          // ✅ Gửi tin nhắn hệ thống vào room chat
+          sendStatusUpdateMessage({
+            orderId: order.id,
+            newStatus,
+            changedBy: userDetail?.email || '',
+            changedByName: userDetail?.name || userDetail?.email || '',
+          }).catch(() => { });
         } catch (e) { showAlert('Lỗi', e.message); }
         finally { setUpdatingStatus(false); }
       }
@@ -238,6 +247,18 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
           <Text style={P.orderDate}>{order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : '—'}</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          {/* Nút Chat */}
+          <TouchableOpacity
+            style={[P.editBtn, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' }]}
+            onPress={() => router.push({
+              pathname: '/chat/[roomId]',
+              params: { roomId: getRoomIdByOrderId(order.id), orderId: order.id },
+            })}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chatbubble-outline" size={14} color="#8B5CF6" />
+            <Text style={[P.editBtnText, { color: '#8B5CF6' }]}>Chat</Text>
+          </TouchableOpacity>
           {!isCancelled && isAdmin && (
             <TouchableOpacity style={P.editBtn}
               onPress={() => router.push({ pathname: '/editOrder/[orderID]', params: { orderID: order.id, orderParam: JSON.stringify(order) } })}
@@ -455,12 +476,22 @@ export default function OrderView() {
       if (role === 'admin') {
         (await getDocs(collection(db, 'customers'))).docs.forEach(d => { const c = d.data(); if (c.phone) customerMap.set(c.phone, c); });
       } else if (role === 'ctv') {
-        (await getDocs(query(collection(db, 'customers'), where('addBy', '==', myEmail)))).docs.forEach(d => { const c = d.data(); if (c.phone) customerMap.set(c.phone, c); });
+        // ✅ CTV xem đơn hàng của khách mình đã kéo về (consult thành công)
+        const consultSnap = await getDocs(
+          query(collection(db, 'consult'),
+            where('createdBy', '==', myEmail),
+            where('status', '==', 'success')
+          )
+        );
+        consultSnap.docs.forEach(d => {
+          const c = d.data();
+          if (c.phone) customerMap.set(c.phone, { name: c.name, phone: c.phone });
+        });
       } else if (role === 'daily' || role === 'phantan') {
-        (await getDocs(query(collection(db, 'customers'), where('addBy', '==', myEmail)))).docs.forEach(d => { const c = d.data(); if (c.phone) customerMap.set(c.phone, c); });
+        (await getDocs(query(collection(db, 'customers'), where('createdBy', '==', myEmail)))).docs.forEach(d => { const c = d.data(); if (c.phone) customerMap.set(c.phone, c); });
         const subs = (await getDocs(query(collection(db, 'users'), where('advisor', '==', myEmail)))).docs.map(d => d.data().email).filter(Boolean);
         for (let i = 0; i < subs.length; i += 30) {
-          (await getDocs(query(collection(db, 'customers'), where('addBy', 'in', subs.slice(i, i + 30))))).docs.forEach(d => { const c = d.data(); if (c.phone) customerMap.set(c.phone, c); });
+          (await getDocs(query(collection(db, 'customers'), where('createdBy', 'in', subs.slice(i, i + 30))))).docs.forEach(d => { const c = d.data(); if (c.phone) customerMap.set(c.phone, c); });
         }
       }
       const phones = [...customerMap.keys()];

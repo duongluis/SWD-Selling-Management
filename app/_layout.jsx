@@ -43,9 +43,10 @@ SplashScreen.preventAutoHideAsync();
 // ── Route groups ─────────────────────────────────────────────
 const PUBLIC_ROUTES = ['auth', 'index'];          // ai cũng vào được
 const ADMIN_ROUTES = ['users'];                   // chỉ admin
-const APP_ROUTES = ['(tabs)', 'addOrder', 'addCustomer',
+const APP_ROUTES = ['(tabs)', 'addOrder', 'addCustomer', 'addConsult',
   'addService', 'CustomerView', 'ServiceView',
-  'OrderView', 'revenue', 'information', 'editUser', 'ctvCustomers'];
+  'OrderView', 'revenue', 'information', 'editUser',
+  'ctvCustomers', 'chat', 'chatList'];
 
 export default function RootLayout() {
   const [userDetail, setUserDetail] = useState(null);
@@ -95,32 +96,26 @@ export default function RootLayout() {
 
     // Các route không cần redirect khi chưa đăng nhập
     const ALLOW_UNAUTHENTICATED = [
-      'index', '',          // màn landing
-      'auth/signIn',        // đăng nhập
-      'auth/signUp',        // đăng ký
+      'index', '',              // màn landing
+      'auth/signIn',            // đăng nhập
+      'auth/signUp',            // đăng ký
+      'auth/userInfo',          // ✅ điền thông tin (chưa tạo account)
     ];
     const isAllowedUnauthenticated =
       ALLOW_UNAUTHENTICATED.includes(segment) ||
       ALLOW_UNAUTHENTICATED.includes(fullPath);
 
     // ── Chưa đăng nhập ──────────────────────────────────────
-    // Luôn về index, trừ khi đang ở signIn/signUp
     if (!userDetail) {
       if (!isAllowedUnauthenticated) router.replace('/');
       return;
     }
 
-    // ── Có Auth nhưng chưa điền thông tin ───────────────────
+    // ── Có Auth nhưng chưa có DB doc (không còn xảy ra với flow mới) ──
+    // Giữ lại để xử lý các account cũ tạo trước khi đổi flow
     if (userDetail._incomplete) {
-      if (isRegistrationPending()) {
-        // Vừa đăng ký trong session này → vào userInfo
-        router.replace('/auth/userInfo');
-      } else {
-        // Reload trang / session cũ → navigate trước, signOut sau
-        // (nếu signOut trước, guard sẽ chạy lại với null và override navigation)
-        router.replace('/auth/signIn');
-        signOut(auth);
-      }
+      router.replace('/auth/signIn');
+      signOut(auth);
       return;
     }
 

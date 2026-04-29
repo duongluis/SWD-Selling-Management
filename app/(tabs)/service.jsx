@@ -50,7 +50,22 @@ function useServices() {
       if (role === "admin") {
         (await getDocs(collection(db, "service"))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
       } else if (role === "ctv") {
-        (await getDocs(query(collection(db, "service"), where("createdBy", "==", myEmail)))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
+        // ✅ CTV xem dịch vụ của khách mình đã kéo về (consult thành công)
+        const consultSnap = await getDocs(
+          query(collection(db, "consult"),
+            where("createdBy", "==", myEmail),
+            where("status", "==", "success")
+          )
+        );
+        const phones = consultSnap.docs
+          .map(d => d.data().phone)
+          .filter(Boolean);
+
+        // Fetch services theo phone
+        for (let i = 0; i < phones.length; i += 30) {
+          (await getDocs(query(collection(db, "service"), where("phone", "in", phones.slice(i, i + 30)))))
+            .docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
+        }
       } else if (role === "daily" || role === "phantan") {
         (await getDocs(query(collection(db, "service"), where("createdBy", "==", myEmail)))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
         const subs = (await getDocs(query(collection(db, "users"), where("advisor", "==", myEmail)))).docs.map(d => d.data().email).filter(Boolean);

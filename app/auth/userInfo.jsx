@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { getAuth } from 'firebase/auth';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
@@ -12,7 +12,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../../components/Main/showAlert';
 import BANKS from '../../config/banks.json';
 import { db } from '../../config/firebaseConfig';
-import { clearRegistrationPending } from '../_layout';
 
 const isWeb = Platform.OS === 'web';
 
@@ -104,6 +103,11 @@ function StepBar({ current, total, labels }) {
 export default function UserInfoView() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const params = useLocalSearchParams();
+
+    const signUpEmail = params.email || '';
+    const signUpPassword = params.password || '';
+
     const [step, setStep] = useState(0);
     const [role, setRole] = useState('');
     const [bizModel, setBizModel] = useState('');
@@ -113,6 +117,10 @@ export default function UserInfoView() {
     const [companyName, setCompanyName] = useState('');
     const [taxCode, setTaxCode] = useState('');
     const [bizAddress, setBizAddress] = useState('');
+    // ── ✅ Người đại diện (company only) ─────────────────────
+    const [repName, setRepName] = useState('');
+    const [repPhone, setRepPhone] = useState('');
+    // ─────────────────────────────────────────────────────────
     const [fullName, setFullName] = useState('');
     const [cccd, setCccd] = useState('');
     const [cccdError, setCccdError] = useState('');
@@ -149,14 +157,7 @@ export default function UserInfoView() {
             : ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD'];
     const TOTAL_STEPS = STEP_LABELS.length;
 
-    const handleSignOut = async () => {
-        try {
-            const auth = getAuth(); const user = auth.currentUser;
-            clearRegistrationPending();
-            router.replace('/auth/signIn');
-            if (user) await user.delete();
-        } catch (e) { console.error(e); }
-    };
+    const handleSignOut = async () => { router.replace('/auth/signIn'); };
 
     const fetchRegions = async () => {
         if (regions.length > 0) return;
@@ -207,6 +208,9 @@ export default function UserInfoView() {
                     if (!companyName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên công ty/hộ KD'); return false; }
                     if (!taxCode.trim()) { showAlert('Thông báo', 'Vui lòng nhập mã số thuế'); return false; }
                     if (!bizAddress.trim()) { showAlert('Thông báo', 'Vui lòng nhập địa chỉ đăng ký KD'); return false; }
+                    // ✅ Validate người đại diện
+                    if (!repName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên người đại diện'); return false; }
+                    if (!repPhone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại người đại diện'); return false; }
                 } else {
                     if (!fullName.trim()) { showAlert('Thông báo', 'Vui lòng nhập họ và tên'); return false; }
                     if (!cccd.trim()) { showAlert('Thông báo', 'Vui lòng nhập số CCCD/CMND'); return false; }
@@ -236,12 +240,18 @@ export default function UserInfoView() {
 
     const handleSubmit = async () => {
         if (!validateStep()) return;
+        if (!signUpEmail || !signUpPassword) {
+            showAlert('Lỗi', 'Không tìm thấy thông tin đăng ký. Vui lòng quay lại và thử lại.');
+            router.replace('/auth/signUp');
+            return;
+        }
         setSubmitting(true);
         try {
             const auth = getAuth();
-            const uid = auth.currentUser?.uid;
-            const email = auth.currentUser?.email;
-            if (!email) throw new Error('Không tìm thấy tài khoản.');
+            const userCredential = await createUserWithEmailAndPassword(auth, signUpEmail, signUpPassword);
+            const uid = userCredential.user.uid;
+            const email = userCredential.user.email;
+
             const roleMap = { daily: 'đại lý', partner: 'Đối tác', ctv: 'cộng tác viên' };
             const payload = {
                 uid, email,
@@ -256,6 +266,9 @@ export default function UserInfoView() {
                 payload.taxCode = taxCode.trim();
                 payload.bizAddress = bizAddress.trim();
                 payload.name = companyName.trim();
+                // ✅ Lưu thông tin người đại diện
+                payload.repName = repName.trim();
+                payload.repPhone = repPhone.trim();
             } else {
                 payload.name = fullName.trim();
                 payload.cccd = cccd.trim();
@@ -277,9 +290,13 @@ export default function UserInfoView() {
                 };
             }
             await setDoc(doc(db, 'users', email), payload);
-            clearRegistrationPending();
             router.replace('/auth/pendingVerification');
-        } catch (e) { showAlert('Lỗi', e.message); }
+        } catch (e) {
+            showAlert('Lỗi đăng ký', e.code === 'auth/email-already-in-use'
+                ? 'Email này đã được đăng ký. Vui lòng dùng email khác hoặc đăng nhập.'
+                : e.message
+            );
+        }
         finally { setSubmitting(false); }
     };
 
@@ -356,6 +373,8 @@ export default function UserInfoView() {
         <View style={S.stepContent}>
             <Text style={S.stepTitle}>Thông tin doanh nghiệp</Text>
             <Text style={S.stepSub}>Theo giấy đăng ký kinh doanh</Text>
+
+            {/* Thông tin doanh nghiệp */}
             <View style={S.fg}><Text style={S.label}>Tên công ty / Hộ kinh doanh <Text style={S.req}>*</Text></Text>
                 <View style={F.inputBox}><Ionicons name="business-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="Công ty TNHH ABC..." placeholderTextColor="#94A3B8" value={companyName} onChangeText={setCompanyName} /></View>
             </View>
@@ -364,6 +383,28 @@ export default function UserInfoView() {
             </View>
             <View style={S.fg}><Text style={S.label}>Địa chỉ đăng ký kinh doanh <Text style={S.req}>*</Text></Text>
                 <View style={[F.inputBox, { alignItems: 'flex-start', minHeight: 80 }]}><Ionicons name="location-outline" size={15} color="#94A3B8" style={{ marginTop: 2 }} /><TextInput style={[F.input, { textAlignVertical: 'top' }]} placeholder="Địa chỉ theo ĐKKD..." placeholderTextColor="#94A3B8" multiline value={bizAddress} onChangeText={setBizAddress} /></View>
+            </View>
+
+            {/* ✅ Thông tin người đại diện */}
+            <View style={S.repSection}>
+                <View style={S.repHeader}>
+                    <Ionicons name="person-circle-outline" size={15} color="#2563EB" />
+                    <Text style={S.repTitle}>Thông tin người đại diện</Text>
+                </View>
+                <View style={S.fg}>
+                    <Text style={S.label}>Họ và tên người đại diện <Text style={S.req}>*</Text></Text>
+                    <View style={F.inputBox}>
+                        <Ionicons name="person-outline" size={15} color="#94A3B8" />
+                        <TextInput style={F.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={repName} onChangeText={setRepName} />
+                    </View>
+                </View>
+                <View style={[S.fg, { marginBottom: 4 }]}>
+                    <Text style={S.label}>Số điện thoại người đại diện <Text style={S.req}>*</Text></Text>
+                    <View style={F.inputBox}>
+                        <Ionicons name="call-outline" size={15} color="#94A3B8" />
+                        <TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={repPhone} onChangeText={setRepPhone} />
+                    </View>
+                </View>
             </View>
         </View>
     ) : (
@@ -613,6 +654,11 @@ const S = StyleSheet.create({
     optional: { fontSize: 11, color: '#94A3B8', fontWeight: '400' },
     req: { color: '#EF4444' },
     errText: { fontSize: 11, color: '#EF4444', marginTop: 4, fontWeight: '500' },
+    // ✅ Người đại diện
+    repSection: { backgroundColor: '#EFF6FF', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 4 },
+    repHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#BFDBFE' },
+    repTitle: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
+    // ─────────────────────────────────────────────────────────
     toggle: { width: 46, height: 26, borderRadius: 13, backgroundColor: '#E2E8F0', padding: 3, justifyContent: 'center' },
     toggleOn: { backgroundColor: '#2563EB' },
     toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFF', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 },

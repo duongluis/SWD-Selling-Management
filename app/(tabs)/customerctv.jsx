@@ -31,11 +31,11 @@ const CONSULT_STATUS = {
 };
 
 // ── CTV Dashboard ─────────────────────────────────────────────
-function CTVDashboard({ customers, consultMap, loading, refreshing, onRefresh, onAddCustomer, onPressCustomer, search, setSearch }) {
+export function CTVDashboard({ customers, consultMap, loading, refreshing, onRefresh, onAddConsult, onPressCustomer, search, setSearch }) {
     const total = customers.length;
-    const consulted = customers.filter(c => consultMap[c.phone] && consultMap[c.phone] !== "none").length;
-    const success = customers.filter(c => consultMap[c.phone] === "success").length;
-    const failed = customers.filter(c => consultMap[c.phone] === "failed").length;
+    const consulted = customers.filter(c => consultMap[c.docId] && consultMap[c.docId] !== "none").length;
+    const success = customers.filter(c => consultMap[c.docId] === "success").length;
+    const failed = customers.filter(c => consultMap[c.docId] === "failed").length;
 
     const filtered = customers.filter(c =>
         (c.name || "").toLowerCase().includes(search.toLowerCase()) ||
@@ -43,43 +43,38 @@ function CTVDashboard({ customers, consultMap, loading, refreshing, onRefresh, o
     );
 
     const STATS = [
-        { label: "Tổng số khách hàng", value: total, icon: "people-outline", color: "#2563EB", bg: "#EFF6FF", trend: "+5%", trendUp: true },
-        { label: "Khách hàng đã tư vấn", value: consulted, icon: "chatbubbles-outline", color: "#7C3AED", bg: "#F5F3FF", trend: null, trendUp: true },
-        { label: "Tư vấn thành công", value: success, icon: "checkmark-circle-outline", color: "#059669", bg: "#ECFDF5", trend: null, trendUp: true },
-        { label: "Tư vấn thất bại", value: failed, icon: "close-circle-outline", color: "#EF4444", bg: "#FEF2F2", trend: null, trendUp: false },
+        { label: "Tổng số khách hàng", value: total, icon: "people-outline", color: "#2563EB", bg: "#EFF6FF", trend: null },
+        { label: "Khách hàng đã tư vấn", value: consulted, icon: "chatbubbles-outline", color: "#7C3AED", bg: "#F5F3FF", trend: null },
+        { label: "Tư vấn thành công", value: success, icon: "checkmark-circle-outline", color: "#059669", bg: "#ECFDF5", trend: null },
+        { label: "Tư vấn thất bại", value: failed, icon: "close-circle-outline", color: "#EF4444", bg: "#FEF2F2", trend: null },
     ];
 
     const renderRow = ({ item, index }) => {
-        const statusKey = consultMap[item.phone] || "none";
+        const statusKey = consultMap[item.docId] || "none";
         const status = CONSULT_STATUS[statusKey];
         const createdAt = item.createdAt ? new Date(item.createdAt).toLocaleDateString("vi-VN") : "—";
         return (
             <TouchableOpacity style={C.tableRow} onPress={() => onPressCustomer(item)} activeOpacity={0.7}>
-                {/* Avatar + Name */}
                 <View style={[C.tableCell, { flex: 2.5, flexDirection: "row", alignItems: "center", gap: 10 }]}>
                     <View style={[C.rowAvatar, { backgroundColor: AVATAR_COLORS[index % AVATAR_COLORS.length] }]}>
                         <Text style={C.rowAvatarText}>{getInitials(item.name)}</Text>
                     </View>
                     <Text style={C.rowName} numberOfLines={1}>{item.name || "—"}</Text>
                 </View>
-                {/* Phone */}
                 <View style={[C.tableCell, { flex: 1.5 }]}>
                     <Text style={C.rowPhone}>{item.phone || "—"}</Text>
                 </View>
-                {/* Date */}
                 {isWeb && (
                     <View style={[C.tableCell, { flex: 1.2 }]}>
                         <Text style={C.rowDate}>{createdAt}</Text>
                     </View>
                 )}
-                {/* Status */}
                 <View style={[C.tableCell, { flex: 1.5 }]}>
                     <View style={[C.statusChip, { backgroundColor: status.bg }]}>
                         <View style={[C.statusDot, { backgroundColor: status.dot }]} />
                         <Text style={[C.statusChipText, { color: status.color }]}>{status.label}</Text>
                     </View>
                 </View>
-                {/* Action */}
                 <TouchableOpacity style={C.actionBtn} onPress={() => onPressCustomer(item)} activeOpacity={0.7}>
                     <Text style={C.actionBtnText}>Xem chi tiết</Text>
                 </TouchableOpacity>
@@ -95,35 +90,29 @@ function CTVDashboard({ customers, consultMap, loading, refreshing, onRefresh, o
                     <Text style={C.pageTitle}>Quản lý Khách hàng</Text>
                     <Text style={C.pageDesc}>Theo dõi và quản lý dữ liệu khách hàng của bạn.</Text>
                 </View>
-                <TouchableOpacity style={C.addBtn} onPress={onAddCustomer} activeOpacity={0.85}>
+                <TouchableOpacity style={C.addBtn} onPress={onAddConsult} activeOpacity={0.85}>
                     <Ionicons name="add" size={18} color="#fff" />
                     <Text style={C.addBtnText}>+ Thêm Khách hàng</Text>
                 </TouchableOpacity>
             </View>
 
-            {/* ── Stat cards ── */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={C.statsScroll} contentContainerStyle={C.statsRow}>
+            {/* ── Stat cards — dàn đều theo chiều rộng màn hình ── */}
+            <View style={C.statsRow}>
                 {STATS.map(s => (
                     <View key={s.label} style={C.statCard}>
                         <View style={C.statTop}>
                             <View style={[C.statIconWrap, { backgroundColor: s.bg }]}>
-                                <Ionicons name={s.icon} size={22} color={s.color} />
+                                <Ionicons name={s.icon} size={20} color={s.color} />
                             </View>
-                            {s.trend && (
-                                <View style={[C.trendBadge, s.trendUp ? C.trendUp : C.trendDown]}>
-                                    <Text style={[C.trendText, s.trendUp ? C.trendTextUp : C.trendTextDown]}>{s.trend}</Text>
-                                </View>
-                            )}
                         </View>
                         <Text style={C.statLabel}>{s.label}</Text>
                         <Text style={[C.statValue, { color: s.color }]}>{s.value.toLocaleString()}</Text>
                     </View>
                 ))}
-            </ScrollView>
+            </View>
 
             {/* ── Table card ── */}
             <View style={C.tableCard}>
-                {/* Table header */}
                 <View style={C.tableTopBar}>
                     <Text style={C.tableTitle}>Danh sách khách hàng</Text>
                     <View style={{ flexDirection: "row", gap: 8 }}>
@@ -158,7 +147,6 @@ function CTVDashboard({ customers, consultMap, loading, refreshing, onRefresh, o
                     <Text style={[C.colText, { width: 90 }]}>HÀNH ĐỘNG</Text>
                 </View>
 
-                {/* Rows */}
                 {loading ? (
                     <View style={C.loadWrap}><ActivityIndicator color="#2563EB" size="small" /><Text style={C.loadText}>Đang tải...</Text></View>
                 ) : filtered.length === 0 ? (
@@ -177,38 +165,13 @@ function CTVDashboard({ customers, consultMap, loading, refreshing, onRefresh, o
                     />
                 )}
 
-                {/* Pagination footer */}
                 {filtered.length > 0 && (
                     <View style={C.tableFooter}>
-                        <Text style={C.footerCount}>Hiển thị {Math.min(filtered.length, 20)} trên {filtered.length} khách hàng</Text>
+                        <Text style={C.footerCount}>Hiển thị {filtered.length} khách hàng</Text>
                     </View>
                 )}
             </View>
-
-            {/* ── Bottom banner ── */}
-            {!loading && total > 0 && (
-                <View style={C.bannerRow}>
-                    {/* Left banner */}
-                    <View style={[C.banner, { backgroundColor: "#0F172A" }]}>
-                        <Ionicons name="sparkles-outline" size={22} color="#60A5FA" style={{ marginBottom: 8 }} />
-                        <Text style={C.bannerTitle}>Kiến tạo trải nghiệm dịch vụ đẳng cấp cùng Azure Horizon.</Text>
-                        <Text style={C.bannerDesc}>Tối ưu hóa quy trình tư vấn và chăm sóc khách hàng với dữ liệu minh bạch</Text>
-                    </View>
-                    {/* Right banner */}
-                    {success > 0 && (
-                        <View style={[C.banner, C.bannerLight]}>
-                            <Ionicons name="bulb-outline" size={22} color="#2563EB" style={{ marginBottom: 8 }} />
-                            <Text style={C.bannerTitleDark}>Gợi ý thông minh</Text>
-                            <Text style={C.bannerDescDark}>
-                                Tỷ lệ chuyển đổi đạt {total > 0 ? Math.round((success / total) * 100) : 0}%. Tập trung vào nhóm khách hàng "Đang tư vấn" để cải thiện.
-                            </Text>
-                            <TouchableOpacity activeOpacity={0.8} style={{ marginTop: 8 }}>
-                                <Text style={C.bannerLink}>Xem báo cáo chi tiết →</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
-                </View>
-            )}
+            {/* ── Banner đã bỏ theo yêu cầu ── */}
         </View>
     );
 }
@@ -273,10 +236,9 @@ export default function CustomerView() {
             try {
                 const phones = customers.map(c => c.phone).filter(Boolean);
                 const map = {};
-                // Default all to none
+
                 phones.forEach(p => { map[p] = "none"; });
 
-                // Query tư vấn services for these customers
                 for (let i = 0; i < phones.length; i += 30) {
                     const chunk = phones.slice(i, i + 30);
                     const snap = await getDocs(
@@ -313,7 +275,6 @@ export default function CustomerView() {
         });
     };
 
-    // ── CTV view ─────────────────────────────────────────────
     if (isCTV) {
         return (
             <View style={styles.root}>
@@ -340,7 +301,6 @@ export default function CustomerView() {
         );
     }
 
-    // ── Admin / daily / phantan view (grouped) ────────────────
     const groups = (() => {
         const myEmail = userDetail?.email;
         if (role === "daily" || role === "phantan") {
@@ -449,20 +409,19 @@ const C = StyleSheet.create({
     pageDesc: { fontSize: 13, color: "#64748B", marginTop: 3 },
     addBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#1E3A8A", paddingHorizontal: isWeb ? 16 : 12, paddingVertical: 10, borderRadius: 10, shadowColor: "#1E3A8A", shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
     addBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
-    // Stat cards
-    statsScroll: { flexGrow: 0, marginBottom: 20 },
-    statsRow: { flexDirection: "row", gap: 12, paddingRight: 16 },
-    statCard: { width: isWeb ? undefined : 160, flex: isWeb ? 1 : undefined, backgroundColor: "#fff", borderRadius: 14, padding: 16, borderWidth: 1, borderColor: "#E2E8F0", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
-    statTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
-    statIconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+    // Stat cards — dàn đều theo chiều rộng
+    statsRow: { flexDirection: "row", gap: 10, marginBottom: 20 },
+    statCard: { flex: 1, backgroundColor: "#fff", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#E2E8F0", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, elevation: 2, minWidth: 0 },
+    statTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 },
+    statIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
     trendBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 20 },
     trendUp: { backgroundColor: "#ECFDF5" },
     trendDown: { backgroundColor: "#FEF2F2" },
     trendText: { fontSize: 11, fontWeight: "700" },
     trendTextUp: { color: "#059669" },
     trendTextDown: { color: "#EF4444" },
-    statLabel: { fontSize: 12, color: "#64748B", marginBottom: 4 },
-    statValue: { fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
+    statLabel: { fontSize: isWeb ? 12 : 10, color: "#64748B", marginBottom: 4 },
+    statValue: { fontSize: isWeb ? 28 : 22, fontWeight: "900", letterSpacing: -0.5 },
     // Table
     tableCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden", marginBottom: 20, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
     tableTopBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },

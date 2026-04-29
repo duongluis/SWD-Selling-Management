@@ -15,8 +15,8 @@ const APP_URL = 'https://duongluis.github.io/SWD-Selling-Management';
 const ROLE_LABEL_MAP = {
   'đại lý': 'Đại lý / NPP',
   'dealer': 'Đại lý / NPP',
-  'nhà phân phối': 'Nhà phân phối',
-  'distributor': 'Nhà phân phối',
+  'đối tác': 'đối tác',
+  'distributor': 'đối tác',
   'đối tác': 'Đối tác',
   'partner': 'Đối tác',
   'cộng tác viên': 'Cộng tác viên',

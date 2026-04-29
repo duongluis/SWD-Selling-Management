@@ -1,24 +1,14 @@
-import { getFirebaseErrorMessage } from '@/components/Main/getFirebaseErrorMessage';
 import Colors from '@/constant/Colors';
 import { Ionicons } from '@expo/vector-icons';
-import { createUserWithEmailAndPassword } from '@firebase/auth';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
-  Linking,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+  Alert, Linking, Platform, StyleSheet, Text,
+  TextInput, TouchableOpacity, View,
 } from 'react-native';
-import auth from '../../config/firebaseConfig';
-import { markRegistrationPending } from '../_layout';
 
-// ✅ KHÔNG lưu DB ở đây — chỉ tạo Firebase Auth account
-// DB chỉ được lưu sau khi user điền xong thông tin ở userInfoView
+// ✅ Màn này CHỈ validate email + password
+// Firebase Auth được tạo ở cuối bước userInfo (sau khi điền đủ thông tin)
 
 export default function SignUp() {
   const router = useRouter();
@@ -41,20 +31,15 @@ export default function SignUp() {
     return true;
   };
 
-  const handleSignUp = async () => {
+  const handleSignUp = () => {
     if (!validate()) return;
-    setLoading(true);
-    try {
-      // ✅ Đặt cờ TRƯỚC khi tạo tài khoản
-      // onAuthStateChanged bắn ngay sau create → guard phải thấy cờ đã có sẵn
-      markRegistrationPending();
-      await createUserWithEmailAndPassword(auth, gmail.trim(), password);
-      router.replace('/auth/userInfo');
-    } catch (e) {
-      Alert.alert('Lỗi đăng ký', getFirebaseErrorMessage(e));
-    } finally {
-      setLoading(false);
-    }
+    // ✅ Không tạo Firebase Auth ở đây
+    // Chỉ truyền email + password sang userInfo làm params
+    // Firebase Auth + DB sẽ được tạo sau khi user điền đủ thông tin
+    router.push({
+      pathname: '/auth/userInfo',
+      params: { email: gmail.trim(), password },
+    });
   };
 
   return (

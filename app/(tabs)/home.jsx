@@ -9,11 +9,10 @@ import {
   Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View
 } from "react-native";
 import { useCustomers } from "../../components/Hooks/useCustomers";
+import NotificationPanel from "../../components/Main/notificationPanel";
 import { db } from "../../config/firebaseConfig";
 
 const isWeb = Platform.OS === "web";
-
-// ✅ Link ảnh nền — thay bằng URL của bạn
 const BG_IMAGE = require('../../assets/images/logo-light.png')
 
 function StatCard({ icon, label, value, color, bg }) {
@@ -75,57 +74,52 @@ export default function HomeView() {
   const quickActions = [
     { name: "Đơn hàng mới", icon: "add-circle-outline", action: () => router.push("/addOrder"), color: "#3B82F6", bg: "#EFF6FF" },
     { name: "Thêm khách", icon: "person-add-outline", action: () => router.push("/addCustomer"), color: "#8B5CF6", bg: "#F5F3FF" },
-    { name: "Báo cáo", icon: "bar-chart-outline", action: () => router.push("/analytics"), color: "#10B981", bg: "#ECFDF5" },
+    { name: "Phòng chat", icon: "chatbubbles-outline", action: () => router.push("/chatList"), color: "#059669", bg: "#ECFDF5" },
     { name: "Dịch vụ", icon: "construct-outline", action: () => router.push("/addService"), color: "#F59E0B", bg: "#FFFBEB" },
   ];
 
   return (
-
     <View style={styles.root}>
-
-      {/* ✅ Watermark — cố định chính giữa, mờ nhạt */}
-      <Image
-        source={BG_IMAGE}
-        style={styles.watermark}
-        resizeMode="contain"
-      />
+      <Image source={BG_IMAGE} style={styles.watermark} resizeMode="contain" />
 
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {
-          !isWeb && (
-            <View style={styles.mobileHeader}>
-              <View>
-                <Text style={styles.greeting}>👋 Xin chào {userDetail?.role}</Text>
-                <Text style={styles.userName}>{userDetail?.name}</Text>
-              </View>
-              <TouchableOpacity style={styles.notifBtn}>
-                <Ionicons name="notifications-outline" size={22} color={Colors.TextPrimary} />
-              </TouchableOpacity>
+        {/* ── Mobile header ── */}
+        {!isWeb && (
+          <View style={styles.mobileHeader}>
+            <View>
+              <Text style={styles.greeting}>👋 Xin chào {userDetail?.role}</Text>
+              <Text style={styles.userName}>{userDetail?.name}</Text>
             </View>
-          )
-        }
+            {/* ✅ NotificationPanel thay nút chuông cũ */}
+            <NotificationPanel bellColor={Colors.TextPrimary} bellSize={22} />
+          </View>
+        )}
 
-        {
-          isWeb && (
-            <View style={styles.welcomeBanner}>
-              <View>
-                <Text style={styles.welcomeTitle}>
-                  Xin chào <Text style={{ color: "#10B981" }}>{userDetail?.role}</Text> {userDetail?.name} 👋
-                </Text>
-                <Text style={styles.welcomeSub}>Tổng quan hoạt động kinh doanh của bạn hôm nay.</Text>
-              </View>
+        {/* ── Web banner ── */}
+        {isWeb && (
+          <View style={styles.welcomeBanner}>
+            <View>
+              <Text style={styles.welcomeTitle}>
+                Xin chào <Text style={{ color: "#10B981" }}>{userDetail?.role}</Text> {userDetail?.name} 👋
+              </Text>
+              <Text style={styles.welcomeSub}>Tổng quan hoạt động kinh doanh của bạn hôm nay.</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {/* ✅ Bell trên web banner */}
+              <NotificationPanel bellColor="#0F172A" bellSize={22} />
               <TouchableOpacity style={styles.welcomeBtn} onPress={() => router.push("/addOrder")}>
                 <Ionicons name="add" size={16} color={Colors.White} />
                 <Text style={styles.welcomeBtnText}>Đơn hàng mới</Text>
               </TouchableOpacity>
             </View>
-          )
-        }
+          </View>
+        )}
 
+        {/* Stats */}
         <View style={[styles.statsGrid, isWeb && styles.statsGridWeb]}>
           <StatCard icon="cash-outline" label="Doanh Thu" value={fmt(totalRevenue)} color="#10B981" bg="#ECFDF5" />
           <StatCard icon="receipt-outline" label="Tổng Đơn Hàng" value={String(totalOrders)} color="#3B82F6" bg="#EFF6FF" />
@@ -134,7 +128,7 @@ export default function HomeView() {
         </View>
 
         <View style={[styles.contentGrid, isWeb && styles.contentGridWeb]}>
-          {/* Quick actions */}
+          {/* Quick actions + recent customers */}
           <View style={[styles.card, isWeb && { flex: 1 }]}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Thao tác nhanh</Text>
@@ -149,7 +143,6 @@ export default function HomeView() {
                 </TouchableOpacity>
               ))}
             </View>
-
             <View style={styles.cardDivider} />
             <Text style={styles.cardSubtitle}>Khách hàng gần đây</Text>
             {customerLoading ? (
@@ -207,39 +200,19 @@ export default function HomeView() {
         </View>
 
         <View style={{ height: isWeb ? 32 : 100 }} />
-      </ScrollView >
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-  },
-  watermark: {
-    position: "absolute",
-    width: "80%",           // ← to nhỏ tuỳ ý
-    height: "60%",          // ← cao thấp tuỳ ý
-    top: "20%",             // ← căn giữa dọc
-    left: "10%",            // ← căn giữa ngang
-    opacity: 0.05,          // ← 0.05 rất mờ / 0.15 rõ hơn
-  },
-
-  // Sửa lại container
+  root: { flex: 1, backgroundColor: "#F8FAFC" },
+  watermark: { position: "absolute", width: "80%", height: "60%", top: "20%", left: "10%", opacity: 0.05 },
   container: { flex: 1, backgroundColor: "transparent" },
-
-  // card: { backgroundColor: "rgba(255,255,255,0.92)", borderRadius: 14, padding: 20, borderWidth: 1, borderColor: "#E2E8F0" },
-  // statCard: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "rgba(255,255,255,0.92)", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#E2E8F0" },
-
-
-  // Giữ nguyên tất cả styles cũ
-  container: { flex: 1, backgroundColor: "transparent" }, // ← đổi thành transparent
   scrollContent: { paddingHorizontal: isWeb ? 32 : 16, paddingTop: isWeb ? 28 : 16 },
   mobileHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   greeting: { fontSize: 12, color: "#64748B", fontWeight: "500" },
   userName: { fontSize: 22, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5 },
-  notifBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
   welcomeBanner: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 28 },
   welcomeTitle: { fontSize: 24, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5, marginBottom: 4 },
   welcomeSub: { fontSize: 14, color: "#64748B" },
@@ -254,7 +227,7 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 20, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5 },
   contentGrid: { flexDirection: "column", gap: 16 },
   contentGridWeb: { flexDirection: "row", gap: 16, alignItems: "flex-start" },
-  card: { backgroundColor: "rgba(255,255,255,0.88)", borderRadius: 14, padding: 20, borderWidth: 1, borderColor: "#E2E8F0" }, // ← hơi trong suốt
+  card: { backgroundColor: "rgba(255,255,255,0.88)", borderRadius: 14, padding: 20, borderWidth: 1, borderColor: "#E2E8F0" },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
   cardTitle: { fontSize: 15, fontWeight: "700", color: "#0F172A" },
   cardLink: { fontSize: 13, color: "#3B82F6", fontWeight: "500" },

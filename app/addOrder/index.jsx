@@ -17,6 +17,7 @@ import {
 } from '../../components/Hooks/getStatus';
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
+import { createOrderChatRoom } from '../../components/Utils/chatService';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
@@ -65,7 +66,7 @@ const getRole = (u) => {
   const r = (u?.role || u?.member || '').toLowerCase();
   if (r === 'admin') return 'admin';
   if (['đại lý', 'daily', 'dealer'].includes(r)) return 'daily';
-  if (['nhà phân phối', 'phantan', 'distributor'].includes(r)) return 'phantan';
+  if (['đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
   if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
   return 'other';
 };
@@ -170,12 +171,12 @@ export default function AddOrder() {
       if (role === 'admin') {
         (await getDocs(collection(db, 'customers'))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
       } else if (role === 'ctv') {
-        (await getDocs(query(collection(db, 'customers'), where('addBy', '==', myEmail)))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
+        (await getDocs(query(collection(db, 'customers'), where('createdBy', '==', myEmail)))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
       } else if (role === 'daily' || role === 'phantan') {
-        (await getDocs(query(collection(db, 'customers'), where('addBy', '==', myEmail)))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
+        (await getDocs(query(collection(db, 'customers'), where('createdBy', '==', myEmail)))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
         const subs = (await getDocs(query(collection(db, 'users'), where('advisor', '==', myEmail)))).docs.map(d => d.data().email).filter(Boolean);
         for (let i = 0; i < subs.length; i += 30) {
-          (await getDocs(query(collection(db, 'customers'), where('addBy', 'in', subs.slice(i, i + 30))))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
+          (await getDocs(query(collection(db, 'customers'), where('createdBy', 'in', subs.slice(i, i + 30))))).docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
         }
       }
       const map = new Map(); all.forEach(c => map.set(c.docId, c));
@@ -261,6 +262,17 @@ export default function AddOrder() {
         createdBy: userDetail?.email || '',
       };
       await setDoc(doc(db, 'orders', selectedCustomer.phone), { orders: arrayUnion(newOrder) }, { merge: true });
+
+      // ✅ Tạo room chat — chỉ khi KHÔNG phải admin
+      const myRole = (userDetail?.role || userDetail?.member || '').toLowerCase();
+      if (myRole !== 'admin') {
+        createOrderChatRoom({
+          orderId,
+          orderType,
+          createdBy: userDetail?.email || '',
+          createdByName: userDetail?.name || userDetail?.email || '',
+        }).catch(e => console.warn('Tạo room chat thất bại:', e));
+      }
 
       // ── Tự động tạo dịch vụ ──────────────────────────────
       if (autoService) {

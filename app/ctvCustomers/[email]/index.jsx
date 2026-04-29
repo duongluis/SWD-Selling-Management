@@ -48,7 +48,7 @@ export default function CTVCustomersScreen() {
         try {
             // 1. Lấy customers của CTV này
             const custSnap = await getDocs(
-                query(collection(db, 'customers'), where('addBy', '==', targetEmail))
+                query(collection(db, 'customers'), where('createdBy', '==', targetEmail))
             );
             const custs = custSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
             setCustomers(custs);
