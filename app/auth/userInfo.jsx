@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
-    KeyboardAvoidingView, Modal, Platform, Pressable,
+    KeyboardAvoidingView, Platform,
     ScrollView, StatusBar, StyleSheet, Text, TextInput,
     TouchableOpacity, View,
 } from 'react-native';
@@ -14,7 +14,6 @@ import BANKS from '../../config/banks.json';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
-
 const COMMITTED_REVENUE_MIN = 100_000_000;
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
@@ -34,46 +33,60 @@ const DISTRIBUTION_TYPES = [
 
 const validateCCCD = (v) => /^(\d{9}|\d{12})$/.test(v.trim());
 
-const toDateStr = (d) => {
-    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${dd}`;
-};
-const toDisplayStr = (s) => { if (!s) return ''; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+// ✅ Chỉ chọn năm sinh
+function YearField({ value, onChange }) {
+    const currentYear = new Date().getFullYear();
+    const [showDrop, setShowDrop] = useState(false);
 
-function DateField({ value, onChange }) {
-    const [show, setShow] = useState(false);
-    const [sel, setSel] = useState(new Date());
-    if (isWeb) return (
-        <View style={F.inputBox}>
-            <Ionicons name="calendar-outline" size={15} color="#94A3B8" />
-            <input type="date" value={value || ''} style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: '#0F172A', backgroundColor: 'transparent', cursor: 'pointer' }}
-                onChange={e => { if (!e.target.value) return; onChange(e.target.value); const [y, m, d] = e.target.value.split('-').map(Number); setSel(new Date(y, m - 1, d, 12)); }} />
-        </View>
+    // Tạo danh sách năm từ 1940 đến năm hiện tại
+    const years = Array.from(
+        { length: currentYear - 1940 + 1 },
+        (_, i) => String(currentYear - i)
     );
-    const DateTimePicker = require('@react-native-community/datetimepicker').default;
+
+    const handleSelect = (year) => {
+        onChange(year);
+        setShowDrop(false);
+    };
+
     return (
-        <>
-            <TouchableOpacity style={F.inputBox} onPress={() => setShow(true)} activeOpacity={0.8}>
+        <View>
+            <TouchableOpacity
+                style={[F.inputBox, showDrop && { borderColor: '#2563EB' }]}
+                onPress={() => setShowDrop(p => !p)}
+                activeOpacity={0.8}
+            >
                 <Ionicons name="calendar-outline" size={15} color="#94A3B8" />
-                <Text style={{ flex: 1, fontSize: 14, color: value ? '#0F172A' : '#94A3B8' }}>{value ? toDisplayStr(value) : 'Chọn ngày sinh...'}</Text>
+                <Text style={[{ flex: 1, fontSize: 14 }, value ? { color: '#0F172A', fontWeight: '500' } : { color: '#94A3B8' }]}>
+                    {value || 'Chọn năm sinh...'}
+                </Text>
+                {value && (
+                    <TouchableOpacity onPress={() => onChange('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                )}
+                <Ionicons name={showDrop ? 'chevron-up' : 'chevron-down'} size={15} color="#94A3B8" />
             </TouchableOpacity>
-            {show && Platform.OS === 'ios' && (
-                <Modal transparent animationType="slide">
-                    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setShow(false)} />
-                    <View style={{ backgroundColor: '#fff', padding: 16 }}>
-                        <DateTimePicker value={sel} mode="date" display="spinner"
-                            onChange={(_, date) => { if (date) { setSel(date); onChange(toDateStr(date)); } }} />
-                        <Pressable onPress={() => setShow(false)} style={{ alignItems: 'center', padding: 12 }}>
-                            <Text style={{ color: '#2563EB', fontWeight: '600' }}>Xong</Text>
-                        </Pressable>
-                    </View>
-                </Modal>
+
+            {showDrop && (
+                <View style={S.drop}>
+                    <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+                        {years.map(y => (
+                            <TouchableOpacity
+                                key={y}
+                                style={[S.dropItem, value === y && S.dropActive]}
+                                onPress={() => handleSelect(y)}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="calendar-outline" size={13} color={value === y ? '#2563EB' : '#94A3B8'} />
+                                <Text style={[S.dropText, value === y && { color: '#2563EB', fontWeight: '700' }]}>{y}</Text>
+                                {value === y && <Ionicons name="checkmark-circle" size={14} color="#2563EB" />}
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
             )}
-            {show && Platform.OS === 'android' && (
-                <DateTimePicker value={sel} mode="date" display="default"
-                    onChange={(_, date) => { setShow(false); if (date) { setSel(date); onChange(toDateStr(date)); } }} />
-            )}
-        </>
+        </View>
     );
 }
 
@@ -105,26 +118,41 @@ export default function UserInfoView() {
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
 
-    const signUpEmail = params.email || '';
-    const signUpPassword = params.password || '';
+    // ✅ FIX: Dùng state + useFocusEffect để re-read params mỗi lần màn hình được focus
+    // Tránh lỗi invalid-email khi user quay lại từ userInfo → signUp → userInfo
+    const [signUpEmail, setSignUpEmail] = useState('');
+    const [signUpPassword, setSignUpPassword] = useState('');
+
+    useFocusEffect(useCallback(() => {
+        const e = (params.email || '').trim();
+        const p = (params.password || '').trim();
+        setSignUpEmail(e);
+        setSignUpPassword(p);
+        // Reset về step 0 khi quay lại màn này (tránh state cũ)
+        setStep(0);
+        setRole(''); setBizModel('');
+    }, [params.email, params.password]));
 
     const [step, setStep] = useState(0);
     const [role, setRole] = useState('');
     const [bizModel, setBizModel] = useState('');
+    // Thông tin chung
     const [phone, setPhone] = useState('');
     const [emailContact, setEmailContact] = useState('');
     const [address, setAddress] = useState('');
+    // ✅ Người liên hệ — gộp vào step thông tin chung (company only)
+    const [contactName, setContactName] = useState('');
+    const [contactPhone, setContactPhone] = useState('');
+    // Company fields
     const [companyName, setCompanyName] = useState('');
     const [taxCode, setTaxCode] = useState('');
     const [bizAddress, setBizAddress] = useState('');
-    // ── ✅ Người đại diện (company only) ─────────────────────
-    const [repName, setRepName] = useState('');
-    const [repPhone, setRepPhone] = useState('');
-    // ─────────────────────────────────────────────────────────
+    // Individual fields — họ tên chuyển vào step bizInfo
     const [fullName, setFullName] = useState('');
     const [cccd, setCccd] = useState('');
     const [cccdError, setCccdError] = useState('');
     const [dob, setDob] = useState('');
+    // Commitment
     const [committedRevenue, setCommittedRevenue] = useState('');
     const [revenueError, setRevenueError] = useState('');
     const [revenueTouched, setRevenueTouched] = useState(false);
@@ -138,6 +166,7 @@ export default function UserInfoView() {
     const [showProvinceDrop, setShowProvinceDrop] = useState(false);
     const [provinceSearch, setProvinceSearch] = useState('');
     const [provinces, setProvinces] = useState([]);
+    // Bank
     const [selectedBank, setSelectedBank] = useState(null);
     const [bankSearch, setBankSearch] = useState('');
     const [showBankDrop, setShowBankDrop] = useState(false);
@@ -157,25 +186,17 @@ export default function UserInfoView() {
             : ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD'];
     const TOTAL_STEPS = STEP_LABELS.length;
 
-    const handleSignOut = async () => { router.replace('/auth/signIn'); };
+    // ✅ Về signUp để user nhập lại (không về signIn)
+    const handleSignOut = () => { router.replace('/auth/signUp'); };
 
     const fetchRegions = async () => {
         if (regions.length > 0) return;
         setRegLoading(true);
-        try {
-            const snap = await getDocs(collection(db, 'province'));
-            setRegions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (e) { console.error(e); }
-        finally { setRegLoading(false); }
+        try { const snap = await getDocs(collection(db, 'province')); setRegions(snap.docs.map(d => ({ id: d.id, ...d.data() }))); }
+        catch (e) { console.error(e); } finally { setRegLoading(false); }
     };
-    const handleSelectRegion = (r) => {
-        setSelectedRegion(r); setSelectedProvince(''); setShowRegionDrop(false);
-        setProvinces((r.cities || []).map(c => c.ten));
-    };
-    const handleToggleArea = () => {
-        const next = !showAreaPicker; setShowAreaPicker(next);
-        if (next) fetchRegions(); else { setSelectedRegion(null); setSelectedProvince(''); }
-    };
+    const handleSelectRegion = (r) => { setSelectedRegion(r); setSelectedProvince(''); setShowRegionDrop(false); setProvinces((r.cities || []).map(c => c.ten)); };
+    const handleToggleArea = () => { const next = !showAreaPicker; setShowAreaPicker(next); if (next) fetchRegions(); else { setSelectedRegion(null); setSelectedProvince(''); } };
     const filteredProvinces = provinces.filter(p => p.toLowerCase().includes(provinceSearch.toLowerCase()));
     const filteredBanks = BANKS.filter(b => b.name.toLowerCase().includes(bankSearch.toLowerCase()) || b.shortName.toLowerCase().includes(bankSearch.toLowerCase()));
 
@@ -189,8 +210,7 @@ export default function UserInfoView() {
         const digits = text.replace(/\D/g, ''); setAccountNo(digits);
         if (selectedBank && digits.length > 0) {
             const { minLen, maxLen } = selectedBank;
-            if (digits.length < minLen || digits.length > maxLen)
-                setAccountNoErr(`Số TK ${selectedBank.name} phải có ${minLen === maxLen ? minLen : `${minLen}–${maxLen}`} chữ số`);
+            if (digits.length < minLen || digits.length > maxLen) setAccountNoErr(`Số TK ${selectedBank.name} phải có ${minLen === maxLen ? minLen : `${minLen}–${maxLen}`} chữ số`);
             else setAccountNoErr('');
         } else setAccountNoErr('');
     };
@@ -202,16 +222,19 @@ export default function UserInfoView() {
             case 2:
                 if (!phone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại'); return false; }
                 if (!address.trim()) { showAlert('Thông báo', 'Vui lòng nhập địa chỉ'); return false; }
+                // ✅ Company: validate người liên hệ ở step thông tin chung
+                if (bizModel === 'company') {
+                    if (!contactName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên người liên hệ'); return false; }
+                    if (!contactPhone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại người liên hệ'); return false; }
+                }
                 return true;
             case 3:
                 if (bizModel === 'company') {
                     if (!companyName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên công ty/hộ KD'); return false; }
                     if (!taxCode.trim()) { showAlert('Thông báo', 'Vui lòng nhập mã số thuế'); return false; }
                     if (!bizAddress.trim()) { showAlert('Thông báo', 'Vui lòng nhập địa chỉ đăng ký KD'); return false; }
-                    // ✅ Validate người đại diện
-                    if (!repName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên người đại diện'); return false; }
-                    if (!repPhone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại người đại diện'); return false; }
                 } else {
+                    // ✅ Individual: họ tên ở step 3
                     if (!fullName.trim()) { showAlert('Thông báo', 'Vui lòng nhập họ và tên'); return false; }
                     if (!cccd.trim()) { showAlert('Thông báo', 'Vui lòng nhập số CCCD/CMND'); return false; }
                     if (!validateCCCD(cccd)) { showAlert('Thông báo', 'Số CCCD phải có 12 chữ số (hoặc CMND 9 chữ số)'); return false; }
@@ -240,8 +263,16 @@ export default function UserInfoView() {
 
     const handleSubmit = async () => {
         if (!validateStep()) return;
-        if (!signUpEmail || !signUpPassword) {
-            showAlert('Lỗi', 'Không tìm thấy thông tin đăng ký. Vui lòng quay lại và thử lại.');
+
+        // ✅ Validate email trước khi gọi Firebase — tránh lỗi invalid-email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!signUpEmail || !emailRegex.test(signUpEmail)) {
+            showAlert('Lỗi email', 'Email không hợp lệ. Vui lòng quay lại bước đăng ký và nhập lại.');
+            router.replace('/auth/signUp');
+            return;
+        }
+        if (!signUpPassword || signUpPassword.length < 6) {
+            showAlert('Lỗi mật khẩu', 'Mật khẩu không hợp lệ. Vui lòng quay lại và nhập lại.');
             router.replace('/auth/signUp');
             return;
         }
@@ -266,9 +297,9 @@ export default function UserInfoView() {
                 payload.taxCode = taxCode.trim();
                 payload.bizAddress = bizAddress.trim();
                 payload.name = companyName.trim();
-                // ✅ Lưu thông tin người đại diện
-                payload.repName = repName.trim();
-                payload.repPhone = repPhone.trim();
+                // ✅ Người liên hệ (trước là người đại diện)
+                payload.contactName = contactName.trim();
+                payload.contactPhone = contactPhone.trim();
             } else {
                 payload.name = fullName.trim();
                 payload.cccd = cccd.trim();
@@ -284,10 +315,7 @@ export default function UserInfoView() {
                 }
             }
             if (needsBank) {
-                payload.bank = {
-                    id: selectedBank.id, name: selectedBank.name,
-                    accountNo: accountNo.trim(), accountName: accountName.trim(),
-                };
+                payload.bank = { id: selectedBank.id, name: selectedBank.name, accountNo: accountNo.trim(), accountName: accountName.trim() };
             }
             await setDoc(doc(db, 'users', email), payload);
             router.replace('/auth/pendingVerification');
@@ -296,8 +324,7 @@ export default function UserInfoView() {
                 ? 'Email này đã được đăng ký. Vui lòng dùng email khác hoặc đăng nhập.'
                 : e.message
             );
-        }
-        finally { setSubmitting(false); }
+        } finally { setSubmitting(false); }
     };
 
     // ── Step renderers ────────────────────────────────────────
@@ -310,16 +337,9 @@ export default function UserInfoView() {
                     const active = role === r.key;
                     return (
                         <TouchableOpacity key={r.key} style={[S.selCard, active && { borderColor: r.color, backgroundColor: r.bg }]} onPress={() => setRole(r.key)} activeOpacity={0.7}>
-                            <View style={[S.selIcon, { backgroundColor: active ? r.color + '22' : '#F1F5F9' }]}>
-                                <Ionicons name={r.icon} size={24} color={active ? r.color : '#94A3B8'} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[S.selLabel, active && { color: r.color }]}>{r.label}</Text>
-                                <Text style={S.selDesc}>{r.desc}</Text>
-                            </View>
-                            <View style={[S.selCheck, active && { backgroundColor: r.color, borderColor: r.color }]}>
-                                {active && <Ionicons name="checkmark" size={12} color="#fff" />}
-                            </View>
+                            <View style={[S.selIcon, { backgroundColor: active ? r.color + '22' : '#F1F5F9' }]}><Ionicons name={r.icon} size={24} color={active ? r.color : '#94A3B8'} /></View>
+                            <View style={{ flex: 1 }}><Text style={[S.selLabel, active && { color: r.color }]}>{r.label}</Text><Text style={S.selDesc}>{r.desc}</Text></View>
+                            <View style={[S.selCheck, active && { backgroundColor: r.color, borderColor: r.color }]}>{active && <Ionicons name="checkmark" size={12} color="#fff" />}</View>
                         </TouchableOpacity>
                     );
                 })}
@@ -336,16 +356,9 @@ export default function UserInfoView() {
                     const active = bizModel === m.key;
                     return (
                         <TouchableOpacity key={m.key} style={[S.selCard, active && { borderColor: '#2563EB', backgroundColor: '#EFF6FF' }]} onPress={() => setBizModel(m.key)} activeOpacity={0.7}>
-                            <View style={[S.selIcon, { backgroundColor: active ? '#BFDBFE' : '#F1F5F9' }]}>
-                                <Ionicons name={m.icon} size={24} color={active ? '#2563EB' : '#94A3B8'} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[S.selLabel, active && { color: '#2563EB' }]}>{m.label}</Text>
-                                <Text style={S.selDesc}>{m.desc}</Text>
-                            </View>
-                            <View style={[S.selCheck, active && { backgroundColor: '#2563EB', borderColor: '#2563EB' }]}>
-                                {active && <Ionicons name="checkmark" size={12} color="#fff" />}
-                            </View>
+                            <View style={[S.selIcon, { backgroundColor: active ? '#BFDBFE' : '#F1F5F9' }]}><Ionicons name={m.icon} size={24} color={active ? '#2563EB' : '#94A3B8'} /></View>
+                            <View style={{ flex: 1 }}><Text style={[S.selLabel, active && { color: '#2563EB' }]}>{m.label}</Text><Text style={S.selDesc}>{m.desc}</Text></View>
+                            <View style={[S.selCheck, active && { backgroundColor: '#2563EB', borderColor: '#2563EB' }]}>{active && <Ionicons name="checkmark" size={12} color="#fff" />}</View>
                         </TouchableOpacity>
                     );
                 })}
@@ -353,10 +366,14 @@ export default function UserInfoView() {
         </View>
     );
 
+    // ✅ Step 2: Thông tin chung
+    // - Company:    SĐT + Email + Địa chỉ + Người liên hệ
+    // - Individual: SĐT + Email + Địa chỉ  (không có họ tên)
     const renderStepCommon = () => (
         <View style={S.stepContent}>
             <Text style={S.stepTitle}>Thông tin liên hệ</Text>
             <Text style={S.stepSub}>Điền thông tin để chúng tôi liên hệ với bạn</Text>
+
             <View style={S.fg}><Text style={S.label}>Số điện thoại <Text style={S.req}>*</Text></Text>
                 <View style={F.inputBox}><Ionicons name="call-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={phone} onChangeText={setPhone} /></View>
             </View>
@@ -366,15 +383,40 @@ export default function UserInfoView() {
             <View style={S.fg}><Text style={S.label}>Địa chỉ <Text style={S.req}>*</Text></Text>
                 <View style={[F.inputBox, { alignItems: 'flex-start', minHeight: 80 }]}><Ionicons name="location-outline" size={15} color="#94A3B8" style={{ marginTop: 2 }} /><TextInput style={[F.input, { textAlignVertical: 'top' }]} placeholder="Số nhà, đường, quận/huyện, tỉnh/thành..." placeholderTextColor="#94A3B8" multiline value={address} onChangeText={setAddress} /></View>
             </View>
+
+            {/* ✅ Người liên hệ — chỉ hiện với company */}
+            {bizModel === 'company' && (
+                <View style={S.contactSection}>
+                    <View style={S.contactHeader}>
+                        <Ionicons name="person-circle-outline" size={15} color="#2563EB" />
+                        <Text style={S.contactTitle}>Người liên hệ</Text>
+                    </View>
+                    <View style={S.fg}>
+                        <Text style={S.label}>Họ và tên người liên hệ <Text style={S.req}>*</Text></Text>
+                        <View style={F.inputBox}>
+                            <Ionicons name="person-outline" size={15} color="#94A3B8" />
+                            <TextInput style={F.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={contactName} onChangeText={setContactName} />
+                        </View>
+                    </View>
+                    <View style={[S.fg, { marginBottom: 4 }]}>
+                        <Text style={S.label}>Số điện thoại người liên hệ <Text style={S.req}>*</Text></Text>
+                        <View style={F.inputBox}>
+                            <Ionicons name="call-outline" size={15} color="#94A3B8" />
+                            <TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={contactPhone} onChangeText={setContactPhone} />
+                        </View>
+                    </View>
+                </View>
+            )}
         </View>
     );
 
+    // ✅ Step 3:
+    // - Company:    Tên cty + MST + Địa chỉ ĐKKD  (không có người liên hệ nữa)
+    // - Individual: Họ tên + CCCD + Ngày sinh
     const renderStepBizInfo = () => bizModel === 'company' ? (
         <View style={S.stepContent}>
             <Text style={S.stepTitle}>Thông tin doanh nghiệp</Text>
             <Text style={S.stepSub}>Theo giấy đăng ký kinh doanh</Text>
-
-            {/* Thông tin doanh nghiệp */}
             <View style={S.fg}><Text style={S.label}>Tên công ty / Hộ kinh doanh <Text style={S.req}>*</Text></Text>
                 <View style={F.inputBox}><Ionicons name="business-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="Công ty TNHH ABC..." placeholderTextColor="#94A3B8" value={companyName} onChangeText={setCompanyName} /></View>
             </View>
@@ -384,30 +426,9 @@ export default function UserInfoView() {
             <View style={S.fg}><Text style={S.label}>Địa chỉ đăng ký kinh doanh <Text style={S.req}>*</Text></Text>
                 <View style={[F.inputBox, { alignItems: 'flex-start', minHeight: 80 }]}><Ionicons name="location-outline" size={15} color="#94A3B8" style={{ marginTop: 2 }} /><TextInput style={[F.input, { textAlignVertical: 'top' }]} placeholder="Địa chỉ theo ĐKKD..." placeholderTextColor="#94A3B8" multiline value={bizAddress} onChangeText={setBizAddress} /></View>
             </View>
-
-            {/* ✅ Thông tin người đại diện */}
-            <View style={S.repSection}>
-                <View style={S.repHeader}>
-                    <Ionicons name="person-circle-outline" size={15} color="#2563EB" />
-                    <Text style={S.repTitle}>Thông tin người đại diện</Text>
-                </View>
-                <View style={S.fg}>
-                    <Text style={S.label}>Họ và tên người đại diện <Text style={S.req}>*</Text></Text>
-                    <View style={F.inputBox}>
-                        <Ionicons name="person-outline" size={15} color="#94A3B8" />
-                        <TextInput style={F.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={repName} onChangeText={setRepName} />
-                    </View>
-                </View>
-                <View style={[S.fg, { marginBottom: 4 }]}>
-                    <Text style={S.label}>Số điện thoại người đại diện <Text style={S.req}>*</Text></Text>
-                    <View style={F.inputBox}>
-                        <Ionicons name="call-outline" size={15} color="#94A3B8" />
-                        <TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={repPhone} onChangeText={setRepPhone} />
-                    </View>
-                </View>
-            </View>
         </View>
     ) : (
+        // ✅ Individual: họ tên nằm ở đây, không có ở step thông tin chung
         <View style={S.stepContent}>
             <Text style={S.stepTitle}>Thông tin cá nhân</Text>
             <Text style={S.stepSub}>Theo giấy tờ tùy thân hợp lệ</Text>
@@ -426,8 +447,8 @@ export default function UserInfoView() {
                 </View>
                 {cccdError ? <Text style={S.errText}>{cccdError}</Text> : null}
             </View>
-            <View style={S.fg}><Text style={S.label}>Ngày sinh <Text style={S.optional}>(tuỳ chọn)</Text></Text>
-                <DateField value={dob} onChange={setDob} />
+            <View style={S.fg}><Text style={S.label}>Năm sinh <Text style={S.optional}>(tuỳ chọn)</Text></Text>
+                <YearField value={dob} onChange={setDob} />
             </View>
         </View>
     );
@@ -525,13 +546,9 @@ export default function UserInfoView() {
                 <TouchableOpacity style={[F.inputBox, showBankDrop && { borderColor: '#2563EB' }]} onPress={() => setShowBankDrop(p => !p)} activeOpacity={0.8}>
                     {selectedBank ? (
                         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>{selectedBank.shortName}</Text>
-                            </View>
+                            <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}><Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>{selectedBank.shortName}</Text></View>
                             <Text style={{ flex: 1, fontSize: 14, color: '#0F172A', fontWeight: '600' }}>{selectedBank.name}</Text>
-                            <TouchableOpacity onPress={() => { setSelectedBank(null); setAccountNo(''); setAccountNoErr(''); }}>
-                                <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => { setSelectedBank(null); setAccountNo(''); setAccountNoErr(''); }}><Ionicons name="close-circle" size={16} color="#94A3B8" /></TouchableOpacity>
                         </View>
                     ) : (
                         <><Ionicons name="search-outline" size={15} color="#94A3B8" /><Text style={F.placeholder}>Tìm và chọn ngân hàng...</Text><Ionicons name={showBankDrop ? 'chevron-up' : 'chevron-down'} size={15} color="#94A3B8" /></>
@@ -543,9 +560,7 @@ export default function UserInfoView() {
                         <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
                             {filteredBanks.map(b => (
                                 <TouchableOpacity key={b.id} style={[S.dropItem, selectedBank?.id === b.id && S.dropActive]} onPress={() => { setSelectedBank(b); setShowBankDrop(false); setBankSearch(''); setAccountNo(''); setAccountNoErr(''); }} activeOpacity={0.7}>
-                                    <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#2563EB' }}>{b.shortName}</Text>
-                                    </View>
+                                    <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}><Text style={{ fontSize: 10, fontWeight: '800', color: '#2563EB' }}>{b.shortName}</Text></View>
                                     <Text style={[S.dropText, selectedBank?.id === b.id && { color: '#2563EB', fontWeight: '700' }]}>{b.name}</Text>
                                     {selectedBank?.id === b.id && <Ionicons name="checkmark-circle" size={14} color="#2563EB" />}
                                 </TouchableOpacity>
@@ -654,11 +669,10 @@ const S = StyleSheet.create({
     optional: { fontSize: 11, color: '#94A3B8', fontWeight: '400' },
     req: { color: '#EF4444' },
     errText: { fontSize: 11, color: '#EF4444', marginTop: 4, fontWeight: '500' },
-    // ✅ Người đại diện
-    repSection: { backgroundColor: '#EFF6FF', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 4 },
-    repHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#BFDBFE' },
-    repTitle: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
-    // ─────────────────────────────────────────────────────────
+    // ✅ Người liên hệ section
+    contactSection: { backgroundColor: '#EFF6FF', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#BFDBFE', marginTop: 4, marginBottom: 4 },
+    contactHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#BFDBFE' },
+    contactTitle: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
     toggle: { width: 46, height: 26, borderRadius: 13, backgroundColor: '#E2E8F0', padding: 3, justifyContent: 'center' },
     toggleOn: { backgroundColor: '#2563EB' },
     toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFF', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 },

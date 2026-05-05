@@ -102,7 +102,7 @@ export default function ChatListScreen() {
             <TouchableOpacity
                 style={[S.roomCard, isUnread && S.roomCardUnread]}
                 onPress={() => router.push({
-                    pathname: '/chat/[roomId]',
+                    pathname: '/chat/[roomID]',
                     params: { roomId: item.roomId, orderId: item.orderId },
                 })}
                 activeOpacity={0.75}

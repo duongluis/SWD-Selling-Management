@@ -1,3 +1,4 @@
+import { getRoomIdByOrderId, sendStatusUpdateMessage } from '@/components/Utils/chatService';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +16,6 @@ import {
   useStatusList,
 } from '../../components/Hooks/getStatus';
 import { showAlert } from '../../components/Main/showAlert';
-import { getRoomIdByOrderId, sendStatusUpdateMessage } from '../../components/Utils/chatService';
 import { trackRevenueOnPaid } from '../../components/Utils/trackRevenue';
 import { db } from '../../config/firebaseConfig';
 
@@ -247,6 +247,18 @@ function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) 
           <Text style={P.orderDate}>{order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : '—'}</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          {/* ✅ Nút xem hợp đồng */}
+          <TouchableOpacity
+            style={[P.editBtn, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
+            onPress={() => router.push({
+              pathname: '/orderContract',
+              params: { orderParam: JSON.stringify(order) },
+            })}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="document-text-outline" size={14} color="#065F46" />
+            <Text style={[P.editBtnText, { color: '#065F46' }]}>Xem HĐ</Text>
+          </TouchableOpacity>
           {/* Nút Chat */}
           <TouchableOpacity
             style={[P.editBtn, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' }]}

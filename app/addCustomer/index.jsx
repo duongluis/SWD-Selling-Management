@@ -33,7 +33,7 @@ export default function AddCustomer() {
 
   const handleSave = async () => {
     if (!form.name || !form.phone) {
-      Alert.alert('Thông báo', 'Vui lòng nhập họ tên và số điện thoại');
+      Alert.alert('THÔNG BÁO', 'VUI LÒNG NHẬP HỌ TÊN VÀ ĐIỆN THOẠI');
       return;
     }
     setSubmitting(true);

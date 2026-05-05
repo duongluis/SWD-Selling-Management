@@ -75,7 +75,7 @@ export default function HomeView() {
     { name: "Đơn hàng mới", icon: "add-circle-outline", action: () => router.push("/addOrder"), color: "#3B82F6", bg: "#EFF6FF" },
     { name: "Thêm khách", icon: "person-add-outline", action: () => router.push("/addCustomer"), color: "#8B5CF6", bg: "#F5F3FF" },
     { name: "Phòng chat", icon: "chatbubbles-outline", action: () => router.push("/chatList"), color: "#059669", bg: "#ECFDF5" },
-    { name: "Dịch vụ", icon: "construct-outline", action: () => router.push("/addService"), color: "#F59E0B", bg: "#FFFBEB" },
+    { name: "Hợp đồng", icon: "document-text-outline", action: () => router.push("/orderContract?mode=template"), color: "#0C447C", bg: "#EFF6FF" },
   ];
 
   return (

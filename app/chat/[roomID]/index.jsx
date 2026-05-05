@@ -1,6 +1,9 @@
 // app/chat/[roomId]/index.jsx
 // Màn hình chat realtime cho 1 đơn hàng
 
+import {
+    markRoomAsRead, sendMessage, subscribeMessages,
+} from '@/components/Utils/chatService';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,9 +13,6 @@ import {
     Platform, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-    markRoomAsRead, sendMessage, subscribeMessages,
-} from '../../../components/Utils/chatService';
 
 const isWeb = Platform.OS === 'web';
 
@@ -87,7 +87,7 @@ export default function ChatScreen() {
     const orderId = params.orderId || '';
 
     const [messages, setMessages] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!!roomId); // ✅ false ngay nếu không có roomId
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const flatRef = useRef(null);
@@ -97,10 +97,13 @@ export default function ChatScreen() {
 
     // ── Subscribe realtime messages ───────────────────────────
     useEffect(() => {
-        if (!roomId) return;
+        if (!roomId) {
+            setLoading(false); // ✅ không có roomId → dừng loading ngay
+            return;
+        }
         setLoading(true);
 
-        // Timeout fallback — nếu sau 5s vẫn chưa có callback thì dừng loading
+        // Timeout fallback 5s
         const timeout = setTimeout(() => setLoading(false), 5000);
 
         let unsub;
@@ -117,7 +120,6 @@ export default function ChatScreen() {
             setLoading(false);
         }
 
-        // Đánh dấu đã đọc khi vào room
         markRoomAsRead(roomId, myEmail).catch(() => { });
 
         return () => {

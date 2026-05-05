@@ -1,0 +1,910 @@
+// app/orderContract/index.jsx
+// Màn tính toán + hợp đồng đơn hàng
+// mode=order  → pre-fill từ đơn hàng có sẵn
+// mode=template → điền tay, không lưu DB
+// Xuất PDF: web dùng window.print(), mobile dùng expo-print
+
+import { db } from '@/config/firebaseConfig';
+import { UserDetailContext } from '@/context/UserDetailContext';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { collection, getDocs } from 'firebase/firestore';
+import { useContext, useEffect, useState } from 'react';
+import {
+    ActivityIndicator, Alert, Platform, ScrollView,
+    StyleSheet, Text, TextInput, TouchableOpacity, View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const isWeb = Platform.OS === 'web';
+const fmt = (n) => Math.round(n || 0).toLocaleString('vi-VN') + ' đ';
+const fmtN = (n) => Math.round(n || 0).toLocaleString('vi-VN');
+const COMM = { buon: 0.03, le: 0.05 };
+
+// ── Input nhỏ dùng trong bảng — dùng string để tránh mất ký tự ──
+function TInput({ value, onChange, keyboardType = 'default', style, placeholder }) {
+    return (
+        <TextInput
+            style={[S.tInput, style]}
+            value={value === undefined || value === null ? '' : String(value)}
+            keyboardType={keyboardType}
+            onChangeText={onChange}           // ← trả về string thô, không parse ở đây
+            selectTextOnFocus
+            placeholder={placeholder}
+            placeholderTextColor="#CBD5E1"
+        />
+    );
+}
+
+// ── Divider ───────────────────────────────────────────────────
+const HR = () => <View style={S.hr} />;
+
+// ── Xuất PDF ─────────────────────────────────────────────────
+async function getBase64Logo() {
+    try {
+        const { Asset } = await import('expo-asset');
+        const asset = Asset.fromModule(require('../../assets/images/logo-light.png'));
+        await asset.downloadAsync();
+        console.log('asset.uri:', asset.uri); // URL thật sau bundle
+        return asset.uri; // web: http://localhost:8081/assets/abc123.png
+        // mobile: data URI hoặc file:// path
+    } catch (e) {
+        console.warn('getBase64Logo failed:', e.message);
+        return null;
+    }
+}
+async function exportPDF(htmlContent) {
+    if (isWeb) {
+        const w = window.open('', '_blank');
+        w.document.write(htmlContent);
+        w.document.close();
+        setTimeout(() => w.print(), 400);
+    } else {
+        try {
+            const Print = await import('expo-print');
+            await Print.printAsync({ html: htmlContent });
+        } catch (e) {
+            Alert.alert('Lỗi', 'Không thể xuất PDF: ' + e.message);
+        }
+    }
+}
+
+function buildPDFHtml({ order, seller, items: itemsProp, disc, total, discAmt, logoBase64 }) {
+    const items = Array.isArray(itemsProp) ? itemsProp : [];      // ✅ guard
+    const hdNum = `HD-${new Date().getFullYear()}-${(order.id || '001').slice(-6).padStart(6, '0')}`;
+    const today = new Date().toLocaleDateString('vi-VN');
+    const rows = items.map((p, i) => `
+    <tr>
+      <td style="text-align:center;color:#94a3b8">${i + 1}</td>
+      <td>${p.name || ''}</td>
+      <td style="text-align:center">${fmtN(p.qty)}</td>
+      <td style="text-align:right">${fmt(p.price)}</td>
+      <td style="text-align:right;font-weight:600">${fmt((p.price || 0) * (p.qty || 1))}</td>
+      <td style="color:#64748b;font-style:italic">${p.note || '—'}</td>
+    </tr>`).join('');
+
+    return `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8">
+<title>Hợp đồng ${hdNum}</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:0;padding:32px;color:#0f172a;font-size:13px;position:relative}
+.watermark{
+  position:fixed;
+  top:40%; left:50%;
+  transform:translate(-50%,-50%);
+  width:80%;
+  opacity:0.1;
+  pointer-events:none;
+  z-index:0;
+  object-fit:contain;
+}
+body>*:not(.watermark){position:relative;z-index:1}
+
+.header{text-align:center;margin-bottom:20px}
+h1{font-size:20px;font-weight:700;margin:0 0 4px;text-align:center}
+.sub{color:#64748b;font-size:12px;text-align:center}
+.badge{display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;background:'transparent';color:#065f46;border:1px solid #a7f3d0}
+
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:90px 0 20px}
+
+.party{background:'transparent';border-radius:8px;padding:14px;border:1px solid #e2e8f0}
+.party-title{font-size:10px;font-weight:700;letter-spacing:.06em;color:#185fa5;text-transform:uppercase;margin-bottom:8px}
+.party-name{font-size:15px;font-weight:700;margin-bottom:4px}
+.party-detail{font-size:11px;color:#64748b;line-height:1.6}
+table{width:100%;border-collapse:collapse;margin:12px 0}
+th{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#94a3b8;padding:10px 12px;text-align:left;background:'transparent';border-bottom:1px solid #e2e8f0}
+td{padding:10px 12px;border-bottom:1px solid #f1f5f9}
+tr:last-child td{border-bottom:none}
+.tfoot td{background:'transparent';font-weight:600;font-size:13px;border-top:1px solid #e2e8f0}
+.total-row td{background:'transparent';font-size:15px;font-weight:700;color:#185fa5}
+.info-box{background:'transparent';border-radius:8px;padding:12px;margin:16px 0;font-size:12px;color:#64748b}
+.terms{font-size:11px;color:#94a3b8;line-height:1.7;margin:12px 0}
+
+.sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px}
+.sig-col{border-top:1px solid #cbd5e1;padding-top:10px;text-align:center}
+.sig-label{font-size:11px;color:#64748b;margin-bottom:40px}
+.sig-name{font-size:13px;font-weight:700}
+@media print{body{padding:16px}}
+</style></head><body>
+${logoBase64 ? `<img class="watermark" src="${logoBase64}" alt="" />` : 'không có ảnh'}
+
+<div class="header">
+  <h1>BÁO GIÁ HỆ THỐNG LỌC TỔNG SINH HOẠT</h1>
+  <div class="sub">Số HĐ: ${hdNum} &nbsp;·&nbsp; Ngày ${today} &nbsp;·&nbsp; 
+
+  </div>
+</div>
+<div class="parties">
+  <div class="party">
+    <div class="party-title">Bên nhận (A)</div>
+    <div class="party-name">${order.customer || '—'}</div>
+    <div class="party-detail">SĐT: ${order.phone || '—'}<br>Địa chỉ: ${order.address || '—'}</div>
+  </div>
+  <div class="party">
+    <div class="party-title">Bên gửi (B)</div>
+    <div class="party-name">${seller?.name || 'SWD Company'}</div>
+    <div class="party-detail">SĐT: ${seller?.phone || '—'}<br>Email: ${seller?.email || '—'}</div>
+  </div>
+</div>
+<table style>
+  <thead><tr>
+    <th style="width:30px">#</th>
+    <th>Sản phẩm</th>
+    <th style="width:60px;text-align:center">SL</th>
+    <th style="width:110px;text-align:righ">Đơn giá</th>
+    <th style="width:120px;text-align:right">Thành tiền</th>
+    <th style="width:120px">Ghi chú</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot>
+    <tr class="tfoot"><td colspan="4">Chiết khấu${disc > 0 ? ` (${disc}%)` : ''}</td><td style="text-align:right;color:#a32d2d">- ${fmt(discAmt)}</td><td></td></tr>
+    <tr class="total-row"><td colspan="4">Tổng thanh toán</td><td style="text-align:right">${fmt(total)}</td><td></td></tr>
+  </tfoot>
+</table>
+<div class="info-box">
+  ${order.note ? '<br>Ghi chú: ' + order.note : '<br>Ghi chú: Không có'}
+</div>
+<div class="terms">
+  ${order.orderType === 'buon'
+            ? 'Thanh toán toàn bộ trước khi giao hàng. Hàng hoá được kiểm tra tại thời điểm giao nhận. Mọi khiếu nại cần phản ánh trong vòng 24 giờ kể từ khi nhận hàng.'
+            : 'Thanh toán khi nhận hàng hoặc chuyển khoản trước. Lắp đặt miễn phí trong vòng 24 giờ kể từ khi giao hàng thành công.'}
+</div>
+<div class="sig">
+  <div class="sig-col">
+    <div class="sig-label">Đại diện bên mua</div>
+    <div class="sig-name">${order.customer || '—'}</div>
+    <div style="font-size:11px;color:#94a3b8">Ký và ghi rõ họ tên</div>
+  </div>
+  <div class="sig-col">
+    <div class="sig-label">Đại diện bên bán</div>
+    <div class="sig-name">${seller?.name || 'SWD Company'}</div>
+    <div style="font-size:11px;color:#94a3b8">Ký và đóng dấu</div>
+  </div>
+</div>
+</body></html>`;
+}
+
+// ── Product Dropdown shared ───────────────────────────────────
+function ProductDropdown({ catalog, onSelect, onClose }) {
+    const [search, setSearch] = useState('');
+    const filtered = catalog.filter(p =>
+        (p.name || '').toLowerCase().includes(search.toLowerCase())
+    );
+    return (
+        <View style={S.dropWrap}>
+            <View style={S.dropSearch}>
+                <Ionicons name="search-outline" size={13} color="#94A3B8" />
+                <TextInput
+                    style={S.dropSearchInput}
+                    placeholder="Tìm sản phẩm..."
+                    placeholderTextColor="#94A3B8"
+                    value={search}
+                    onChangeText={setSearch}
+                    autoFocus
+                />
+                {search.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearch('')}>
+                        <Ionicons name="close-circle" size={13} color="#94A3B8" />
+                    </TouchableOpacity>
+                )}
+            </View>
+            <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+                {filtered.length === 0 ? (
+                    <Text style={S.dropEmpty}>Không tìm thấy</Text>
+                ) : filtered.map((p, i) => (
+                    <TouchableOpacity key={p.docId || i} style={S.dropItem}
+                        onPress={() => { onSelect(p); onClose(); }} activeOpacity={0.7}>
+                        <View style={S.dropItemIcon}>
+                            <Ionicons name="water-outline" size={13} color="#185FA5" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={S.dropItemName} numberOfLines={1}>{p.name}</Text>
+                            {p.capacity && <Text style={S.dropItemCap}>{p.capacity}</Text>}
+                        </View>
+                        <Text style={S.dropItemPrice}>
+                            {(p.price || p.price_a || 0).toLocaleString('vi-VN')}đ
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
+        </View>
+    );
+}
+
+// ── Template Form (mode=template) ────────────────────────────
+function TemplateForm({ form, setForm, catalog }) {
+    const [openDropIdx, setOpenDropIdx] = useState(null); // index sản phẩm đang mở dropdown
+
+    const addProduct = () => setForm(f => ({
+        ...f,
+        items: [...(f.items || []), { name: '', qty: '1', price: '', note: '' }],
+    }));
+
+    const removeProduct = (i) => setForm(f => ({
+        ...f,
+        items: (f.items || []).filter((_, idx) => idx !== i),
+    }));
+
+    const updateItem = (i, field, val) => setForm(f => {
+        const items = (f.items || []).map((p, idx) =>
+            idx === i ? { ...p, [field]: val } : p   // ✅ lưu string thô
+        );
+        return { ...f, items };
+    });
+
+    const selectProduct = (i, prod) => {
+        setForm(f => {
+            const items = (f.items || []).map((p, idx) =>
+                idx === i ? { ...p, name: prod.name, price: String(prod.price || prod.price_a || 0) } : p
+            );
+            return { ...f, items };
+        });
+        setOpenDropIdx(null);
+    };
+
+    return (
+        <View style={S.templateCard}>
+            <Text style={S.sectionHead}>Thông tin hợp đồng</Text>
+            <HR />
+
+            <Text style={S.fieldLabel}>Loại đơn</Text>
+            <View style={S.typeRow}>
+                {['buon', 'le'].map(t => (
+                    <TouchableOpacity key={t}
+                        style={[S.typeBtn, form.orderType === t && S.typeBtnActive]}
+                        onPress={() => setForm(f => ({
+                            ...f, orderType: t,
+                            paymentMethod: t === 'buon' ? 'company' : 'customer'
+                        }))}
+                    >
+                        <Text style={[S.typeBtnText, form.orderType === t && S.typeBtnTextActive]}>
+                            {t === 'buon' ? 'Đơn buôn' : 'Đơn lẻ'}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            <Text style={S.subHead}>Bên mua</Text>
+            <Text style={S.fieldLabel}>Tên khách hàng</Text>
+            <TextInput style={S.input} placeholder="Nguyễn Văn A" placeholderTextColor="#CBD5E1"
+                value={form.customer} onChangeText={v => setForm(f => ({ ...f, customer: v }))} />
+            <Text style={S.fieldLabel}>Số điện thoại</Text>
+            <TextInput style={S.input} placeholder="0901 234 567" keyboardType="phone-pad" placeholderTextColor="#CBD5E1"
+                value={form.phone} onChangeText={v => setForm(f => ({ ...f, phone: v }))} />
+            <Text style={S.fieldLabel}>Địa chỉ giao hàng</Text>
+            <TextInput style={[S.input, { minHeight: 56 }]} placeholder="123 Đường ABC, Q.1, TP.HCM"
+                multiline placeholderTextColor="#CBD5E1"
+                value={form.address} onChangeText={v => setForm(f => ({ ...f, address: v }))} />
+
+            <HR />
+            <Text style={S.subHead}>Sản phẩm</Text>
+
+            {(form.items || []).map((p, i) => (
+                <View key={i} style={S.prodFormRow}>
+                    <View style={S.prodFormHeader}>
+                        <Text style={S.prodFormIdx}>#{i + 1}</Text>
+                        {(form.items || []).length > 1 && (
+                            <TouchableOpacity onPress={() => removeProduct(i)}>
+                                <Ionicons name="trash-outline" size={15} color="#EF4444" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* ✅ Dropdown chọn sản phẩm */}
+                    <Text style={S.fieldLabel}>Sản phẩm</Text>
+                    <TouchableOpacity
+                        style={[S.input, S.dropTrigger, openDropIdx === i && { borderColor: '#185FA5' }]}
+                        onPress={() => setOpenDropIdx(openDropIdx === i ? null : i)}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={p.name ? S.dropTriggerText : S.dropTriggerPlaceholder} numberOfLines={1}>
+                            {p.name || 'Chọn sản phẩm...'}
+                        </Text>
+                        <Ionicons name={openDropIdx === i ? 'chevron-up' : 'chevron-down'} size={14} color="#94A3B8" />
+                    </TouchableOpacity>
+                    {openDropIdx === i && (
+                        <ProductDropdown
+                            catalog={catalog}
+                            onSelect={(prod) => selectProduct(i, prod)}
+                            onClose={() => setOpenDropIdx(null)}
+                        />
+                    )}
+
+                    <View style={S.row2}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={S.fieldLabel}>Số lượng</Text>
+                            <TextInput style={S.input} keyboardType="numeric" placeholderTextColor="#CBD5E1"
+                                value={String(p.qty ?? '')}
+                                onChangeText={v => updateItem(i, 'qty', v)} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={S.fieldLabel}>Đơn giá (đ)</Text>
+                            <TextInput style={S.input} keyboardType="numeric" placeholderTextColor="#CBD5E1"
+                                value={String(p.price ?? '')}
+                                onChangeText={v => updateItem(i, 'price', v)} />
+                        </View>
+                    </View>
+                    <Text style={S.fieldLabel}>Ghi chú</Text>
+                    <TextInput style={S.input} placeholder="Giao buổi sáng..." placeholderTextColor="#CBD5E1"
+                        value={p.note || ''} onChangeText={v => updateItem(i, 'note', v)} />
+                </View>
+            ))}
+
+            <TouchableOpacity style={S.addProdBtn} onPress={addProduct}>
+                <Ionicons name="add" size={16} color="#185FA5" />
+                <Text style={S.addProdText}>Thêm sản phẩm</Text>
+            </TouchableOpacity>
+
+            <HR />
+            <Text style={S.fieldLabel}>Hình thức thanh toán</Text>
+            <View style={S.typeRow}>
+                {[
+                    { key: 'customer', label: 'Khách hàng TT' },
+                    { key: 'company', label: 'Doanh nghiệp TT' },
+                ].map(opt => (
+                    <TouchableOpacity key={opt.key}
+                        style={[S.typeBtn, form.paymentMethod === opt.key && S.typeBtnActive]}
+                        onPress={() => setForm(f => ({ ...f, paymentMethod: opt.key }))}
+                    >
+                        <Text style={[S.typeBtnText, form.paymentMethod === opt.key && S.typeBtnTextActive]}>
+                            {opt.label}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            <Text style={S.fieldLabel}>Ghi chú đơn hàng</Text>
+            <TextInput style={S.input} placeholder="Hướng dẫn đặc biệt..." placeholderTextColor="#CBD5E1"
+                value={form.note || ''} onChangeText={v => setForm(f => ({ ...f, note: v }))} />
+        </View>
+    );
+}
+
+// ── Calculator ────────────────────────────────────────────────
+function Calculator({ items: itemsProp, setItems, orderType, disc, setDisc, catalog }) {
+    const items = Array.isArray(itemsProp) ? itemsProp : [];
+    const [openDropIdx, setOpenDropIdx] = useState(null);
+
+    // ✅ Parse string → number CHỈ khi tính toán, không parse khi lưu state
+    const parseNum = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
+    const subtotal = items.reduce((s, p) => s + parseNum(p.price) * parseNum(p.qty), 0);
+    const discAmt = subtotal * (parseNum(disc) / 100);
+    const total = subtotal - discAmt;
+    const commRate = COMM[orderType] || 0.03;
+    const comm = total * commRate;
+
+    const update = (i, field, val) => {
+        setItems(prev => (prev || []).map((p, idx) =>
+            idx === i ? { ...p, [field]: val } : p  // ✅ lưu string thô
+        ));
+    };
+
+    const selectProduct = (i, prod) => {
+        setItems(prev => (prev || []).map((p, idx) =>
+            idx === i ? { ...p, name: prod.name, price: String(prod.price || prod.price_a || 0) } : p
+        ));
+        setOpenDropIdx(null);
+    };
+
+    return (
+        <View style={S.calcCard}>
+            <View style={S.calcHeader}>
+                <View style={S.calcIcon}>
+                    <Ionicons name="calculator-outline" size={16} color="#185FA5" />
+                </View>
+                <Text style={S.calcTitle}>Tính toán</Text>
+                <View style={S.editBadge}>
+                    <Ionicons name="create-outline" size={10} color="#185FA5" />
+                    <Text style={S.editBadgeText}>Có thể sửa</Text>
+                </View>
+            </View>
+            <HR />
+
+            {items.map((p, i) => (
+                <View key={i} style={S.calcRow}>
+                    <View style={S.calcProdIcon}>
+                        <Ionicons name="water-outline" size={12} color="#185FA5" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        {/* ✅ Dropdown chọn sản phẩm */}
+                        <TouchableOpacity
+                            style={[S.calcDropTrigger, openDropIdx === i && { borderColor: '#185FA5' }]}
+                            onPress={() => setOpenDropIdx(openDropIdx === i ? null : i)}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={p.name ? S.calcProdName : S.calcDropPlaceholder} numberOfLines={1}>
+                                {p.name || 'Chọn sản phẩm...'}
+                            </Text>
+                            <Ionicons name={openDropIdx === i ? 'chevron-up' : 'chevron-down'} size={13} color="#94A3B8" />
+                        </TouchableOpacity>
+                        {openDropIdx === i && catalog.length > 0 && (
+                            <ProductDropdown
+                                catalog={catalog}
+                                onSelect={(prod) => selectProduct(i, prod)}
+                                onClose={() => setOpenDropIdx(null)}
+                            />
+                        )}
+
+                        <View style={S.calcInputs}>
+                            <View style={S.calcField}>
+                                <Text style={S.calcFieldLabel}>SL</Text>
+                                <TInput
+                                    value={String(p.qty ?? '')}
+                                    onChange={v => update(i, 'qty', v)}
+                                    keyboardType="numeric"
+                                    style={{ width: 52 }}
+                                    placeholder="1"
+                                />
+                            </View>
+                            <View style={S.calcField}>
+                                <Text style={S.calcFieldLabel}>Đơn giá (đ)</Text>
+                                <TInput
+                                    value={String(p.price ?? '')}
+                                    onChange={v => update(i, 'price', v)}
+                                    keyboardType="numeric"
+                                    style={{ minWidth: 90 }}
+                                    placeholder="0"
+                                />
+                            </View>
+                            <View style={S.calcField}>
+                                <Text style={S.calcFieldLabel}>Thành tiền</Text>
+                                <Text style={S.lineTotal}>{fmt(parseNum(p.price) * parseNum(p.qty))}</Text>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            ))}
+
+            <HR />
+            <View style={S.discRow}>
+                <Text style={S.calcFieldLabel}>Chiết khấu (%)</Text>
+                <TInput
+                    value={String(disc ?? '')}
+                    onChange={v => setDisc(v)}
+                    keyboardType="numeric"
+                    style={{ width: 64 }}
+                    placeholder="0"
+                />
+            </View>
+            <HR />
+
+            <View style={S.statRow}><Text style={S.statLabel}>Tổng tiền hàng</Text><Text style={S.statVal}>{fmt(subtotal)}</Text></View>
+            <View style={S.statRow}><Text style={S.statLabel}>Chiết khấu</Text><Text style={[S.statVal, { color: '#A32D2D' }]}>- {fmt(discAmt)}</Text></View>
+            <View style={S.totalRow}>
+                <Text style={S.totalLabel}>Tổng thanh toán</Text>
+                <Text style={S.totalVal}>{fmt(total)}</Text>
+            </View>
+            <View style={S.commBox}>
+                <View>
+                    <Text style={S.commLabel}>Hoa hồng nhận được</Text>
+                    <Text style={S.commVal}>{fmt(comm)}</Text>
+                    <Text style={S.commSub}>{(commRate * 100).toFixed(0)}% · {orderType === 'buon' ? 'đơn buôn' : 'đơn lẻ'}</Text>
+                </View>
+                <Text style={S.commRate}>{(commRate * 100).toFixed(0)}%</Text>
+            </View>
+        </View>
+    );
+}
+
+// ── Contract View ─────────────────────────────────────────────
+function Contract({ order, seller, items: itemsProp, disc, total, discAmt }) {
+    const items = Array.isArray(itemsProp) ? itemsProp : [];     // ✅ guard
+    const hdNum = `HD-${new Date().getFullYear()}-${(order.id || Math.floor(Math.random() * 999 + 1).toString()).slice(-6).padStart(6, '0')}`;
+    const today = new Date().toLocaleDateString('vi-VN');
+
+    return (
+        <View style={S.contractCard}>
+            {/* Head */}
+            <View style={S.cHead}>
+                <View style={{ flex: 1 }}>
+                    <Text style={S.cTitle}>Hợp đồng mua bán hàng hoá</Text>
+                    <Text style={S.cNum}>Số HĐ: {hdNum}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <View style={[S.tBadge, order.orderType === 'buon' ? S.tBuon : S.tLe]}>
+                        <Text style={[S.tBadgeT, order.orderType === 'buon' ? S.tBuonT : S.tLeT]}>
+                            {order.orderType === 'buon' ? 'Đơn buôn' : 'Đơn lẻ'}
+                        </Text>
+                    </View>
+                    <Text style={S.cDate}>Ngày {today}</Text>
+                </View>
+            </View>
+            <HR />
+
+            {/* Parties */}
+            <View style={[S.partiesRow, isWeb && { flexDirection: 'row', gap: 10 }]}>
+                <View style={[S.partyBox, !isWeb && { marginBottom: 10 }]}>
+                    <View style={S.partyTR}>
+                        <Ionicons name="person-outline" size={11} color="#185FA5" />
+                        <Text style={S.partyTitle}>Bên mua (A)</Text>
+                    </View>
+                    <Text style={S.partyName}>{order.customer || '—'}</Text>
+                    <Text style={S.partyD}>SĐT: {order.phone || '—'}</Text>
+                    <Text style={S.partyD}>Địa chỉ: {order.address || '—'}</Text>
+                </View>
+                <View style={S.partyBox}>
+                    <View style={S.partyTR}>
+                        <Ionicons name="business-outline" size={11} color="#185FA5" />
+                        <Text style={S.partyTitle}>Bên bán (B)</Text>
+                    </View>
+                    <Text style={S.partyName}>{seller?.name || 'SWD Company'}</Text>
+                    <Text style={S.partyD}>SĐT: {seller?.phone || '—'}</Text>
+                    <Text style={S.partyD}>Email: {seller?.email || '—'}</Text>
+                </View>
+            </View>
+            <HR />
+
+            {/* Table */}
+            <Text style={S.secMini}>Chi tiết đơn hàng</Text>
+            <View style={S.tableWrap}>
+                <View style={[S.tRow, S.tHead]}>
+                    <Text style={[S.th, { width: 22 }]}>#</Text>
+                    <Text style={[S.th, { flex: 1 }]}>Sản phẩm</Text>
+                    <Text style={[S.th, S.thR, { width: 36 }]}>SL</Text>
+                    <Text style={[S.th, S.thR, { width: isWeb ? 100 : 82 }]}>Đơn giá</Text>
+                    <Text style={[S.th, S.thR, { width: isWeb ? 108 : 90 }]}>Thành tiền</Text>
+                    {isWeb && <Text style={[S.th, { width: 110 }]}>Ghi chú</Text>}
+                </View>
+                {items.map((p, i) => (
+                    <View key={i} style={[S.tRow, i % 2 === 1 && S.tRowAlt]}>
+                        <Text style={[S.td, { width: 22, color: '#94A3B8' }]}>{i + 1}</Text>
+                        <Text style={[S.td, { flex: 1 }]} numberOfLines={2}>{p.name || '—'}</Text>
+                        <Text style={[S.td, S.tdR, { width: 36 }]}>{fmtN(p.qty)}</Text>
+                        <Text style={[S.td, S.tdR, { width: isWeb ? 100 : 82 }]}>{fmt(p.price)}</Text>
+                        <Text style={[S.td, S.tdR, { width: isWeb ? 108 : 90 }]}>{fmt((p.price || 0) * (p.qty || 1))}</Text>
+                        {isWeb && <Text style={[S.td, { width: 110, color: '#64748B', fontStyle: 'italic', fontSize: 11 }]}>{p.note || '—'}</Text>}
+                    </View>
+                ))}
+                <View style={[S.tRow, S.tFoot]}>
+                    <Text style={[S.td, { flex: 1, color: '#64748B', fontSize: 11 }]}>Chiết khấu{disc > 0 ? ` (${disc}%)` : ''}</Text>
+                    <Text style={[S.td, S.tdR, { color: '#A32D2D' }]}>- {fmt(discAmt)}</Text>
+                </View>
+                <View style={[S.tRow, S.tFoot, { backgroundColor: '#EFF6FF' }]}>
+                    <Text style={[S.td, { flex: 1, fontSize: 14, fontWeight: '700', color: '#0F172A' }]}>Tổng thanh toán</Text>
+                    <Text style={[S.td, S.tdR, { fontSize: 15, fontWeight: '700', color: '#185FA5' }]}>{fmt(total)}</Text>
+                </View>
+            </View>
+            <HR />
+
+            {/* Info */}
+            <View style={S.infoBox}>
+                <View style={S.infoRow}>
+                    <Ionicons name="card-outline" size={12} color="#64748B" />
+                    <Text style={S.infoL}>Thanh toán:</Text>
+                    <Text style={S.infoV}>{order.paymentMethod === 'company' ? 'Doanh nghiệp thanh toán' : 'Khách hàng thanh toán'}</Text>
+                </View>
+                {order.note ? (
+                    <View style={S.infoRow}>
+                        <Ionicons name="document-text-outline" size={12} color="#64748B" />
+                        <Text style={S.infoL}>Ghi chú:</Text>
+                        <Text style={S.infoV}>{order.note}</Text>
+                    </View>
+                ) : null}
+            </View>
+            <HR />
+
+            {/* Terms */}
+            <Text style={S.termsT}>Điều khoản thanh toán</Text>
+            <Text style={S.termsB}>
+                {order.orderType === 'buon'
+                    ? 'Thanh toán toàn bộ trước khi giao hàng. Hàng hoá được kiểm tra tại thời điểm giao nhận. Mọi khiếu nại cần phản ánh trong vòng 24 giờ kể từ khi nhận hàng.'
+                    : 'Thanh toán khi nhận hàng hoặc chuyển khoản trước. Lắp đặt miễn phí trong vòng 24 giờ kể từ khi giao hàng thành công.'}
+            </Text>
+            <HR />
+
+            {/* Signatures */}
+            <View style={[S.sigRow, isWeb && { flexDirection: 'row', gap: 40 }]}>
+                <View style={[S.sigCol, !isWeb && { marginBottom: 14 }]}>
+                    <Text style={S.sigLabel}>Đại diện bên mua</Text>
+                    <View style={S.sigLine} />
+                    <Text style={S.sigName}>{order.customer || '—'}</Text>
+                    <Text style={S.sigHint}>Ký và ghi rõ họ tên</Text>
+                </View>
+                <View style={S.sigCol}>
+                    <Text style={S.sigLabel}>Đại diện bên bán</Text>
+                    <View style={S.sigLine} />
+                    <Text style={S.sigName}>{seller?.name || 'SWD Company'}</Text>
+                    <Text style={S.sigHint}>Ký và đóng dấu</Text>
+                </View>
+            </View>
+        </View>
+    );
+}
+
+// ── Main Screen ───────────────────────────────────────────────
+export default function OrderContractScreen() {
+    const router = useRouter();
+    const insets = useSafeAreaInsets();
+    const params = useLocalSearchParams();
+    const { userDetail } = useContext(UserDetailContext);
+
+    const mode = params.mode || 'order';
+    const rawOrder = params.orderParam ? (() => { try { return JSON.parse(params.orderParam); } catch { return {}; } })() : {};
+
+    // Template form state
+    const [form, setForm] = useState({
+        customer: '', phone: '', address: '',
+        orderType: 'le', paymentMethod: 'customer', note: '',
+        items: [{ name: '', qty: 1, price: 0, note: '' }],
+    });
+
+    // Shared calculator state — ✅ luôn fallback []
+    const safeItems = Array.isArray(rawOrder.items) && rawOrder.items.length > 0
+        ? rawOrder.items
+        : mode === 'order' ? [] : form.items;
+
+    const [items, setItems] = useState(safeItems);
+    const [disc, setDisc] = useState('0');
+    const [exporting, setExporting] = useState(false);
+
+    // ✅ Fetch catalog sản phẩm từ Firestore
+    const [catalog, setCatalog] = useState([]);
+    useEffect(() => {
+        getDocs(collection(db, 'productPrice'))
+            .then(snap => setCatalog(
+                snap.docs.map(d => ({ ...d.data(), docId: d.id }))
+                    .sort((a, b) => (a.id || 0) - (b.id || 0))
+            ))
+            .catch(e => console.warn('catalog fetch:', e));
+    }, []);
+
+    // Derived — ✅ guard items trước khi reduce
+    const parseNum = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
+    const order = mode === 'order' ? rawOrder : form;
+    const safeCalc = Array.isArray(items) ? items : [];
+    const subtotal = safeCalc.reduce((s, p) => s + parseNum(p.price) * parseNum(p.qty), 0);
+    const discAmt = subtotal * (parseNum(disc) / 100);
+    const total = subtotal - discAmt;
+
+    // ✅ Sync items từ form khi mode=template (tránh bug function updater)
+    useEffect(() => {
+        if (mode === 'template' && Array.isArray(form.items)) {
+            setItems(form.items);
+        }
+    }, [form.items, mode]);
+
+    const handleFormChange = (nextForm) => {
+        setForm(nextForm); // React tự xử lý cả object lẫn function updater
+    };
+
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            const logoBase64 = await getBase64Logo(); // ✅ fetch base64 trước
+            const html = buildPDFHtml({ order, seller: userDetail, items: safeCalc, disc, total, discAmt, logoBase64 });
+            await exportPDF(html);
+        } catch (e) { console.error(e); }
+        finally { setExporting(false); }
+    };
+
+    return (
+        <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+            {/* Header */}
+            <View style={S.header}>
+                <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
+                    <Ionicons name="arrow-back" size={20} color="#0F172A" />
+                </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                    <Text style={S.hTitle}>
+                        {mode === 'template' ? 'Hợp đồng mẫu' : `Đơn hàng #${rawOrder.id}`}
+                    </Text>
+                    <Text style={S.hSub}>
+                        {mode === 'template' ? 'Điền thông tin để xem trước hợp đồng' : rawOrder.customer}
+                    </Text>
+                </View>
+                {/* PDF Export button */}
+                <TouchableOpacity style={S.pdfBtn} onPress={handleExport} disabled={exporting} activeOpacity={0.85}>
+                    {exporting
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <Ionicons name="document-outline" size={15} color="#fff" />
+                    }
+                    <Text style={S.pdfBtnText}>{exporting ? 'Đang xuất...' : 'Xuất PDF'}</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Body */}
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[S.body, isWeb && S.bodyWeb]}
+                keyboardShouldPersistTaps="handled"
+            >
+                {isWeb ? (
+                    <View style={S.grid}>
+                        {/* Left: Template form hoặc Calculator */}
+                        <View style={{ width: 340, flexShrink: 0, gap: 14 }}>
+                            {mode === 'template' && (
+                                <TemplateForm form={form} setForm={handleFormChange} catalog={catalog} />
+                            )}
+                            <Calculator
+                                items={safeCalc}
+                                setItems={mode === 'order' ? setItems : (next) => {
+                                    const safe = Array.isArray(next) ? next : [];
+                                    setItems(safe);
+                                    setForm(f => ({ ...f, items: safe }));
+                                }}
+                                orderType={order.orderType || 'le'}
+                                catalog={catalog}
+                                disc={disc}
+                                setDisc={setDisc}
+                            />
+                        </View>
+                        {/* Right: Contract */}
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Contract
+                                order={order}
+                                seller={userDetail}
+                                items={safeCalc}
+                                disc={disc}
+                                total={total}
+                                discAmt={discAmt}
+                            />
+                        </View>
+                    </View>
+                ) : (
+                    <View style={{ gap: 12 }}>
+                        {mode === 'template' && (
+                            <TemplateForm form={form} setForm={handleFormChange} catalog={catalog} />
+                        )}
+                        <Calculator
+                            items={safeCalc}
+                            setItems={mode === 'order' ? setItems : (next) => {
+                                const safe = Array.isArray(next) ? next : [];
+                                setItems(safe);
+                                setForm(f => ({ ...f, items: safe }));
+                            }}
+                            orderType={order.orderType || 'le'}
+                            catalog={catalog}
+                            disc={disc}
+                            setDisc={setDisc}
+                        />
+                        <Contract
+                            order={order}
+                            seller={userDetail}
+                            items={safeCalc}
+                            disc={disc}
+                            total={total}
+                            discAmt={discAmt}
+                        />
+                    </View>
+                )}
+                <View style={{ height: 60 }} />
+            </ScrollView>
+        </View>
+    );
+}
+
+// ── Styles ────────────────────────────────────────────────────
+const S = StyleSheet.create({
+    root: { flex: 1, backgroundColor: '#F4F6FA' },
+    // Header
+    header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 13, backgroundColor: '#fff', borderBottomWidth: 0.5, borderBottomColor: '#E2E8F0' },
+    backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+    hTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
+    hSub: { fontSize: 12, color: '#64748B', marginTop: 1 },
+    pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0C447C', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9 },
+    pdfBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+    // Layout
+    body: { padding: 14, paddingBottom: 40 },
+    bodyWeb: { padding: 20 },
+    grid: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
+    hr: { height: 0.5, backgroundColor: '#E2E8F0', marginVertical: 13 },
+    // Template Form
+    templateCard: { backgroundColor: '#fff', borderRadius: 14, padding: 18, borderWidth: 0.5, borderColor: '#E2E8F0', marginBottom: 0 },
+    sectionHead: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+    subHead: { fontSize: 12, fontWeight: '700', color: '#374151', marginTop: 12, marginBottom: 6 },
+    fieldLabel: { fontSize: 11, color: '#64748B', marginBottom: 4, marginTop: 8 },
+    input: { backgroundColor: '#F8FAFC', borderWidth: 0.5, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 11, paddingVertical: 9, fontSize: 13, color: '#0F172A' },
+    row2: { flexDirection: 'row', gap: 10 },
+    typeRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
+    typeBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 0.5, borderColor: '#E2E8F0', alignItems: 'center', backgroundColor: '#F8FAFC' },
+    typeBtnActive: { backgroundColor: '#0C447C', borderColor: '#0C447C' },
+    typeBtnText: { fontSize: 12, color: '#64748B', fontWeight: '600' },
+    typeBtnTextActive: { color: '#fff' },
+    prodFormRow: { backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, marginTop: 8, borderWidth: 0.5, borderColor: '#E2E8F0' },
+    prodFormHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    prodFormIdx: { fontSize: 11, fontWeight: '700', color: '#185FA5' },
+    addProdBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 9, backgroundColor: '#EFF6FF', marginTop: 10 },
+    addProdText: { fontSize: 13, color: '#185FA5', fontWeight: '600' },
+    // Calculator
+    calcCard: { backgroundColor: '#fff', borderRadius: 14, padding: 18, borderWidth: 0.5, borderColor: '#E2E8F0' },
+    calcHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    calcIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+    calcTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0F172A' },
+    editBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#EFF6FF', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+    editBadgeText: { fontSize: 10, color: '#185FA5', fontWeight: '700' },
+    calcRow: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'flex-start' },
+    calcProdIcon: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+    calcDropTrigger: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', borderWidth: 0.5, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 8 },
+    calcDropPlaceholder: { flex: 1, fontSize: 12, color: '#CBD5E1' },
+    // Product Dropdown
+    dropWrap: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 0.5, borderColor: '#E2E8F0', marginTop: 2, marginBottom: 8, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 10, elevation: 6 },
+    dropSearch: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9' },
+    dropSearchInput: { flex: 1, fontSize: 13, color: '#0F172A' },
+    dropItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#F8FAFC' },
+    dropItemIcon: { width: 24, height: 24, borderRadius: 6, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+    dropItemName: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
+    dropItemCap: { fontSize: 11, color: '#94A3B8' },
+    dropItemPrice: { fontSize: 12, fontWeight: '600', color: '#185FA5' },
+    dropEmpty: { padding: 14, fontSize: 13, color: '#94A3B8', textAlign: 'center' },
+    // Template dropdown trigger
+    dropTrigger: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    dropTriggerText: { flex: 1, fontSize: 13, color: '#0F172A', fontWeight: '500' },
+    dropTriggerPlaceholder: { flex: 1, fontSize: 13, color: '#CBD5E1' },
+    calcProdName: { fontSize: 12, fontWeight: '600', color: '#0F172A', marginBottom: 6 },
+    calcInputs: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+    calcField: { gap: 3 },
+    calcFieldLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '600' },
+    tInput: { fontSize: 13, fontWeight: '600', color: '#0F172A', backgroundColor: '#F8FAFC', borderWidth: 0.5, borderColor: '#E2E8F0', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, textAlign: 'center' },
+    lineTotal: { fontSize: 13, fontWeight: '700', color: '#185FA5', paddingVertical: 6 },
+    discRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    statRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7 },
+    statLabel: { fontSize: 12, color: '#64748B' },
+    statVal: { fontSize: 12, fontWeight: '600', color: '#0F172A' },
+    totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 9, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 0.5, borderColor: '#E2E8F0', marginTop: 4 },
+    totalLabel: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
+    totalVal: { fontSize: 17, fontWeight: '700', color: '#185FA5' },
+    commBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0C447C', borderRadius: 12, padding: 14, marginTop: 12 },
+    commLabel: { fontSize: 9, letterSpacing: .07, color: '#85B7EB', marginBottom: 3, textTransform: 'uppercase' },
+    commVal: { fontSize: 20, fontWeight: '700', color: '#fff' },
+    commSub: { fontSize: 10, color: '#85B7EB', marginTop: 2 },
+    commRate: { fontSize: 18, fontWeight: '700', color: 'rgba(255,255,255,0.4)' },
+    // Contract
+    contractCard: { backgroundColor: '#fff', borderRadius: 14, padding: 20, borderWidth: 0.5, borderColor: '#E2E8F0' },
+    cHead: { flexDirection: 'row', alignItems: 'flex-start' },
+    cTitle: { fontSize: 17, fontWeight: '700', color: '#0F172A', letterSpacing: -.3 },
+    cNum: { fontSize: 11, color: '#64748B', marginTop: 3 },
+    cDate: { fontSize: 11, color: '#94A3B8' },
+    tBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+    tBuon: { backgroundColor: '#ECFDF5', borderWidth: 0.5, borderColor: '#A7F3D0' },
+    tLe: { backgroundColor: '#F5F3FF', borderWidth: 0.5, borderColor: '#DDD6FE' },
+    tBadgeT: { fontSize: 11, fontWeight: '700' },
+    tBuonT: { color: '#065F46' },
+    tLeT: { color: '#5B21B6' },
+    partiesRow: {},
+    partyBox: { flex: 1, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, borderWidth: 0.5, borderColor: '#E2E8F0' },
+    partyTR: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 7 },
+    partyTitle: { fontSize: 9, fontWeight: '700', letterSpacing: .07, color: '#185FA5', textTransform: 'uppercase' },
+    partyName: { fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
+    partyD: { fontSize: 11, color: '#64748B', lineHeight: 17 },
+    secMini: { fontSize: 9, fontWeight: '700', letterSpacing: .07, color: '#94A3B8', textTransform: 'uppercase', marginBottom: 9 },
+    tableWrap: { borderWidth: 0.5, borderColor: '#E2E8F0', borderRadius: 10, overflow: 'hidden' },
+    tRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9' },
+    tHead: { backgroundColor: '#F8FAFC' },
+    tRowAlt: { backgroundColor: '#FAFBFF' },
+    tFoot: { backgroundColor: '#F8FAFC', borderTopWidth: 0.5, borderTopColor: '#E2E8F0', borderBottomWidth: 0 },
+    th: { fontSize: 9, fontWeight: '700', letterSpacing: .06, color: '#94A3B8', padding: 9, textTransform: 'uppercase' },
+    thR: { textAlign: 'right' },
+    td: { fontSize: 12, color: '#0F172A', padding: 9 },
+    tdR: { textAlign: 'right' },
+    infoBox: { backgroundColor: '#F8FAFC', borderRadius: 9, padding: 11, gap: 6 },
+    infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+    infoL: { fontSize: 12, color: '#64748B', minWidth: 68 },
+    infoV: { flex: 1, fontSize: 12, color: '#374151', fontWeight: '500' },
+    termsT: { fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 5 },
+    termsB: { fontSize: 11, color: '#94A3B8', lineHeight: 17 },
+    sigRow: {},
+    sigCol: { flex: 1 },
+    sigLabel: { fontSize: 11, color: '#64748B', marginBottom: 20 },
+    sigLine: { height: 0.5, backgroundColor: '#CBD5E1', marginBottom: 7 },
+    sigName: { fontSize: 12, fontWeight: '600', color: '#0F172A', marginBottom: 2 },
+    sigHint: { fontSize: 10, color: '#94A3B8' },
+});

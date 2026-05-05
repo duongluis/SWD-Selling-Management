@@ -41,15 +41,8 @@
           }
         }
       ],
-      // [
-      //   "expo-font",
-      //   {
-      //     "fonts": [
-      //       "node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf"
-      //     ]
-      //   }
-      // ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

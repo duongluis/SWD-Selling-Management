@@ -136,8 +136,8 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
           {[
             { label: 'Đơn Hàng Mới', icon: 'add-circle-outline', route: '/addOrder' },
             { label: 'Thêm Khách Hàng', icon: 'person-add-outline', route: '/addCustomer' },
-            // ✅ Phòng chat trong sidebar
             { label: 'Phòng chat', icon: 'chatbubbles-outline', route: '/chatList' },
+            { label: 'Hợp đồng mẫu', icon: 'document-text-outline', route: '/orderContract?mode=template' },
           ].map(a => (
             <Pressable key={a.label} style={S.navItem} onPress={() => router.push(a.route)}>
               <Ionicons name={a.icon} size={16} color="#ffffff" style={S.navIcon} />

@@ -2,15 +2,12 @@ import Colors from "@/constant/Colors";
 import { UserDetailContext } from "@/context/UserDetailContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useState } from "react";
 import {
   ActivityIndicator, Image, Platform, RefreshControl,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from "react-native";
-import { CTVDashboard } from "../(tabs)/customerctv";
 import { getRole, useCustomers } from "../../components/Hooks/useCustomers";
-import { db } from "../../config/firebaseConfig";
 
 const isWeb = Platform.OS === "web";
 const BG_IMAGE = require('../../assets/images/logo-light.png');
@@ -54,41 +51,19 @@ export default function CustomerView() {
   const router = useRouter();
   const { userDetail } = useContext(UserDetailContext);
   const role = getRole(userDetail);
-  const isCTV = role === "ctv";
 
   const { customers, loading, refresh } = useCustomers();
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
 
-  const [consultMap, setConsultMap] = useState({});
-  const [consultLoad, setConsultLoad] = useState(false);
-  const [consultCustomers, setConsultCustomers] = useState([]);
-
-  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
-
-  // Fetch tư vấn status cho CTV — đọc từ db/consult
-  useEffect(() => {
-    if (!isCTV) return;
-    const fetchConsult = async () => {
-      setConsultLoad(true);
-      try {
-        const snap = await getDocs(
-          query(collection(db, 'consult'), where('createdBy', '==', userDetail?.email || ''))
-        );
-        const map = {};
-        // key = docId của consult record
-        snap.docs.forEach(d => {
-          const data = d.data();
-          map[d.id] = data.status || 'pending';
-        });
-        setConsultMap(map);
-        // Cập nhật danh sách customers từ consult
-        setConsultCustomers(snap.docs.map(d => ({ ...d.data(), docId: d.id })));
-      } catch (e) { console.error(e); }
-      finally { setConsultLoad(false); }
-    };
-    fetchConsult();
-  }, [isCTV, userDetail?.email]);
+  // ✅ CTV → redirect sang màn riêng ngay khi focus
+  useFocusEffect(useCallback(() => {
+    if (role === "ctv") {
+      router.replace("/customerctv");
+      return;
+    }
+    refresh();
+  }, [role, refresh]));
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -103,10 +78,8 @@ export default function CustomerView() {
     });
   };
 
-  // ✅ Phải đặt useCallback TRƯỚC mọi conditional return
-  // để React luôn gọi đúng số hooks mỗi lần render
+  // Tính groups — chỉ cho admin/daily/phantan
   const groups = useCallback(() => {
-    if (role === "ctv") return [{ email: userDetail?.email, name: userDetail?.name || userDetail?.email, customers, isSelf: true }];
     if (role === "daily" || role === "phantan") {
       const myEmail = userDetail?.email;
       const selfCustomers = customers.filter(c => c.createdBy === myEmail);
@@ -117,46 +90,34 @@ export default function CustomerView() {
           subMap.get(c.createdBy).customers.push(c);
         }
       });
-      return [{ email: myEmail, name: userDetail?.name || myEmail, customers: selfCustomers, isSelf: true }, ...[...subMap.values()].filter(g => g.customers.length > 0)];
+      return [
+        { email: myEmail, name: userDetail?.name || myEmail, customers: selfCustomers, isSelf: true },
+        ...[...subMap.values()].filter(g => g.customers.length > 0),
+      ];
     }
     if (role === "admin") {
       const map = new Map();
-      customers.forEach(c => { const key = c.createdBy || "unknown"; if (!map.has(key)) map.set(key, { email: key, name: key, customers: [] }); map.get(key).customers.push(c); });
+      customers.forEach(c => {
+        const key = c.createdBy || "unknown";
+        if (!map.has(key)) map.set(key, { email: key, name: key, customers: [] });
+        map.get(key).customers.push(c);
+      });
       return [...map.values()];
     }
     return [];
   }, [customers, role, userDetail])();
 
-  const filteredGroups = groups.map(g => ({ ...g, customers: search.trim() === "" ? g.customers : g.customers.filter(c => (c.name || "").toLowerCase().includes(search.toLowerCase()) || (c.phone || "").includes(search)) })).filter(g => g.customers.length > 0 || search.trim() === "");
-
-  // ── CTV: dùng màn dashboard riêng ────────────────────────
-  if (isCTV) {
-    return (
-      <View style={styles.root}>
-        <Image source={BG_IMAGE} style={styles.watermark} resizeMode="contain" />
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: Platform.OS === 'web' ? 32 : 16, paddingTop: Platform.OS === 'web' ? 28 : 20, paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        >
-          <CTVDashboard
-            customers={consultCustomers}
-            consultMap={consultMap}
-            loading={consultLoad}
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            onAddConsult={() => router.push("/addConsult")}
-            onPressCustomer={handlePress}
-            search={search}
-            setSearch={setSearch}
-          />
-        </ScrollView>
-      </View>
-    );
-  }
-
-  // ── Admin / daily / phantan view (grouped) ───────────────
+  const filteredGroups = groups
+    .map(g => ({
+      ...g,
+      customers: search.trim() === ""
+        ? g.customers
+        : g.customers.filter(c =>
+          (c.name || "").toLowerCase().includes(search.toLowerCase()) ||
+          (c.phone || "").includes(search)
+        ),
+    }))
+    .filter(g => g.customers.length > 0 || search.trim() === "");
 
   if (loading && !refreshing) return (
     <View style={[styles.container, { alignItems: "center", justifyContent: "center" }]}>

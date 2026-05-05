@@ -1,3 +1,4 @@
+import { createOrderChatRoom } from '@/components/Utils/chatService';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -17,7 +18,6 @@ import {
 } from '../../components/Hooks/getStatus';
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
-import { createOrderChatRoom } from '../../components/Utils/chatService';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
@@ -155,9 +155,13 @@ export default function AddOrder() {
   const priceField = getPriceField(role);
 
   // ── Order type — locked by role ───────────────────────────
-  const lockedType = ROLE_ORDER_TYPE[role]; // 'buon' | 'le' | null
+  const lockedType = ROLE_ORDER_TYPE[role];
   const [orderType, setOrderType] = useState(lockedType || 'le');
   const orderTypeCfg = ORDER_TYPES[orderType];
+
+  // ✅ Đơn buôn default = company, đơn lẻ = customer
+  const getDefaultPayment = (type) => type === 'buon' ? 'company' : 'customer';
+  const handleSetOrderType = (type) => { setOrderType(type); setPaymentMethod(getDefaultPayment(type)); };
 
   // ── Customers ─────────────────────────────────────────────
   const [customerList, setCustomerList] = useState([]);
@@ -210,22 +214,40 @@ export default function AddOrder() {
   const [newProduct, setNewProduct] = useState({ name: '', qty: '1', price: '', productId: '' });
   const [serviceNote, setServiceNote] = useState('');
   const [autoService, setAutoService] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState('customer'); // 'customer' | 'company'
+  const [paymentMethod, setPaymentMethod] = useState(getDefaultPayment(lockedType || 'le'));
 
   const filteredCustomers = customerSearch.trim() === ''
     ? customerList
     : customerList.filter(c => (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone || '').includes(customerSearch));
 
   const handleSelectProduct = (p) => {
-    setNewProduct({ name: p.name, qty: '1', price: String(p[priceField] || p.price || 0), productId: String(p.id || p.docId) });
+    setNewProduct({
+      name: p.name,
+      qty: '1',
+      price: String(p[priceField] || p.price || 0),
+      basePrice: p[priceField] || p.price || 0, // ✅ lưu giá base để validate đơn lẻ
+      productId: String(p.id || p.docId),
+    });
     setShowProductDrop(false);
   };
 
   const addProduct = () => {
     if (!newProduct.name) { showAlert('Thông báo', 'Vui lòng chọn sản phẩm'); return; }
-    setProducts(prev => [...prev, { id: Date.now().toString(), name: newProduct.name, qty: parseInt(newProduct.qty) || 1, price: parseInt(newProduct.price) || 0 }]);
-    setNewProduct({ name: '', qty: '1', price: '', productId: '' });
-    setShowAddProduct(false); setShowProductDrop(false);
+    const inputPrice = parseInt(newProduct.price) || 0;
+    // ✅ Đơn lẻ: giá phải >= giá base của role
+    if (orderType === 'le' && newProduct.basePrice && inputPrice < newProduct.basePrice) {
+      showAlert('Giá không hợp lệ', `Giá phải >= ${(newProduct.basePrice).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' })} (${ROLE_LABEL[role]})`);
+      return;
+    }
+    setProducts(prev => [...prev, {
+      id: Date.now().toString(),
+      name: newProduct.name,
+      qty: parseInt(newProduct.qty) || 1,
+      price: inputPrice,
+    }]);
+    setNewProduct({ name: '', qty: '1', price: '', basePrice: 0, productId: '' });
+    setShowAddProduct(false);
+    setShowProductDrop(false);
   };
 
   const removeProduct = (id) => setProducts(prev => prev.filter(p => p.id !== id));
@@ -349,10 +371,25 @@ export default function AddOrder() {
       </View>
       <View style={ws ? W.addRow : styles.addProductRow}>
         <TextInput style={[ws ? W.addInput : styles.addProductInput, { flex: 1, marginRight: 8 }]} placeholder="Số lượng" placeholderTextColor="#B0B0C8" keyboardType="numeric" value={newProduct.qty} onChangeText={v => setNewProduct(p => ({ ...p, qty: v }))} />
-        <View style={[ws ? W.addInput : styles.addProductInput, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9' }]}>
-          <Ionicons name="lock-closed-outline" size={13} color="#94A3B8" />
-          <Text style={{ flex: 1, fontSize: 14, color: newProduct.price ? '#0F172A' : '#94A3B8' }}>{newProduct.price ? fmt(parseInt(newProduct.price)) : ROLE_LABEL[role]}</Text>
-        </View>
+        {/* ✅ Đơn lẻ: cho sửa giá; đơn buôn: giá cố định */}
+        {orderType === 'le' ? (
+          <View style={[ws ? W.addInput : styles.addProductInput, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+            <Ionicons name="create-outline" size={13} color="#2563EB" />
+            <TextInput
+              style={{ flex: 1, fontSize: 14, color: '#0F172A', fontWeight: '500' }}
+              placeholder={newProduct.basePrice ? fmt(newProduct.basePrice) : ROLE_LABEL[role]}
+              placeholderTextColor="#94A3B8"
+              keyboardType="numeric"
+              value={newProduct.price}
+              onChangeText={v => setNewProduct(p => ({ ...p, price: v.replace(/\D/g, '') }))}
+            />
+          </View>
+        ) : (
+          <View style={[ws ? W.addInput : styles.addProductInput, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9' }]}>
+            <Ionicons name="lock-closed-outline" size={13} color="#94A3B8" />
+            <Text style={{ flex: 1, fontSize: 14, color: newProduct.price ? '#0F172A' : '#94A3B8' }}>{newProduct.price ? fmt(parseInt(newProduct.price)) : ROLE_LABEL[role]}</Text>
+          </View>
+        )}
       </View>
       <View style={ws ? W.addActions : styles.addProductActions}>
         <TouchableOpacity style={ws ? W.addCancel : styles.addProductCancel} onPress={() => { setShowAddProduct(false); setShowProductDrop(false); setNewProduct({ name: '', qty: '1', price: '', productId: '' }); }}>
@@ -466,35 +503,80 @@ export default function AddOrder() {
     { key: 'company', label: 'Doanh nghiệp thanh toán', icon: 'business-outline', color: '#8B5CF6', bg: '#F5F3FF', border: '#DDD6FE' },
   ];
 
-  const PaymentMethodField = ({ ws }) => (
-    <View style={ws ? W.pmCard : styles.pmCard}>
-      <View style={ws ? W.pmHeader : styles.pmHeader}>
-        <View style={ws ? W.pmHeaderIcon : styles.pmHeaderIcon}>
-          <Ionicons name="card-outline" size={14} color="#2563EB" />
+  const PaymentMethodField = ({ ws }) => {
+    // ✅ Đơn buôn: khóa cứng = doanh nghiệp, không cho chọn
+    if (orderType === 'buon') {
+      const cfg = PAYMENT_OPTIONS.find(o => o.key === 'company');
+      return (
+        <View style={ws ? W.pmCard : styles.pmCard}>
+          <View style={ws ? W.pmHeader : styles.pmHeader}>
+            <View style={ws ? W.pmHeaderIcon : styles.pmHeaderIcon}>
+              <Ionicons name="card-outline" size={14} color="#8B5CF6" />
+            </View>
+            <Text style={ws ? W.pmTitle : styles.pmTitle}>Hình thức thanh toán</Text>
+            <View style={styles.pmLockBadge}>
+              <Ionicons name="lock-closed-outline" size={10} color="#8B5CF6" />
+              <Text style={styles.pmLockText}>Cố định</Text>
+            </View>
+          </View>
+          {/* Read-only badge */}
+          <View style={[ws ? W.pmOption : styles.pmOption, { borderColor: cfg.color, backgroundColor: cfg.bg, opacity: 1 }]}>
+            <View style={[ws ? W.pmOptionIcon : styles.pmOptionIcon, { backgroundColor: cfg.color + '22' }]}>
+              <Ionicons name={cfg.icon} size={15} color={cfg.color} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[ws ? W.pmOptionLabel : styles.pmOptionLabel, { color: cfg.color, fontWeight: '700' }]}>
+                {cfg.label}
+              </Text>
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                Áp dụng bắt buộc cho đơn buôn
+              </Text>
+            </View>
+            <View style={[ws ? W.pmCheck : styles.pmCheck, { backgroundColor: cfg.color }]}>
+              <Ionicons name="checkmark" size={10} color="#fff" />
+            </View>
+          </View>
         </View>
-        <Text style={ws ? W.pmTitle : styles.pmTitle}>Hình thức thanh toán</Text>
+      );
+    }
+
+    // Đơn lẻ: cho phép chọn
+    return (
+      <View style={ws ? W.pmCard : styles.pmCard}>
+        <View style={ws ? W.pmHeader : styles.pmHeader}>
+          <View style={ws ? W.pmHeaderIcon : styles.pmHeaderIcon}>
+            <Ionicons name="card-outline" size={14} color="#2563EB" />
+          </View>
+          <Text style={ws ? W.pmTitle : styles.pmTitle}>Hình thức thanh toán</Text>
+        </View>
+        <View style={ws ? W.pmOptions : styles.pmOptions}>
+          {PAYMENT_OPTIONS.map(opt => {
+            const active = paymentMethod === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                style={[ws ? W.pmOption : styles.pmOption, { borderColor: active ? opt.color : '#E2E8F0' }, active && { backgroundColor: opt.bg }]}
+                onPress={() => setPaymentMethod(opt.key)}
+                activeOpacity={0.8}
+              >
+                <View style={[ws ? W.pmOptionIcon : styles.pmOptionIcon, { backgroundColor: active ? opt.color + '22' : '#F1F5F9' }]}>
+                  <Ionicons name={opt.icon} size={15} color={active ? opt.color : '#94A3B8'} />
+                </View>
+                <Text style={[ws ? W.pmOptionLabel : styles.pmOptionLabel, active && { color: opt.color, fontWeight: '700' }]}>
+                  {opt.label}
+                </Text>
+                {active && (
+                  <View style={[ws ? W.pmCheck : styles.pmCheck, { backgroundColor: opt.color }]}>
+                    <Ionicons name="checkmark" size={10} color="#fff" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
-      <View style={ws ? W.pmOptions : styles.pmOptions}>
-        {PAYMENT_OPTIONS.map(opt => {
-          const active = paymentMethod === opt.key;
-          return (
-            <TouchableOpacity
-              key={opt.key}
-              style={[ws ? W.pmOption : styles.pmOption, { borderColor: active ? opt.color : '#E2E8F0' }, active && { backgroundColor: opt.bg }]}
-              onPress={() => setPaymentMethod(opt.key)}
-              activeOpacity={0.8}
-            >
-              <View style={[ws ? W.pmOptionIcon : styles.pmOptionIcon, { backgroundColor: active ? opt.color + '22' : '#F1F5F9' }]}>
-                <Ionicons name={opt.icon} size={15} color={active ? opt.color : '#94A3B8'} />
-              </View>
-              <Text style={[ws ? W.pmOptionLabel : styles.pmOptionLabel, active && { color: opt.color, fontWeight: '700' }]}>{opt.label}</Text>
-              {active && <View style={[ws ? W.pmCheck : styles.pmCheck, { backgroundColor: opt.color }]}><Ionicons name="checkmark" size={10} color="#fff" /></View>}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
+    );
+  };
 
   // ─────────────────────────────────────────────────────────
   // WEB LAYOUT
@@ -891,6 +973,8 @@ const styles = StyleSheet.create({
   toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 },
   toggleThumbOn: { alignSelf: 'flex-end' },
   // Payment method
+  pmLockBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F5F3FF', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, marginLeft: 'auto' },
+  pmLockText: { fontSize: 10, color: '#8B5CF6', fontWeight: '700' },
   pmCard: { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 18, padding: 14 },
   pmHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   pmHeaderIcon: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },

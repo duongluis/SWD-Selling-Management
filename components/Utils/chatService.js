@@ -2,12 +2,12 @@
 // Toàn bộ logic chat + notification — không cần Cloud Function
 // Dùng Firestore onSnapshot để realtime sync
 
+import { db } from '@/config/firebaseConfig';
 import {
     addDoc, collection, doc, getDoc, getDocs,
     onSnapshot, query, serverTimestamp,
     setDoc, updateDoc, where,
 } from 'firebase/firestore';
-import { db } from '../../config/firebaseConfig';
 
 // ─────────────────────────────────────────────────────────────
 // ROOM MANAGEMENT
