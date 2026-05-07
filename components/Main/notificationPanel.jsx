@@ -1,7 +1,3 @@
-// components/NotificationPanel.jsx
-// Panel thông báo dạng dropdown — dùng Modal để luôn nằm trên cùng
-// ✅ Null-safe khi userDetail = null (đăng xuất)
-
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';

@@ -1,92 +1,128 @@
-// app/(tabs)/customerCTV.jsx
-import { UserDetailContext } from "@/context/UserDetailContext";
-import { useFocusEffect, useRouter } from "expo-router";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { useCallback, useContext, useState } from "react";
-import {
-    Image, Platform,
-    RefreshControl, ScrollView, StyleSheet,
-    View
-} from "react-native";
-import { CTVDashboard } from "../../components/UI/ctvDashboard";
-import { db } from "../../config/firebaseConfig";
+// app/(tabs)/customerCTV.jsx — refactored
 
-const isWeb = Platform.OS === "web";
-const BG_IMAGE = require('../../assets/images/logo-light.png');
+import { useScreenData } from '@/components/Hooks/useScreenData';
+import { useSearch } from '@/components/Hooks/useSearch';
+import EmptyState from '@/components/Main/EmptyState';
+import ScreenHeader from '@/components/Main/ScreenHeader';
+import TabScreenLayout from '@/components/Main/TabScreenLayout';
+import StatBar from '@/components/UI/StatBar';
+import { getInitials } from '@/components/Utils/formatters';
+import { UserDetailContext } from '@/context/UserDetailContext';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useContext } from 'react';
+import {
+    FlatList, Platform, RefreshControl,
+    StyleSheet, Text, TouchableOpacity, View,
+} from 'react-native';
+
+const isWeb = Platform.OS === 'web';
+
+const CONSULT_STATUS_CFG = {
+    success: { color: '#059669', bg: '#ECFDF5', label: 'Thành công' },
+    failed: { color: '#EF4444', bg: '#FEF2F2', label: 'Thất bại' },
+    pending: { color: '#2563EB', bg: '#EFF6FF', label: 'Đang tư vấn' },
+    none: { color: '#94A3B8', bg: '#F1F5F9', label: 'Chưa tư vấn' },
+};
+
+const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444'];
+
+function ConsultCard({ item, index, statusKey, onPress }) {
+    const cfg = CONSULT_STATUS_CFG[statusKey] || CONSULT_STATUS_CFG.none;
+    return (
+        <TouchableOpacity style={C.card} onPress={() => onPress(item)} activeOpacity={0.75}>
+            <View style={[C.avatar, { backgroundColor: AVATAR_COLORS[index % AVATAR_COLORS.length] }]}>
+                <Text style={C.avatarText}>{getInitials(item.name)}</Text>
+            </View>
+            <View style={C.info}>
+                <Text style={C.name}>{item.name || '—'}</Text>
+                <Text style={C.phone}>{item.phone || '—'}</Text>
+            </View>
+            <View style={[C.statusPill, { backgroundColor: cfg.bg }]}>
+                <View style={[C.statusDot, { backgroundColor: cfg.color }]} />
+                <Text style={[C.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
+        </TouchableOpacity>
+    );
+}
 
 export default function CustomerCTVScreen() {
     const router = useRouter();
     const { userDetail } = useContext(UserDetailContext);
+    const { data: consultList, loading, refreshing, refresh, stats } = useScreenData('consults');
+    const { query, setQuery, result } = useSearch(consultList, ['name', 'phone']);
 
-    const [consultList, setConsultList] = useState([]);
-    const [consultMap, setConsultMap] = useState({});
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [search, setSearch] = useState("");
+    // map docId → status
+    const consultMap = Object.fromEntries(consultList.map(c => [c.docId, c.status || 'none']));
 
-    const myEmail = userDetail?.email || "";
+    const statCards = [
+        { icon: 'people-outline', label: 'Tổng', value: String(stats.total || 0), color: '#2563EB', bg: '#EFF6FF' },
+        { icon: 'checkmark-circle-outline', label: 'Thành công', value: String(stats.success || 0), color: '#10B981', bg: '#ECFDF5' },
+        { icon: 'close-circle-outline', label: 'Thất bại', value: String(stats.failed || 0), color: '#EF4444', bg: '#FEF2F2' },
+    ];
 
-    const fetchConsult = useCallback(async () => {
-        if (!myEmail) return;
-        setLoading(true);
-        try {
-            const snap = await getDocs(
-                query(collection(db, "consult"), where("createdBy", "==", myEmail))
-            );
-            const list = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
-            const map = {};
-            list.forEach(item => { map[item.docId] = item.status || "pending"; });
-            setConsultList(list);
-            setConsultMap(map);
-        } catch (e) { console.error("fetchConsult error:", e); }
-        finally { setLoading(false); setRefreshing(false); }
-    }, [myEmail]);
-
-    useFocusEffect(useCallback(() => { fetchConsult(); }, [fetchConsult]));
-
-    const handleRefresh = async () => {
-        setRefreshing(true);
-        await fetchConsult();
-    };
-
-    // ✅ Bấm vào khách hàng → xem thông tin, không phải tạo mới
-    const handlePressCustomer = (item) => {
+    const handlePress = (item) => {
         router.push({
-            pathname: "/CustomerView/[customerID]",
-            params: {
-                customerid: item?.docId,
-                customerParam: JSON.stringify(item),
-            },
+            pathname: '/CustomerView/[customerID]',
+            params: { customerid: item?.docId, customerParam: JSON.stringify(item) },
         });
     };
 
     return (
-        <View style={S.root}>
-            <Image source={BG_IMAGE} style={S.watermark} resizeMode="contain" />
-            <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={S.scroll}
-                showsVerticalScrollIndicator={false}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-            >
-                <CTVDashboard
-                    customers={consultList}
-                    consultMap={consultMap}
-                    loading={loading}
-                    refreshing={refreshing}
-                    onRefresh={handleRefresh}
-                    onAddConsult={() => router.push("/addConsult")}
-                    onPressCustomer={handlePressCustomer}
-                    search={search}
-                    setSearch={setSearch}
-                />
-            </ScrollView>
-        </View>
+        <TabScreenLayout>
+            <ScreenHeader
+                title="Khách hàng của tôi"
+                subtitle={`${stats.total || 0} khách hàng đã tư vấn`}
+                searchValue={query}
+                onSearchChange={setQuery}
+                searchPlaceholder="Tìm tên, SĐT..."
+                actionLabel={isWeb ? 'Thêm tư vấn' : undefined}
+                actionIcon="add"
+                onAction={() => router.push('/addConsult')}
+            />
+
+            <StatBar stats={statCards} />
+
+            {loading ? <EmptyState loading /> :
+                result.length === 0 ? (
+                    <EmptyState
+                        empty
+                        icon="people-outline"
+                        title={query ? 'Không tìm thấy' : 'Chưa có khách hàng'}
+                        subtitle="Bấm Thêm tư vấn để bắt đầu"
+                        actionLabel="Thêm tư vấn"
+                        onAction={() => router.push('/addConsult')}
+                    />
+                ) : (
+                    <FlatList
+                        data={result}
+                        keyExtractor={(item, i) => item.docId || String(i)}
+                        renderItem={({ item, index }) => (
+                            <ConsultCard
+                                item={item}
+                                index={index}
+                                statusKey={consultMap[item.docId] || 'none'}
+                                onPress={handlePress}
+                            />
+                        )}
+                        contentContainerStyle={{ paddingHorizontal: isWeb ? 32 : 16, paddingBottom: 100 }}
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+                        showsVerticalScrollIndicator={false}
+                    />
+                )}
+        </TabScreenLayout>
     );
 }
 
-const S = StyleSheet.create({
-    root: { flex: 1, backgroundColor: "#F8FAFC" },
-    watermark: { position: "absolute", width: "80%", height: "60%", top: "20%", left: "10%", opacity: 0.05 },
-    scroll: { paddingHorizontal: isWeb ? 32 : 16, paddingTop: isWeb ? 28 : 20, paddingBottom: 40 },
+const C = StyleSheet.create({
+    card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 6, borderWidth: 1, borderColor: '#E2E8F0', gap: 10 },
+    avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+    avatarText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+    info: { flex: 1 },
+    name: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
+    phone: { fontSize: 12, color: '#64748B', marginTop: 1 },
+    statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
+    statusDot: { width: 6, height: 6, borderRadius: 3 },
+    statusText: { fontSize: 11, fontWeight: '700' },
 });

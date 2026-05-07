@@ -284,11 +284,11 @@ export default function InformationScreen() {
             <View style={S.container}>
                 {/* Header */}
                 <View style={S.header}>
-                    {!isWeb && (
-                        <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
-                            <Ionicons name="arrow-back" size={20} color={Colors.TextPrimary} />
-                        </TouchableOpacity>
-                    )}
+
+                    <TouchableOpacity onPress={() => router.replace('/(tabs)/home')} style={S.backBtn}>
+                        <Ionicons name="arrow-back" size={20} color={Colors.TextPrimary} />
+                    </TouchableOpacity>
+
                     <View style={{ flex: 1 }}>
                         <Text style={S.headerTitle}>Thông tin</Text>
                         <View style={S.roleBadge}>

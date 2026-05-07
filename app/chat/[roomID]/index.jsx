@@ -83,8 +83,12 @@ export default function ChatScreen() {
     const params = useLocalSearchParams();
     const { userDetail } = useContext(UserDetailContext);
 
-    const roomId = params.roomId || '';
+    // ✅ Đọc cả hai — tránh case-sensitive mismatch giữa folder name và params
+    const roomId = params.roomID || params.roomId || '';
     const orderId = params.orderId || '';
+
+    console.log('[ChatScreen] params raw:', JSON.stringify(params));
+    console.log('[ChatScreen] roomId resolved:', roomId);
 
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(!!roomId); // ✅ false ngay nếu không có roomId
@@ -108,12 +112,21 @@ export default function ChatScreen() {
 
         let unsub;
         try {
-            unsub = subscribeMessages(roomId, (msgs) => {
-                clearTimeout(timeout);
-                setMessages(msgs);
-                setLoading(false);
-                setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
-            });
+            unsub = subscribeMessages(
+                roomId,
+                (msgs) => {
+                    clearTimeout(timeout);
+                    setMessages(msgs);
+                    setLoading(false);
+                    setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
+                },
+                (error) => {
+                    // ✅ Lỗi từ onSnapshot — dừng loading nhưng GIỮ messages cũ
+                    clearTimeout(timeout);
+                    setLoading(false);
+                    console.warn('Chat error:', error.code);
+                }
+            );
         } catch (e) {
             console.error('subscribeMessages error:', e);
             clearTimeout(timeout);

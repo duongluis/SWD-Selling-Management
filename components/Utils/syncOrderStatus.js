@@ -1,7 +1,3 @@
-// utils/syncOrderStatus.js
-// Khi dịch vụ đổi trạng thái → tự động cập nhật đơn hàng liên kết
-// Logic này thay thế việc admin đổi thủ công các trạng thái có changeable:false
-
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
 

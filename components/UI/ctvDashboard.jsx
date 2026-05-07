@@ -1,6 +1,3 @@
-// components/CTVDashboard.jsx
-// Component dashboard riêng cho CTV — export named để tránh conflict
-
 import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, FlatList, Platform, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 

@@ -1,12 +1,3 @@
-// utils/trackRevenue.js
-//
-// Lưu doanh thu trực tiếp vào db/users/{email}:
-// {
-//   ...existing fields,
-//   revenueTotal:  number,       // tổng doanh thu đã xác nhận
-//   revenueOrders: string[],     // danh sách orderId đã tính (chống double-count)
-// }
-
 import { arrayUnion, doc, getDoc, increment, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
 

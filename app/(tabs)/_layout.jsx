@@ -6,8 +6,8 @@ import { Tabs, useRouter, useSegments } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { doc, writeBatch } from 'firebase/firestore';
 import { useContext, useState } from 'react';
-import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
-import NotificationPanel from '../../components/Main/notificationPanel';
+import { Dimensions, Image, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import NotificationPanel from '../../components/Main/NotificationPanel';
 import { showInfo } from '../../components/Main/showInfo';
 import auth, { db } from '../../config/firebaseConfig';
 
@@ -23,9 +23,10 @@ const NAV_ITEMS = [
   { key: 'home', link: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
   { key: 'order', link: '(tabs)/order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
   { key: 'customer', link: '(tabs)/customer', label: 'KHÁCH HÀNG', icon: 'people-outline', activeIcon: 'people' },
+  { key: 'consult', link: '(tabs)/customerctv', label: 'TIỀM NĂNG', icon: 'people-outline', activeIcon: 'people' },
   { key: 'service', link: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
   { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
-  { key: 'information', link: 'information', label: 'Bảng giá', icon: 'cash-outline', activeIcon: 'cash' },
+  { key: 'information', link: 'information', label: 'BẢNG GIÁ', icon: 'cash-outline', activeIcon: 'cash' },
 ];
 
 const WEB_NAV_ITEMS = [
@@ -34,8 +35,8 @@ const WEB_NAV_ITEMS = [
   { key: 'customer', link: '(tabs)/customer', label: 'KHÁCH HÀNG', icon: 'people-outline', activeIcon: 'people' },
   { key: 'service', link: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
   { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
-  // ✅ Thêm mới
-  { key: 'revenue', link: '(tabs)/revenue', label: 'BÁO CÁO', icon: 'bar-chart-outline', activeIcon: 'bar-chart' },
+  { key: 'consult', link: '(tabs)/customerctv', label: 'TIỀM NĂNG', icon: 'people-outline', activeIcon: 'people' },
+  { key: 'revenue', link: '(tabs)/analytics', label: 'BÁO CÁO', icon: 'bar-chart-outline', activeIcon: 'bar-chart' },
   { key: 'information', link: 'information', label: 'Bảng giá', icon: 'cash-outline', activeIcon: 'cash' },
 ];
 
@@ -122,7 +123,7 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
           const isActive = activeTab === item.key;
           return (
             <Pressable key={item.key} style={[S.navItem, isActive && S.navItemActive]} onPress={() => onNavigate(item.link)}>
-              <Ionicons name={isActive ? item.activeIcon : item.icon} size={16} color={isActive ? '#64748B' : '#fff'} style={S.navIcon} />
+              <Ionicons name={isActive ? item.activeIcon : item.icon} size={16} color={isActive ? '#fff' : '#fff'} style={S.navIcon} />
               {!collapsed && <Text style={[S.navLabel, isActive && S.navLabelActive]}>{item.label}</Text>}
             </Pressable>
           );
@@ -157,16 +158,18 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
             </View>
           )}
           <Pressable style={[S.navItem, isUsersActive && S.navItemActive]} onPress={() => router.push('/(tabs)/user')}>
-            <Ionicons name={isUsersActive ? 'people' : 'people-outline'} size={16} color={isUsersActive ? '#64748B' : '#fff'} style={S.navIcon} />
+            <Ionicons name={isUsersActive ? 'people' : 'people-outline'} size={16} color={isUsersActive ? '#fff' : '#fff'} style={S.navIcon} />
             {!collapsed && <Text style={[S.navLabel, isUsersActive && S.navLabelActive]}>Danh sách người dùng</Text>}
           </Pressable>
-          <Pressable style={[S.syncBtn, collapsed && S.syncBtnCollapsed, syncing && S.syncBtnLoading]} onPress={handleSync} disabled={syncing}>
+
+          {/* <Pressable style={[S.syncBtn, collapsed && S.syncBtnCollapsed, syncing && S.syncBtnLoading]} onPress={handleSync} disabled={syncing}>
             {syncing
               ? <ActivityIndicator size="small" color="#FFFFFF" />
               : <Ionicons name={syncOk ? 'checkmark-circle' : 'cloud-upload-outline'} size={16} color="#FFFFFF" />
             }
             {!collapsed && <Text style={S.syncBtnText}>{syncing ? 'Đang cập nhật...' : 'Cập nhật giá'}</Text>}
-          </Pressable>
+          </Pressable> */}
+
           {!collapsed && (
             <View style={S.syncMeta}>
               {lastSync ? (
@@ -283,6 +286,7 @@ export default function TabLayout() {
       <Tabs.Screen name="revenue" />
       <Tabs.Screen name="users" />
       <Tabs.Screen name="information" />
+      <Tabs.Screen name="consult" />
     </>
   );
 
@@ -298,22 +302,28 @@ export default function TabLayout() {
           onToggle={() => setCollapsed(c => !c)}
           router={router}
         />
-        <View style={S.mainArea}>
-          {/* Topbar — ✅ tích hợp NotificationPanel */}
+        <View style={S.mainArea} >
+          {/* Topbar — có banner image */}
           <View style={S.topBar}>
+            {/* ✅ Banner image nền topBar */}
+            <Image
+              source={require('../../assets/images/layout-img.png')}
+              style={S.topBarBanner}
+              resizeMode="cover"
+            />
             <View style={S.breadcrumb}>
-              <Text style={S.breadcrumbRoot}>SWD Seller</Text>
-              <Ionicons name="chevron-forward" size={12} color="#94A3B8" />
+              <Text style={S.breadcrumbRoot}>   SWD Seller</Text>
+              <Ionicons name="chevron-forward" size={12} color="#fff" />
               <Text style={S.breadcrumbCurrent}>{pageLabel}</Text>
             </View>
             <View style={S.topBarActions}>
               {/* ✅ Phòng chat ở topbar */}
               <Pressable style={S.topBarBtn} onPress={() => router.push('/chatList')}>
-                <Ionicons name="chatbubbles-outline" size={18} color="#64748B" />
+                <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
               </Pressable>
               {/* ✅ NotificationPanel thay bell cũ */}
-              <NotificationPanel bellColor="#64748B" bellSize={18} />
-              <Pressable style={S.topBarBtn}><Ionicons name="help-circle-outline" size={18} color="#64748B" /></Pressable>
+              <NotificationPanel bellColor="#fff" bellSize={18} />
+              <Pressable style={S.topBarBtn}><Ionicons name="help-circle-outline" size={18} color="#fff" /></Pressable>
               <View style={S.topBarDivider} />
               <View style={S.topBarAvatar}>
                 <Text style={S.topBarAvatarText}>{getInitials(userDetail?.name)}</Text>
@@ -355,12 +365,12 @@ const S = StyleSheet.create({
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#1E293B', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 16 },
   searchText: { flex: 1, color: '#ffffff', fontSize: 13 },
   navSection: { marginBottom: 16 },
-  navSectionLabel: { color: '#334155', fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4, paddingHorizontal: 8 },
+  navSectionLabel: { color: '#7db1d8', fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4, paddingHorizontal: 8 },
   navItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 7, borderRadius: 7, marginBottom: 1 },
   navItemActive: { backgroundColor: '#1E293B' },
   navIcon: { marginRight: 8 },
   navLabel: { color: '#ffffff', fontSize: 13, fontWeight: '500' },
-  navLabelActive: { color: '#F8FAFC', fontWeight: '600' },
+  navLabelActive: { color: '#fff', fontWeight: '600' },
   adminSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, marginBottom: 6 },
   adminBadge: { backgroundColor: '#1E3A8A', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   adminBadgeText: { color: '#93C5FD', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
@@ -379,11 +389,12 @@ const S = StyleSheet.create({
   logoutPopup: { backgroundColor: '#1E293B', borderRadius: 8, marginBottom: 4, borderWidth: 1, borderColor: '#334155', overflow: 'hidden' },
   logoutItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
   logoutItemText: { color: '#F87171', fontSize: 13, fontWeight: '600' },
-  mainArea: { flex: 1, flexDirection: 'column', backgroundColor: '#F8FAFC' },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  breadcrumb: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  breadcrumbRoot: { color: '#94A3B8', fontSize: 13, fontWeight: '500' },
-  breadcrumbCurrent: { color: '#0F172A', fontSize: 13, fontWeight: '600' },
+  mainArea: { flex: 1, flexDirection: 'column', backgroundColor: 'transparent' },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#transparent', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', overflow: 'hidden', paddingVertical: 15, paddingRight: 10 },
+  topBarBanner: { position: 'absolute', width: Dimensions.get('screen').width, height: 100, opacity: 1, backgroundColor: '#7db1d8' },
+  breadcrumb: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'transparent' },
+  breadcrumbRoot: { color: '#fff', fontSize: 15, fontWeight: '500' },
+  breadcrumbCurrent: { color: '#fff', fontSize: 15, fontWeight: '600' },
   topBarActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   topBarBtn: { width: 32, height: 32, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   topBarDivider: { width: 1, height: 20, backgroundColor: '#E2E8F0', marginHorizontal: 4 },

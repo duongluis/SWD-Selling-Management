@@ -47,7 +47,7 @@ const APP_ROUTES = ['(tabs)', 'addOrder', 'addCustomer', 'addConsult',
   'addService', 'CustomerView', 'ServiceView',
   'OrderView', 'revenue', 'information', 'editUser',
   'ctvCustomers', 'chat', 'chatList', 'customerCTV',
-  'orderContract'];
+  'orderContract', 'editCustomer'];
 
 export default function RootLayout() {
   const [userDetail, setUserDetail] = useState(null);
@@ -62,14 +62,6 @@ export default function RootLayout() {
     "outfit-light": require("./../assets/fonts/Oswald-Bold.ttf"),
   });
 
-
-  if (Platform.OS === 'web') {
-    const style = document.createElement('style');
-    style.textContent = `
-    input, textarea { outline: none !important; }
-  `;
-    document.head.appendChild(style);
-  }
   // ── Auth state listener ───────────────────────────────────
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {

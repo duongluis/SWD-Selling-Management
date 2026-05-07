@@ -1,196 +1,157 @@
-import Colors from "@/constant/Colors";
-import { UserDetailContext } from "@/context/UserDetailContext";
-import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useContext, useState } from "react";
+import { useScreenData } from '@/components/Hooks/useScreenData';
+import { useSearch } from '@/components/Hooks/useSearch';
+import EmptyState from '@/components/Main/EmptyState';
+import ScreenHeader from '@/components/Main/ScreenHeader';
+import TabScreenLayout from '@/components/Main/TabScreenLayout';
+import CustomerDetail from '@/components/UI/CustomerDetail';
+import StatBar from '@/components/UI/StatBar';
+import { fmtDate, fmtPhone, getInitials } from '@/components/Utils/formatters';
+import { canAdd, isCTV } from '@/components/Utils/roleHelper';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
-  ActivityIndicator, Image, Platform, RefreshControl,
-  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
-} from "react-native";
-import { getRole, useCustomers } from "../../components/Hooks/useCustomers";
+  FlatList, Platform, RefreshControl,
+  StyleSheet, Text, TouchableOpacity, View,
+} from 'react-native';
 
-const isWeb = Platform.OS === "web";
-const BG_IMAGE = require('../../assets/images/logo-light.png');
+const isWeb = Platform.OS === 'web';
+const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899'];
 
-function getInitials(name) {
-  if (!name) return "?";
-  return name.trim().split(/\s+/).filter(n => n.length > 0).map(n => n[0]).join("").toUpperCase().slice(0, 2);
-}
-const AVATAR_COLORS = ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#06B6D4"];
-
-function CustomerCard({ item, index, onPress }) {
+function TableHead() {
+  if (!isWeb) return null;
   return (
-    <TouchableOpacity style={styles.listRow} activeOpacity={0.6} onPress={() => onPress(item)}>
-      <View style={[styles.listAvatar, { backgroundColor: AVATAR_COLORS[index % AVATAR_COLORS.length] }]}>
-        <Text style={styles.listAvatarText}>{getInitials(item.name)}</Text>
+    <View style={T.head}>
+      <View style={{ width: 46 }} />
+      <Text style={[T.hcell, { flex: 2 }]}>Khách hàng</Text>
+      <Text style={[T.hcell, { flex: 1 }]}>Điện thoại</Text>
+      <Text style={[T.hcell, { flex: 1 }]}>Ngày tạo</Text>
+      <Text style={[T.hcell, { flex: 1.2 }]}>Tạo bởi</Text>
+      <View style={{ width: 20 }} />
+    </View>
+  );
+}
+const T = StyleSheet.create({
+  head: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 16, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  hcell: { fontSize: 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.06, paddingHorizontal: 4 },
+});
+
+function CustomerRow({ item, index, isActive, onPress }) {
+  const color = COLORS[index % COLORS.length];
+  return (
+    <TouchableOpacity
+      style={[R.row, isActive && R.rowActive]}
+      onPress={() => onPress(item)}
+      activeOpacity={0.72}
+    >
+      {isActive && <View style={R.leftBar} />}
+      <View style={[R.avatar, { backgroundColor: color + '20' }]}>
+        <Text style={[R.avatarText, { color }]}>{getInitials(item.name)}</Text>
       </View>
-      <View style={styles.listInfo}>
-        <Text style={styles.listName}>{item.name}</Text>
-        <Text style={styles.listSub}>{item.phone || "Chưa có SĐT"}{item.email ? ` · ${item.email}` : ""}</Text>
-        {item.address && <Text style={styles.listAddress} numberOfLines={1}>{item.address}</Text>}
+      {/* Tên */}
+      <View style={[R.col, { flex: 2 }]}>
+        <Text style={R.name} numberOfLines={1}>{item.name || '—'}</Text>
+        {!isWeb && <Text style={R.sub}>{item.phone || '—'}</Text>}
       </View>
-      <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
+      {/* Phone */}
+      {isWeb && <Text style={[R.col, R.txt, { flex: 1 }]}>{fmtPhone(item.phone)}</Text>}
+      {/* Ngày tạo */}
+      {isWeb && <Text style={[R.col, R.sub2, { flex: 1 }]}>{fmtDate(item.createdAt)}</Text>}
+      {/* Tạo bởi — thay thế group header */}
+      {isWeb && (
+        <View style={[R.col, { flex: 1.2 }]}>
+          <Text style={R.createdBy} numberOfLines={1}>{item.createdBy || '—'}</Text>
+        </View>
+      )}
+      <Ionicons name="chevron-forward" size={14} color={isActive ? '#2563EB' : '#CBD5E1'} />
     </TouchableOpacity>
   );
 }
+const R = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 10, position: 'relative' },
+  rowActive: { backgroundColor: '#F0F7FF' },
+  leftBar: { position: 'absolute', left: 0, top: 4, bottom: 4, width: 3, backgroundColor: '#2563EB', borderRadius: 2 },
+  avatar: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  avatarText: { fontSize: 13, fontWeight: '800' },
+  col: { paddingHorizontal: 4 },
+  name: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
+  sub: { fontSize: 11, color: '#64748B', marginTop: 1 },
+  txt: { fontSize: 13, color: '#374151' },
+  sub2: { fontSize: 12, color: '#94A3B8' },
+  createdBy: { fontSize: 11, color: '#64748B', backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, alignSelf: 'flex-start' },
+});
 
-function SectionHeader({ email, name, count }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <View style={styles.sectionAvatar}><Text style={styles.sectionAvatarText}>{getInitials(name)}</Text></View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.sectionName}>{name || "Chưa có tên"}</Text>
-        <Text style={styles.sectionEmail}>{email}</Text>
-      </View>
-      <View style={styles.sectionBadge}><Text style={styles.sectionBadgeText}>{count} KH</Text></View>
-    </View>
-  );
-}
-
-export default function CustomerView() {
+export default function CustomerScreen() {
   const router = useRouter();
-  const { userDetail } = useContext(UserDetailContext);
-  const role = getRole(userDetail);
+  const { data, loading, refreshing, refresh, stats, role } = useScreenData('customers');
+  const { query, setQuery, result } = useSearch(data, ['name', 'phone', 'email']);
+  const [selected, setSelected] = useState(null);
 
-  const { customers, loading, refresh } = useCustomers();
-  const [refreshing, setRefreshing] = useState(false);
-  const [search, setSearch] = useState("");
-
-  // ✅ CTV → redirect sang màn riêng ngay khi focus
   useFocusEffect(useCallback(() => {
-    if (role === "ctv") {
-      router.replace("/customerctv");
-      return;
-    }
-    refresh();
-  }, [role, refresh]));
+    if (isCTV(role)) router.replace('/customerCTV');
+  }, [role]));
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await refresh();
-    setRefreshing(false);
-  }, [refresh]);
-
-  const handlePress = (item) => {
-    router.push({
-      pathname: "/CustomerView/[customerID]",
-      params: { customerid: item?.docId, customerParam: JSON.stringify(item) },
-    });
-  };
-
-  // Tính groups — chỉ cho admin/daily/phantan
-  const groups = useCallback(() => {
-    if (role === "daily" || role === "phantan") {
-      const myEmail = userDetail?.email;
-      const selfCustomers = customers.filter(c => c.createdBy === myEmail);
-      const subMap = new Map();
-      customers.forEach(c => {
-        if (c.createdBy && c.createdBy !== myEmail) {
-          if (!subMap.has(c.createdBy)) subMap.set(c.createdBy, { email: c.createdBy, name: c.createdBy, customers: [] });
-          subMap.get(c.createdBy).customers.push(c);
-        }
-      });
-      return [
-        { email: myEmail, name: userDetail?.name || myEmail, customers: selfCustomers, isSelf: true },
-        ...[...subMap.values()].filter(g => g.customers.length > 0),
-      ];
-    }
-    if (role === "admin") {
-      const map = new Map();
-      customers.forEach(c => {
-        const key = c.createdBy || "unknown";
-        if (!map.has(key)) map.set(key, { email: key, name: key, customers: [] });
-        map.get(key).customers.push(c);
-      });
-      return [...map.values()];
-    }
-    return [];
-  }, [customers, role, userDetail])();
-
-  const filteredGroups = groups
-    .map(g => ({
-      ...g,
-      customers: search.trim() === ""
-        ? g.customers
-        : g.customers.filter(c =>
-          (c.name || "").toLowerCase().includes(search.toLowerCase()) ||
-          (c.phone || "").includes(search)
-        ),
-    }))
-    .filter(g => g.customers.length > 0 || search.trim() === "");
-
-  if (loading && !refreshing) return (
-    <View style={[styles.container, { alignItems: "center", justifyContent: "center" }]}>
-      <ActivityIndicator size="large" color="#2563EB" />
-      <Text style={{ marginTop: 12, color: "#94A3B8", fontSize: 14 }}>Đang tải khách hàng...</Text>
-    </View>
-  );
+  const statCards = [
+    { icon: 'people-outline', label: 'Tổng khách hàng', value: String(stats.total || 0), color: '#2563EB', bg: '#EFF6FF' },
+  ];
 
   return (
-    <View style={styles.root}>
-      <Image source={BG_IMAGE} style={styles.watermark} resizeMode="contain" />
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View>
-            {!isWeb && <Text style={styles.headerSub}>QUẢN LÝ</Text>}
-            <Text style={styles.headerTitle}>Khách hàng</Text>
-            <Text style={styles.headerCount}>{customers.length} khách hàng · {groups.length} nhóm</Text>
-          </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => router.push("/addCustomer")}>
-            <Ionicons name="add" size={18} color={Colors.White} />
-            {isWeb && <Text style={styles.addBtnText}>Thêm khách hàng</Text>}
-          </TouchableOpacity>
+    <TabScreenLayout>
+      <ScreenHeader
+        title="Khách hàng"
+        subtitle={`${stats.total || 0} khách hàng`}
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Tìm tên, SĐT..."
+        actionLabel={canAdd(role) && isWeb ? ' Thêm khách hàng' : undefined}
+        actionIcon="add"
+        onAction={canAdd(role) ? () => router.push('/addCustomer') : undefined}
+      />
+      <StatBar stats={statCards} />
+
+      <View style={{ flex: 1, flexDirection: 'row' }}>
+        <View style={WRAP.card}>
+          <TableHead />
+          {loading && !refreshing ? <EmptyState loading /> :
+            result.length === 0 ? (
+              <EmptyState empty icon="people-outline"
+                title={query ? 'Không tìm thấy' : 'Chưa có khách hàng'}
+                actionLabel={canAdd(role) ? 'Thêm khách hàng' : undefined}
+                onAction={canAdd(role) ? () => router.push('/addCustomer') : undefined}
+              />
+            ) : (
+              <FlatList
+                data={result}
+                keyExtractor={(item, i) => item.docId || String(i)}
+                renderItem={({ item, index }) => (
+                  <CustomerRow item={item} index={index}
+                    isActive={selected?.docId === item.docId}
+                    onPress={setSelected}
+                  />
+                )}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+                contentContainerStyle={{ paddingBottom: isWeb ? 60 : 100 }}
+              />
+            )}
         </View>
-        <View style={styles.searchWrap}>
-          <Ionicons name="search-outline" size={16} color="#94A3B8" />
-          <TextInput style={styles.searchInput} placeholder="Tìm tên, SĐT..." placeholderTextColor="#94A3B8" value={search} onChangeText={setSearch} />
-          {search.length > 0 && <TouchableOpacity onPress={() => setSearch("")}><Ionicons name="close-circle" size={16} color="#94A3B8" /></TouchableOpacity>}
-        </View>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isWeb ? 32 : 100 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
-          {filteredGroups.length === 0 ? (
-            <View style={styles.empty}>
-              <View style={styles.emptyIconWrap}><Ionicons name="people-outline" size={32} color="#94A3B8" /></View>
-              <Text style={styles.emptyTitle}>{search ? "Không tìm thấy kết quả" : "Chưa có khách hàng"}</Text>
-              <Text style={styles.emptySub}>{search ? "Thử từ khoá khác" : "Thêm khách hàng đầu tiên"}</Text>
-              {!search && <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push("/addCustomer")}><Ionicons name="add" size={16} color={Colors.White} /><Text style={styles.emptyBtnText}>Thêm khách hàng</Text></TouchableOpacity>}
-            </View>
-          ) : (
-            filteredGroups.map(group => (
-              <View key={group.email} style={styles.group}>
-                {!group.isSelf && <SectionHeader email={group.email} name={group.name} count={group.customers.length} />}
-                {group.customers.map((item, index) => <CustomerCard key={item.docId || index} item={item} index={index} onPress={handlePress} />)}
-              </View>
-            ))
-          )}
-        </ScrollView>
+        {isWeb && selected && (
+          <CustomerDetail
+            customer={selected}
+            onClose={() => setSelected(null)}
+            onEdit={() => { setSelected(null); router.push({ pathname: '/editCustomer/[customerID]', params: { customerId: selected.docId } }); }}
+          />
+        )}
       </View>
-    </View>
+    </TabScreenLayout>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F8FAFC" }, watermark: { position: "absolute", width: "80%", height: "60%", top: "20%", left: "10%", opacity: 0.05 },
-  container: { flex: 1, backgroundColor: "transparent", paddingHorizontal: isWeb ? 32 : 16, paddingTop: isWeb ? 28 : 30 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
-  headerSub: { fontSize: 10, color: "#94A3B8", fontWeight: "700", letterSpacing: 1, marginBottom: 2 },
-  headerTitle: { fontSize: isWeb ? 28 : 24, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5 },
-  headerCount: { fontSize: 13, color: "#64748B", marginTop: 2 },
-  addBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#2563EB", paddingHorizontal: isWeb ? 14 : 12, paddingVertical: 9, borderRadius: 8 },
-  addBtnText: { color: Colors.White, fontSize: 13, fontWeight: "600" },
-  searchWrap: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFFFFF", borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: "#E2E8F0", marginBottom: 16 },
-  searchInput: { flex: 1, fontSize: 14, color: "#0F172A" },
-  group: { marginBottom: 20 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#2563EB", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 6 },
-  sectionAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
-  sectionAvatarText: { color: "#fff", fontSize: 11, fontWeight: "800" }, sectionName: { fontSize: 13, fontWeight: "700", color: "#F8FAFC" },
-  sectionEmail: { fontSize: 11, color: "#fff", marginTop: 1 }, sectionBadge: { backgroundColor: "#fff", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
-  sectionBadgeText: { fontSize: 11, color: "#2563EB", fontWeight: "600" },
-  listRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, marginBottom: 5, borderWidth: 1, borderColor: "#E2E8F0", gap: 10 },
-  listAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" }, listAvatarText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
-  listInfo: { flex: 1 }, listName: { fontSize: 14, fontWeight: "600", color: "#0F172A" }, listSub: { fontSize: 12, color: "#64748B", marginTop: 1 }, listAddress: { fontSize: 11, color: "#94A3B8", marginTop: 2 },
-  empty: { alignItems: "center", justifyContent: "center", paddingVertical: 60, gap: 8 },
-  emptyIconWrap: { width: 64, height: 64, borderRadius: 32, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center", marginBottom: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: "700", color: "#374151" }, emptySub: { fontSize: 13, color: "#94A3B8", textAlign: "center" },
-  emptyBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#2563EB", paddingHorizontal: 18, paddingVertical: 10, borderRadius: 8, marginTop: 8 },
-  emptyBtnText: { color: Colors.White, fontWeight: "600", fontSize: 13 },
+const WRAP = StyleSheet.create({
+  card: {
+    flex: 1, backgroundColor: '#fff',
+    borderRadius: isWeb ? 14 : 0, borderWidth: 1, borderColor: '#E2E8F0',
+    overflow: 'hidden', margin: isWeb ? 16 : 0, marginTop: 0,
+    shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2,
+  },
 });

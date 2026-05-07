@@ -1,796 +1,243 @@
-import { getRoomIdByOrderId, sendStatusUpdateMessage } from '@/components/Utils/chatService';
-import Colors from '@/constant/Colors';
-import { UserDetailContext } from '@/context/UserDetailContext';
+// app/(tabs)/order.jsx
+
+import { useScreenData } from '@/components/Hooks/useScreenData';
+import { useSearch } from '@/components/Hooks/useSearch';
+import EmptyState from '@/components/Main/EmptyState';
+import ScreenHeader from '@/components/Main/ScreenHeader';
+import TabScreenLayout from '@/components/Main/TabScreenLayout';
+import FilterChips from '@/components/UI/FilterChips';
+import StatBar from '@/components/UI/StatBar';
+// ✅ Import từ component riêng — không định nghĩa inline nữa
+import OrderDetail from '@/components/UI/OrderDetail';
+import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
+import { isCTV } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, Image, Modal, Platform, Pressable,
-  RefreshControl, ScrollView, StyleSheet, Text,
-  TextInput, TouchableOpacity, View,
+  FlatList, Platform, RefreshControl,
+  StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import {
-  ORDER_TYPE_TO_CATEGORY,
-  getStatusConfig,
-  useStatusList,
-} from '../../components/Hooks/getStatus';
-import { showAlert } from '../../components/Main/showAlert';
-import { trackRevenueOnPaid } from '../../components/Utils/trackRevenue';
-import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
-const BG_IMAGE = require('../../assets/images/logo-light.png');
+const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 
-const getRole = (u) => {
-  const r = (u?.role || u?.member || '').toLowerCase();
-  if (r === 'admin') return 'admin';
-  if (['đại lý', 'daily', 'dealer'].includes(r)) return 'daily';
-  if (['đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
-  if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
-  return 'other';
+// ── Status config (dùng cho row badges) ──────────────────────
+const S_CFG = {
+  'Chờ xác nhận': { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
+  'Chờ lắp đặt': { c: '#2563EB', bg: '#EFF6FF', bd: '#BFDBFE' },
+  'Đang lắp đặt': { c: '#7C3AED', bg: '#F5F3FF', bd: '#DDD6FE' },
+  'Đã lắp đặt': { c: '#059669', bg: '#ECFDF5', bd: '#A7F3D0' },
+  'Chờ thanh toán': { c: '#EA580C', bg: '#FFF7ED', bd: '#FED7AA' },
+  'Đã thanh toán': { c: '#16A34A', bg: '#DCFCE7', bd: '#86EFAC' },
+  'Đã hủy': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
+  'CANCELLED': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
+  'PENDING': { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' },
 };
+const scfg = (s) => S_CFG[s] || { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' };
 
-const SVC_TYPE_CONFIG = {
-  INSTALLATION: { label: 'Lắp đặt', icon: 'build-outline', color: '#8B5CF6', bg: '#F5F3FF' },
-  MAINTENANCE: { label: 'Bảo dưỡng', icon: 'construct-outline', color: '#F59E0B', bg: '#FFFBEB' },
-  DELIVERY: { label: 'Giao hàng', icon: 'car-outline', color: '#10B981', bg: '#ECFDF5' },
-  CONSULTING: { label: 'Tư vấn', icon: 'chatbubbles-outline', color: '#EC4899', bg: '#FDF2F8' },
-  SALT: { label: 'Đổ muối', icon: 'water-outline', color: '#3B82F6', bg: '#EFF6FF' },
+const TYPE_CFG = {
+  buon: { label: 'Đơn buôn', c: '#065F46', bg: '#ECFDF5' },
+  le: { label: 'Đơn lẻ', c: '#5B21B6', bg: '#F5F3FF' },
 };
+const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899'];
 
-const SVC_STATUS = {
-  PENDING: { color: '#F59E0B', bg: '#FFFBEB', label: 'Chờ xử lý' },
-  PROCESSING: { color: '#3B82F6', bg: '#EFF6FF', label: 'Đang xử lý' },
-  COMPLETED: { color: '#10B981', bg: '#ECFDF5', label: 'Hoàn thành' },
-  CANCELLED: { color: '#EF4444', bg: '#FEF2F2', label: 'Đã hủy' },
-};
-
-const ORDER_TYPE_CONFIG = {
-  buon: { label: 'Đơn buôn', color: '#2563EB', bg: '#EFF6FF', icon: 'cube-outline' },
-  le: { label: 'Đơn lẻ', color: '#8B5CF6', bg: '#F5F3FF', icon: 'home-outline' },
-};
-
-const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
-function getInitials(name) {
-  if (!name) return '?';
-  return name.trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
-const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4'];
-const TABS = ['All', 'PENDING', 'SHIPPED', 'CONFIRMED', 'COMPLETED', 'CANCELLED'];
-const TAB_LABELS = { All: 'Tất cả', PENDING: 'Chờ lắp đặt', SHIPPED: 'Đang giao hàng', CONFIRMED: 'Đã thanh toán', COMPLETED: 'Hoàn thành', CANCELLED: 'Đã hủy' };
-
-// ── Status Picker Modal Styles ────────────────────────────────
-const PM = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  sheet: { backgroundColor: '#FFFFFF', borderRadius: 16, width: '100%', maxWidth: 340, overflow: 'hidden' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  title: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
-  closeBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
-  itemActive: { backgroundColor: '#F8FAFC' },
-  itemIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  itemText: { flex: 1, fontSize: 14, color: '#374151', fontWeight: '500' },
-  lockedTag: { backgroundColor: '#FEF2F2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-  lockedText: { fontSize: 10, color: '#EF4444', fontWeight: '600' },
-  cancelItem: { borderTopWidth: 2, borderTopColor: '#FEE2E2' },
-  cancelIcon: { backgroundColor: '#FEF2F2', width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-});
-
-// ── Order Detail Panel ────────────────────────────────────────
-function OrderDetailPanel({ order: initialOrder, onClose, router, userDetail }) {
-  const [order, setOrder] = useState(initialOrder);
-  const [services, setServices] = useState([]);
-  const [svcLoading, setSvcLoading] = useState(true);
-  const [showStatusPicker, setShowStatusPicker] = useState(false);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
-
-  const isAdmin = (userDetail?.role || userDetail?.member || '').toLowerCase() === 'admin';
-
-  // ✅ Dùng hook chung — fetch db/status/{don_buon|don_le}/list
-  const category = ORDER_TYPE_TO_CATEGORY[order?.orderType];
-  const { statusList } = useStatusList(category);
-
-  // Config của trạng thái hiện tại
-  const statusCfg = getStatusConfig(order?.status, statusList);
-
-  useEffect(() => { setOrder(initialOrder); }, [initialOrder?.id]);
-
-  // Fetch services
-  useEffect(() => {
-    if (!order?.id) return;
-    const fetch = async () => {
-      setSvcLoading(true);
-      try {
-        const snap = await getDocs(query(collection(db, 'service'), where('orderId', '==', order.id)));
-        setServices(snap.docs.map(d => ({ ...d.data(), docId: d.id })));
-      } catch (e) { console.error(e); }
-      finally { setSvcLoading(false); }
-    };
-    fetch();
-  }, [order?.id]);
-
-  // ── Hủy tất cả dịch vụ đính kèm ─────────────────────────
-  const cancelLinkedServices = async (orderId) => {
-    try {
-      const snap = await getDocs(query(collection(db, 'service'), where('orderId', '==', orderId)));
-      await Promise.all(snap.docs.map(d => updateDoc(doc(db, 'service', d.id), { status: 'Đã hủy' })));
-      setServices(prev => prev.map(s => ({ ...s, status: 'Đã hủy' })));
-    } catch (e) { console.error('Lỗi hủy dịch vụ:', e); }
-  };
-
-  // ── Cập nhật trạng thái ───────────────────────────────────
-  const handleUpdateStatus = (newStatus) => {
-    setShowStatusPicker(false);
-    if (newStatus === order.status) return;
-
-    // Trạng thái hiện tại là auto-only → không cho đổi thủ công
-    if (!currentChangeable) {
-      showAlert('Không thể thay đổi', 'Trạng thái hiện tại được quản lý tự động, không thể thay đổi thủ công.');
-      return;
-    }
-
-    const newCfg = getStatusConfig(newStatus, statusList);
-    const isCancelling = newStatus === 'Đã hủy';
-
-    showAlert(
-      isCancelling ? '⚠️ Hủy đơn hàng' : 'Đổi trạng thái',
-      isCancelling
-        ? `Hủy đơn hàng #${order.id}? Tất cả dịch vụ đính kèm cũng sẽ bị hủy.`
-        : `Cập nhật sang "${newCfg?.label}"?`,
-      async () => {
-        setUpdatingStatus(true);
-        try {
-          const phone = order._phone;
-          if (!phone) throw new Error('Không xác định được số điện thoại khách hàng');
-          const orderDoc = await getDoc(doc(db, 'orders', phone));
-          if (!orderDoc.exists()) throw new Error('Không tìm thấy đơn hàng');
-          const orders = orderDoc.data().orders || [];
-          const updated = orders.map(o => o.id === order.id ? { ...o, status: newStatus } : o);
-          await updateDoc(doc(db, 'orders', phone), { orders: updated });
-          setOrder(prev => ({ ...prev, status: newStatus }));
-
-          // ✅ Cộng doanh thu khi đổi sang "Đã thanh toán" (chỉ 1 lần duy nhất)
-          if (newStatus === 'Đã thanh toán' && order.createdBy) {
-            await trackRevenueOnPaid(order.createdBy, order, newStatus);
-          }
-
-          if (isCancelling) await cancelLinkedServices(order.id);
-
-          // ✅ Gửi tin nhắn hệ thống vào room chat
-          sendStatusUpdateMessage({
-            orderId: order.id,
-            newStatus,
-            changedBy: userDetail?.email || '',
-            changedByName: userDetail?.name || userDetail?.email || '',
-          }).catch(() => { });
-        } catch (e) { showAlert('Lỗi', e.message); }
-        finally { setUpdatingStatus(false); }
-      }
-    );
-  };
-
-  if (!order) return null;
-  const typeCfg = ORDER_TYPE_CONFIG[order.orderType];
-  const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
-  const isCancelled = statusCfg?.name === 'Đã hủy' || order.status === 'Đã hủy';
-
-  // changeable từ DB là nguồn duy nhất
-  const currentChangeable = statusCfg?.changeable !== false;
-
-  const StatusPickerModal = () => (
-    <Modal transparent animationType="fade" visible={showStatusPicker} onRequestClose={() => setShowStatusPicker(false)}>
-      <Pressable style={PM.overlay} onPress={() => setShowStatusPicker(false)}>
-        <View style={PM.sheet} onStartShouldSetResponder={() => true}>
-          <View style={PM.header}>
-            <Text style={PM.title}>Chọn trạng thái</Text>
-            <TouchableOpacity onPress={() => setShowStatusPicker(false)} style={PM.closeBtn}>
-              <Ionicons name="close" size={16} color="#64748B" />
-            </TouchableOpacity>
-          </View>
-
-          {!currentChangeable && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF2F2', padding: 12, borderBottomWidth: 1, borderBottomColor: '#FECACA' }}>
-              <Ionicons name="lock-closed-outline" size={14} color="#EF4444" />
-              <Text style={{ fontSize: 12, color: '#EF4444', flex: 1 }}>Trạng thái hiện tại được quản lý tự động, không thể thay đổi thủ công.</Text>
-            </View>
-          )}
-
-          {statusList.map(s => {
-            const active = order.status === s.name;
-            // locked nếu: trạng thái hiện tại bị khóa HOẶC trạng thái đích là auto-only
-            const locked = !currentChangeable || s.changeable === false;
-            return (
-              <TouchableOpacity key={s.id}
-                style={[PM.item, active && PM.itemActive, locked && !active && { opacity: 0.4 }]}
-                onPress={() => !locked && handleUpdateStatus(s.name)} activeOpacity={locked ? 1 : 0.7}
-              >
-                <View style={[PM.itemIcon, { backgroundColor: s.bg }]}>
-                  <Ionicons name={s.icon} size={16} color={s.color} />
-                </View>
-                <Text style={[PM.itemText, active && { color: s.color, fontWeight: '700' }]}>{s.name}</Text>
-                {s.changeable === false && (
-                  <View style={PM.lockedTag}><Text style={PM.lockedText}>Tự động</Text></View>
-                )}
-                {active && <Ionicons name="checkmark-circle" size={18} color={s.color} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </Pressable>
-    </Modal>
-  );
-
+// ── Table Header ──────────────────────────────────────────────
+function TableHeader() {
+  if (!isWeb) return null;
   return (
-    <View style={[P.root, isCancelled && P.rootCancelled]}>
-      <StatusPickerModal />
-
-      {/* Header */}
-      <View style={P.header}>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <Text style={P.orderId}>Order #{order.id}</Text>
-            {typeCfg && (
-              <View style={[P.typeBadge, { backgroundColor: typeCfg.bg }]}>
-                <Ionicons name={typeCfg.icon} size={11} color={typeCfg.color} />
-                <Text style={[P.typeBadgeText, { color: typeCfg.color }]}>{typeCfg.label}</Text>
-              </View>
-            )}
-            {/* Cancelled banner */}
-            {isCancelled && (
-              <View style={P.cancelledBadge}>
-                <Ionicons name="close-circle" size={12} color="#EF4444" />
-                <Text style={P.cancelledBadgeText}>Đã hủy</Text>
-              </View>
-            )}
-          </View>
-          <Text style={P.orderDate}>{order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : '—'}</Text>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          {/* ✅ Nút xem hợp đồng */}
-          <TouchableOpacity
-            style={[P.editBtn, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
-            onPress={() => router.push({
-              pathname: '/orderContract',
-              params: { orderParam: JSON.stringify(order) },
-            })}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="document-text-outline" size={14} color="#065F46" />
-            <Text style={[P.editBtnText, { color: '#065F46' }]}>Xem HĐ</Text>
-          </TouchableOpacity>
-          {/* Nút Chat */}
-          <TouchableOpacity
-            style={[P.editBtn, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' }]}
-            onPress={() => router.push({
-              pathname: '/chat/[roomId]',
-              params: { roomId: getRoomIdByOrderId(order.id), orderId: order.id },
-            })}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chatbubble-outline" size={14} color="#8B5CF6" />
-            <Text style={[P.editBtnText, { color: '#8B5CF6' }]}>Chat</Text>
-          </TouchableOpacity>
-          {!isCancelled && isAdmin && (
-            <TouchableOpacity style={P.editBtn}
-              onPress={() => router.push({ pathname: '/editOrder/[orderID]', params: { orderID: order.id, orderParam: JSON.stringify(order) } })}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="create-outline" size={14} color="#2563EB" />
-              <Text style={P.editBtnText}>Sửa</Text>
-            </TouchableOpacity>
-          )}
-          {isAdmin && !isCancelled && (
-            <TouchableOpacity
-              style={[P.statusBtn, { backgroundColor: statusCfg.bg, borderColor: statusCfg.border }, updatingStatus && { opacity: 0.6 }]}
-              onPress={() => setShowStatusPicker(true)} disabled={updatingStatus} activeOpacity={0.8}
-            >
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusCfg.color }} />
-              <Text style={[P.statusBtnText, { color: statusCfg.color }]}>
-                {updatingStatus ? 'Đang cập nhật...' : statusCfg.label}
-              </Text>
-              <Ionicons name="chevron-down" size={12} color={statusCfg.color} />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={onClose} style={P.closeBtn}>
-            <Ionicons name="close" size={18} color="#64748B" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-        <View style={P.body}>
-          {/* LEFT */}
-          <View style={P.leftCol}>
-            <View style={P.section}>
-              <View style={P.sectionHeader}>
-                <Ionicons name="person-circle-outline" size={14} color="#2563EB" />
-                <Text style={P.sectionTitle}>Khách hàng</Text>
-              </View>
-              <View style={P.infoRow}>
-                <View style={P.infoIcon}><Ionicons name="person-outline" size={12} color="#64748B" /></View>
-                <Text style={P.infoText}>{order.customer}</Text>
-              </View>
-              {order.address && (
-                <View style={P.infoRow}>
-                  <View style={P.infoIcon}><Ionicons name="location-outline" size={12} color="#64748B" /></View>
-                  <Text style={P.infoText} numberOfLines={2}>{order.address}</Text>
-                </View>
-              )}
-            </View>
-            <View style={P.section}>
-              <View style={P.sectionHeader}>
-                <Ionicons name="cube-outline" size={14} color="#2563EB" />
-                <Text style={P.sectionTitle}>Sản phẩm</Text>
-                <View style={P.countBadge}><Text style={P.countText}>{order.items?.length || 0}</Text></View>
-              </View>
-              {(order.items || []).map((item, i) => (
-                <View key={i} style={P.productRow}>
-                  <View style={P.productIcon}><Ionicons name="water-outline" size={12} color="#2563EB" /></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={P.productName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={P.productMeta}>x{item.qty} · {fmt(item.price)}</Text>
-                  </View>
-                  <Text style={P.productTotal}>{fmt(item.price * item.qty)}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* RIGHT — Services */}
-          <View style={P.rightCol}>
-            <View style={P.section}>
-              <View style={P.sectionHeader}>
-                <Ionicons name="construct-outline" size={14} color="#8B5CF6" />
-                <Text style={[P.sectionTitle, { color: '#8B5CF6' }]}>Dịch vụ</Text>
-                {services.length > 0 && <View style={[P.countBadge, { backgroundColor: '#F5F3FF' }]}><Text style={[P.countText, { color: '#8B5CF6' }]}>{services.length}</Text></View>}
-              </View>
-              {svcLoading ? (
-                <View style={{ alignItems: 'center', paddingVertical: 16 }}><ActivityIndicator size="small" color="#8B5CF6" /></View>
-              ) : services.length === 0 ? (
-                <View style={P.svcEmpty}><Ionicons name="construct-outline" size={24} color="#E2E8F0" /><Text style={P.svcEmptyText}>Chưa có dịch vụ</Text></View>
-              ) : services.map((svc, i) => {
-                const svcType = SVC_TYPE_CONFIG[svc.type] || SVC_TYPE_CONFIG.MAINTENANCE;
-                const svcStatus = SVC_STATUS[svc.status] || SVC_STATUS.PENDING;
-                return (
-                  <View key={svc.id || i} style={[P.svcCard, svc.status === 'CANCELLED' && { opacity: 0.6 }]}>
-                    <View style={P.svcCardTop}>
-                      <View style={[P.svcIcon, { backgroundColor: svcType.bg }]}>
-                        <Ionicons name={svcType.icon} size={13} color={svcType.color} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={P.svcId}>#{svc.id}</Text>
-                        <Text style={[P.svcType, { color: svcType.color }]}>{svcType.label}</Text>
-                      </View>
-                      <View style={[P.svcStatusBadge, { backgroundColor: svcStatus.bg }]}>
-                        <Text style={[P.svcStatusText, { color: svcStatus.color }]}>{svcStatus.label}</Text>
-                      </View>
-                    </View>
-                    {svc.machineItem && (
-                      <View style={P.svcMachineRow}>
-                        <Ionicons name="settings-outline" size={11} color={svcType.color} />
-                        <Text style={[P.svcMachineText, { color: svcType.color }]} numberOfLines={1}>{svc.machineItem.name}</Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-              {services.length > 0 && (
-                <TouchableOpacity style={P.svcViewAllBtn}
-                  onPress={() => router.push({ pathname: '/(tabs)/service', params: { filterOrderId: order.id } })}
-                  activeOpacity={0.8}
-                >
-                  <Text style={P.svcViewAllText}>Xem tất cả dịch vụ →</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Total */}
-        <View style={[P.totalBox, isCancelled && { backgroundColor: '#6B7280' }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={P.totalLabel}>Tổng cộng</Text>
-            {order.note && <Text style={P.noteText} numberOfLines={1}>Ghi chú: {order.note}</Text>}
-          </View>
-          <Text style={P.totalValue}>{fmt(total)}</Text>
-        </View>
-      </ScrollView>
+    <View style={TH.row}>
+      <View style={{ width: 46 }} />
+      <Text style={[TH.cell, { flex: 2.2 }]}>Đơn hàng</Text>
+      <Text style={[TH.cell, { flex: 0.9 }]}>Ngày</Text>
+      <Text style={[TH.cell, { flex: 0.7 }]}>Sản phẩm</Text>
+      <Text style={[TH.cell, { flex: 1.2, textAlign: 'right' }]}>Tổng tiền</Text>
+      <Text style={[TH.cell, { flex: 1.2 }]}>Trạng thái</Text>
+      <View style={{ width: 22 }} />
     </View>
   );
 }
-
-const P = StyleSheet.create({
-  root: { width: 680, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', flexShrink: 0 },
-  rootCancelled: { borderColor: '#FECACA', backgroundColor: '#FFFAFA' },
-  header: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  orderId: { fontSize: 16, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
-  typeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
-  typeBadgeText: { fontSize: 10, fontWeight: '700' },
-  cancelledBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF2F2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, borderWidth: 1, borderColor: '#FECACA' },
-  cancelledBadgeText: { fontSize: 10, fontWeight: '800', color: '#EF4444' },
-  orderDate: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
-  closeBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  body: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 12 },
-  leftCol: { flex: 1 },
-  rightCol: { flex: 1 },
-  section: { borderRadius: 10, padding: 12, marginBottom: 10 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#0F172A', flex: 1 },
-  countBadge: { backgroundColor: '#EFF6FF', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 8 },
-  countText: { fontSize: 10, fontWeight: '700', color: '#2563EB' },
-  infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, paddingVertical: 4 },
-  infoIcon: { width: 20, height: 20, borderRadius: 5, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  infoText: { flex: 1, fontSize: 12, color: '#374151' },
-  productRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  productIcon: { width: 20, height: 20, borderRadius: 5, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
-  productName: { fontSize: 12, fontWeight: '600', color: '#0F172A' },
-  productMeta: { fontSize: 10, color: '#64748B' },
-  productTotal: { fontSize: 12, fontWeight: '700', color: '#2563EB' },
-  svcEmpty: { alignItems: 'center', paddingVertical: 20, gap: 6 },
-  svcEmptyText: { fontSize: 12, color: '#94A3B8' },
-  svcCard: { backgroundColor: '#FFFFFF', borderRadius: 8, padding: 10, marginBottom: 7, borderWidth: 1, borderColor: '#E2E8F0' },
-  svcCardTop: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  svcIcon: { width: 26, height: 26, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  svcId: { fontSize: 11, fontWeight: '700', color: '#0F172A' },
-  svcType: { fontSize: 10, fontWeight: '600', marginTop: 1 },
-  svcStatusBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
-  svcStatusText: { fontSize: 10, fontWeight: '700' },
-  svcMachineRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#F8FAFC' },
-  svcMachineText: { fontSize: 10, fontWeight: '600', flex: 1 },
-  svcViewAllBtn: { alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 4 },
-  svcViewAllText: { fontSize: 12, color: '#8B5CF6', fontWeight: '700' },
-  totalBox: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 8, backgroundColor: '#1E3A8A', borderRadius: 12, padding: 16 },
-  totalLabel: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.7)' },
-  noteText: { fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
-  totalValue: { fontSize: 22, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
-  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
-  editBtnText: { fontSize: 12, color: '#2563EB', fontWeight: '700' },
-  statusBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
-  statusBtnText: { fontSize: 11, fontWeight: '700' },
+const TH = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 10 },
+  cell: { fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.06, textTransform: 'uppercase' },
 });
 
-// ── Main ─────────────────────────────────────────────────────
-export default function OrderView() {
-  const router = useRouter();
-  const { userDetail } = useContext(UserDetailContext);
-  const role = getRole(userDetail);
+// ── Order Row ─────────────────────────────────────────────────
+function OrderRow({ item, index, isActive, onPress }) {
+  const cfg = scfg(item.status);
+  const tcfg = TYPE_CFG[item.orderType];
+  const total = (item.items || []).reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
+  const pCount = (item.items || []).length;
+  const isCancelled = (item.status || '').includes('hủy') || item.status === 'CANCELLED';
+  const avatarColor = isCancelled ? '#94A3B8' : AVATAR_COLORS[index % AVATAR_COLORS.length];
+  const date = item.createdAt
+    ? new Date(item.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : '—';
 
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState('All');
-  const [filterType, setFilterType] = useState('all'); // 'all' | 'buon' | 'le'
-  const [search, setSearch] = useState('');
+  return (
+    <TouchableOpacity
+      style={[ROW.wrap, isActive && ROW.wrapActive, isCancelled && ROW.wrapCancelled]}
+      onPress={() => onPress(item)}
+      activeOpacity={0.72}
+    >
+      {isActive && <View style={ROW.leftAccent} />}
+      <View style={[ROW.avatar, { backgroundColor: avatarColor + '22' }]}>
+        <Text style={[ROW.avatarText, { color: avatarColor }]}>{getInitials(item.customer)}</Text>
+      </View>
+      <View style={ROW.mainCol}>
+        <View style={ROW.idRow}>
+          <Text style={[ROW.orderId, isCancelled && ROW.cancelled]}>Đơn hàng #{item.id}</Text>
+          {tcfg && (
+            <View style={[ROW.typePill, { backgroundColor: tcfg.bg }]}>
+              <Text style={[ROW.typePillText, { color: tcfg.c }]}>{tcfg.label}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={[ROW.customer, isCancelled && ROW.cancelledLight]}>{item.customer}</Text>
+      </View>
+      {isWeb && <Text style={[ROW.col, ROW.colDate]}>{date}</Text>}
+      {isWeb && <Text style={[ROW.col, ROW.colSub]}>{pCount} sản phẩm</Text>}
+      <Text style={[ROW.col, ROW.colAmount, isCancelled && ROW.cancelledLight]}>{fmtCurrency(total)}</Text>
+      <View style={ROW.statusWrap}>
+        <View style={[ROW.statusPill, { backgroundColor: cfg.bg, borderColor: cfg.bd }]}>
+          <View style={[ROW.statusDot, { backgroundColor: cfg.c }]} />
+          <Text style={[ROW.statusText, { color: cfg.c }]}>{item.status || 'PENDING'}</Text>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={14} color={isActive ? '#2563EB' : '#CBD5E1'} />
+    </TouchableOpacity>
+  );
+}
+
+const ROW = StyleSheet.create({
+  wrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: isWeb ? 20 : 14, paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 10, position: 'relative' },
+  wrapActive: { backgroundColor: '#F0F7FF' },
+  wrapCancelled: { opacity: 0.6 },
+  leftAccent: { position: 'absolute', left: 0, top: 4, bottom: 4, width: 3, backgroundColor: '#2563EB', borderRadius: 2 },
+  avatar: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  avatarText: { fontSize: 12, fontWeight: '800' },
+  mainCol: { flex: isWeb ? 2.2 : 1, minWidth: 0 },
+  idRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  orderId: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
+  customer: { fontSize: 12, color: '#64748B' },
+  typePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 },
+  typePillText: { fontSize: 10, fontWeight: '700' },
+  col: { paddingHorizontal: 2 },
+  colDate: { flex: 0.9, fontSize: 12, color: '#94A3B8' },
+  colSub: { flex: 0.7, fontSize: 12, color: '#94A3B8' },
+  colAmount: { flex: isWeb ? 1.2 : 1, fontSize: 13, fontWeight: '800', color: '#0F172A', textAlign: 'right' },
+  statusWrap: { flex: isWeb ? 1.2 : undefined, alignItems: isWeb ? 'flex-start' : 'center' },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
+  statusDot: { width: 5, height: 5, borderRadius: 3 },
+  statusText: { fontSize: 11, fontWeight: '700' },
+  cancelled: { textDecorationLine: 'line-through', color: '#94A3B8' },
+  cancelledLight: { color: '#94A3B8' },
+});
+
+// ── Main Screen ───────────────────────────────────────────────
+export default function OrderScreen() {
+  const router = useRouter();
+  const { data, loading, refreshing, refresh, stats, role } = useScreenData('orders');
+  const { query, setQuery } = useSearch(data, ['id', 'customer']);
+  const [typeFilter, setTypeFilter] = useState('all');
   const [selected, setSelected] = useState(null);
 
-  // ✅ Load status list từ DB theo thể loại đơn đang chọn
-  const { statusList: buonStatuses } = useStatusList(ORDER_TYPE_TO_CATEGORY['buon']); // don_buon
-  const { statusList: leStatuses } = useStatusList(ORDER_TYPE_TO_CATEGORY['le']);   // don_le
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return data.filter(o => {
+      const ms = !q || (o.customer || '').toLowerCase().includes(q) || (o.id || '').toLowerCase().includes(q);
+      const mt = typeFilter === 'all' || o.orderType === typeFilter;
+      return ms && mt;
+    });
+  }, [data, query, typeFilter]);
 
-  // Status tabs hiển thị tương ứng filterType
-  const activeStatusList = filterType === 'buon' ? buonStatuses
-    : filterType === 'le' ? leStatuses
-      : [];  // filterType==='all' → không hiện tab
+  const totalRevenue = useMemo(() =>
+    data.filter(o => !String(o.status).includes('hủy'))
+      .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + PARSE(p.price) * PARSE(p.qty || 1), 0), 0)
+    , [data]);
 
-  // Reset status filter khi đổi thể loại
-  const handleSetFilterType = (type) => {
-    setFilterType(type);
-    setFilter('All');
-    setSelected(null);
-  };
+  const statCards = [
+    { icon: 'receipt-outline', label: 'Đơn hàng', value: String(stats.total || 0), color: '#2563EB', bg: '#EFF6FF' },
+    { icon: 'cube-outline', label: 'Đơn buôn', value: String(data.filter(o => o.orderType === 'buon').length), color: '#059669', bg: '#ECFDF5' },
+    { icon: 'home-outline', label: 'Đơn lẻ', value: String(data.filter(o => o.orderType === 'le').length), color: '#8B5CF6', bg: '#F5F3FF' },
+    { icon: 'cash-outline', label: 'Doanh thu', value: fmtCurrency(totalRevenue), color: '#F59E0B', bg: '#FFFBEB' },
+  ];
 
-  const fetchOrders = useCallback(async () => {
-    if (!userDetail?.email) return;
-    const myEmail = userDetail.email;
-    const customerMap = new Map();
-    try {
-      if (role === 'admin') {
-        (await getDocs(collection(db, 'customers'))).docs.forEach(d => { const c = d.data(); if (c.phone) customerMap.set(c.phone, c); });
-      } else if (role === 'ctv') {
-        // ✅ CTV xem đơn hàng của khách mình đã kéo về (consult thành công)
-        const consultSnap = await getDocs(
-          query(collection(db, 'consult'),
-            where('createdBy', '==', myEmail),
-            where('status', '==', 'success')
-          )
-        );
-        consultSnap.docs.forEach(d => {
-          const c = d.data();
-          if (c.phone) customerMap.set(c.phone, { name: c.name, phone: c.phone });
-        });
-      } else if (role === 'daily' || role === 'phantan') {
-        (await getDocs(query(collection(db, 'customers'), where('createdBy', '==', myEmail)))).docs.forEach(d => { const c = d.data(); if (c.phone) customerMap.set(c.phone, c); });
-        const subs = (await getDocs(query(collection(db, 'users'), where('advisor', '==', myEmail)))).docs.map(d => d.data().email).filter(Boolean);
-        for (let i = 0; i < subs.length; i += 30) {
-          (await getDocs(query(collection(db, 'customers'), where('createdBy', 'in', subs.slice(i, i + 30))))).docs.forEach(d => { const c = d.data(); if (c.phone) customerMap.set(c.phone, c); });
-        }
-      }
-      const phones = [...customerMap.keys()];
-      const allOrders = [];
-      await Promise.all(phones.map(async (phone) => {
-        try {
-          const snap = await getDoc(doc(db, 'orders', phone));
-          if (!snap.exists()) return;
-          (snap.data().orders || []).forEach(o => allOrders.push({ ...o, _phone: phone }));
-        } catch (_) { }
-      }));
-      allOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-      setOrders(allOrders);
-    } catch (e) { console.error('Lỗi fetch orders:', e); }
-    finally { setLoading(false); setRefreshing(false); }
-  }, [userDetail?.email, role]);
-
-  // ✅ Auto-refresh mỗi khi màn hình được focus (navigate tới)
-  useFocusEffect(
-    useCallback(() => {
-      fetchOrders();
-    }, [fetchOrders])
-  );
-
-  const filteredOrders = orders.filter(o => {
-    const matchFilter = filter === 'All' || o.status === filter;
-    const matchSearch = (o.customer || '').toLowerCase().includes(search.toLowerCase()) || (o.id || '').includes(search);
-    const matchType = filterType === 'all' || o.orderType === filterType;
-    return matchFilter && matchSearch && matchType;
-  });
-
-  // Đếm số đơn theo từng status name (dùng cho tab badges)
-  const countByStatus = (statusName) =>
-    orders.filter(o => o.status === statusName && (filterType === 'all' || o.orderType === filterType)).length;
-
-  const totalRevenue = orders.filter(o => o.status !== 'Đã hủy').reduce((sum, o) => sum + (o.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0), 0);
-
-  const handlePressOrder = (item) => {
-    if (isWeb) setSelected(prev => prev?.id === item.id ? null : item);
-    else router.push({ pathname: '/OrderView/[orderID]', params: { orderID: item?.id, orderParam: JSON.stringify(item) } });
-  };
-
-  const renderOrder = ({ item, index }) => {
-    const cfg = getStatusConfig(item.status, []);
-    const typeCfg = ORDER_TYPE_CONFIG[item.orderType];
-    const isActive = selected?.id === item.id;
-    const isCancelled = item.status === 'CANCELLED';
-    return (
-      <TouchableOpacity
-        activeOpacity={0.75}
-        style={[styles.orderRow, isActive && styles.orderRowActive, isCancelled && styles.orderRowCancelled]}
-        onPress={() => handlePressOrder(item)}
-      >
-        <View style={[styles.orderAvatar, { backgroundColor: isCancelled ? '#9CA3AF' : AVATAR_COLORS[index % AVATAR_COLORS.length] }]}>
-          <Text style={styles.orderAvatarText}>{getInitials(item.customer)}</Text>
-        </View>
-        <View style={[styles.orderInfo, isWeb && { flex: 2 }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <Text style={[styles.orderIdText, isCancelled && { textDecorationLine: 'line-through', color: '#9CA3AF' }]}>Đơn hàng #{item.id}</Text>
-            {typeCfg && <View style={[styles.orderTypePill, { backgroundColor: typeCfg.bg }]}><Text style={[styles.orderTypePillText, { color: typeCfg.color }]}>{typeCfg.label}</Text></View>}
-          </View>
-          <Text style={styles.orderCustomer}>{item.customer}</Text>
-        </View>
-        {isWeb && <Text style={styles.orderDate}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : '—'}</Text>}
-        {isWeb && <Text style={styles.orderItems}>{item.items?.length || 0} sản phẩm</Text>}
-        <Text style={[styles.orderAmount, isWeb && { flex: 1 }, isCancelled && { color: '#9CA3AF' }]}>
-          {(item.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' })}
-        </Text>
-        <View style={[styles.statusPill, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
-          <View style={[styles.statusDot, { backgroundColor: cfg.color }]} />
-          <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={14} color={isActive ? '#2563EB' : '#CBD5E1'} />
-      </TouchableOpacity>
-    );
+  const handlePress = (item) => {
+    if (isWeb) setSelected(p => p?.id === item.id ? null : item);
+    else router.push({ pathname: '/OrderView/[orderID]', params: { orderID: item.id, orderParam: JSON.stringify(item) } });
   };
 
   return (
-    <View style={styles.root}>
-      <Image source={BG_IMAGE} style={styles.watermark} resizeMode="contain" />
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View>
-            {!isWeb && <View style={styles.headerLeft}><Ionicons name="receipt-outline" size={22} color={Colors.Primary} /></View>}
-            <Text style={styles.title}>Đơn hàng</Text>
-            <Text style={styles.headerCount}>{orders.length} đơn hàng</Text>
-          </View>
-          {/* ✅ CTV chỉ đọc — không cho tạo đơn */}
-          {role !== 'ctv' && (
-            <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/addOrder')} activeOpacity={0.85}>
-              <Ionicons name="add" size={18} color={Colors.White} />
-              {isWeb && <Text style={styles.addBtnText}>Tạo đơn hàng</Text>}
-            </TouchableOpacity>
-          )}
-        </View>
+    <TabScreenLayout>
+      <ScreenHeader
+        title="Đơn hàng"
+        subtitle={`${stats.total || 0} đơn hàng`}
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Tìm kiếm đơn hàng..."
+        actionLabel={!isCTV(role) && isWeb ? ' Tạo đơn hàng' : undefined}
+        actionIcon="add"
+        onAction={!isCTV(role) ? () => router.push('/addOrder') : undefined}
+      />
+      <StatBar stats={statCards} />
+      <FilterChips
+        options={[
+          { key: 'all', label: 'Tất cả' },
+          { key: 'buon', label: 'Đơn buôn' },
+          { key: 'le', label: 'Đơn lẻ', count: data.filter(o => o.orderType === 'le').length },
+        ]}
+        value={typeFilter}
+        onChange={t => { setTypeFilter(t); setSelected(null); }}
+      />
 
-        {isWeb && (
-          <View style={styles.statsRow}>
-            {[
-              { icon: 'receipt-outline', color: '#3B82F6', bg: '#EFF6FF', value: orders.filter(o => o.status !== 'Đã hủy').length, label: 'Đơn hàng' },
-              { icon: 'cube-outline', color: '#2563EB', bg: '#EFF6FF', value: orders.filter(o => o.orderType === 'buon').length, label: 'Đơn buôn' },
-              { icon: 'home-outline', color: '#8B5CF6', bg: '#F5F3FF', value: orders.filter(o => o.orderType === 'le').length, label: 'Đơn lẻ' },
-              { icon: 'cash-outline', color: '#10B981', bg: '#ECFDF5', value: fmt(totalRevenue), label: 'Doanh thu' },
-            ].map(s => (
-              <View key={s.label} style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: s.bg }]}><Ionicons name={s.icon} size={16} color={s.color} /></View>
-                <View><Text style={styles.statValue}>{s.value}</Text><Text style={styles.statLabel}>{s.label}</Text></View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        <View style={styles.toolbar}>
-          <View style={styles.searchContainer}>
-            <Ionicons name="search-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
-            <TextInput style={styles.searchBar} placeholder="Tìm kiếm đơn hàng..." placeholderTextColor="#94A3B8" value={search} onChangeText={setSearch} />
-            {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={16} color="#94A3B8" /></TouchableOpacity>}
-          </View>
-
-          {/* ✅ Bộ lọc thể loại đơn */}
-          <View style={styles.typeFilterRow}>
-            {[
-              { key: 'all', label: 'Tất cả', icon: 'list-outline', color: '#64748B', activeBg: '#0F172A', activeBorder: '#0F172A' },
-              { key: 'buon', label: 'Đơn buôn', icon: 'cube-outline', color: '#2563EB', activeBg: '#EFF6FF', activeBorder: '#2563EB' },
-              { key: 'le', label: 'Đơn lẻ', icon: 'home-outline', color: '#8B5CF6', activeBg: '#F5F3FF', activeBorder: '#8B5CF6' },
-            ].map(t => {
-              const active = filterType === t.key;
-              const count = t.key === 'buon' ? orders.filter(o => o.orderType === 'buon').length
-                : t.key === 'le' ? orders.filter(o => o.orderType === 'le').length
-                  : null;
-              return (
-                <TouchableOpacity
-                  key={t.key}
-                  style={[styles.typeFilterBtn,
-                  active && { backgroundColor: t.key === 'all' ? '#0F172A' : t.activeBg, borderColor: t.activeBorder },
-                  ]}
-                  onPress={() => handleSetFilterType(t.key)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name={t.icon} size={13} color={active ? (t.key === 'all' ? '#fff' : t.color) : '#94A3B8'} />
-                  <Text style={[styles.typeFilterText, active && { color: t.key === 'all' ? '#fff' : t.color, fontWeight: '700' }]}>
-                    {t.label}
-                  </Text>
-                  {count != null && count > 0 && (
-                    <View style={[styles.typeFilterBadge, { backgroundColor: active ? t.color + '33' : '#F1F5F9' }]}>
-                      <Text style={[styles.typeFilterBadgeText, { color: active ? t.color : '#94A3B8' }]}>{count}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* ✅ Status tabs: chỉ hiện khi chọn Đơn buôn hoặc Đơn lẻ */}
-          {filterType !== 'all' && activeStatusList.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
-              {/* Tab Tất cả */}
-              <TouchableOpacity
-                style={[styles.tabItem, filter === 'All' && styles.activeTabItem]}
-                onPress={() => setFilter('All')}
-              >
-                <Text style={[styles.tabText, filter === 'All' && styles.activeTabText]}>
-                  Tất cả
-                  {filter !== 'All' && <Text style={styles.tabCount}> {orders.filter(o => o.orderType === filterType).length}</Text>}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Tabs từ DB */}
-              {activeStatusList.map(s => {
-                const active = filter === s.name;
-                const count = countByStatus(s.name);
-                const isCancelledTab = s.name === 'Đã hủy';
-                return (
-                  <TouchableOpacity
-                    key={s.id}
-                    style={[
-                      styles.tabItem,
-                      active && styles.activeTabItem,
-                      active && isCancelledTab && { backgroundColor: '#EF4444', borderColor: '#EF4444' },
-                    ]}
-                    onPress={() => setFilter(s.name)}
-                  >
-                    <Text style={[styles.tabText, active && styles.activeTabText]}>
-                      {s.label}
-                      {count > 0 && !active && <Text style={styles.tabCount}> {count}</Text>}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
-        </View>
-
-        <View style={styles.mainArea}>
-          <View style={[styles.listArea, isWeb && selected && { marginRight: 16 }]}>
-            {isWeb && filteredOrders.length > 0 && (
-              <View style={styles.tableHeader}>
-                <View style={{ width: 36 }} />
-                <Text style={[styles.thCell, { flex: 2 }]}>Đơn hàng</Text>
-                <Text style={[styles.thCell, { flex: 1 }]}>Ngày</Text>
-                <Text style={[styles.thCell, { flex: 1 }]}>Sản phẩm</Text>
-                <Text style={[styles.thCell, { flex: 1 }]}>Tổng tiền</Text>
-                <Text style={[styles.thCell, { width: 130 }]}>Trạng thái</Text>
-                <View style={{ width: 20 }} />
-              </View>
-            )}
-            {loading ? (
-              <View style={styles.emptyState}><ActivityIndicator size="large" color="#2563EB" /><Text style={styles.emptyText}>Đang tải đơn hàng...</Text></View>
+      <View style={{ flex: 1, flexDirection: 'row', padding: isWeb ? 16 : 0, paddingTop: 0 }}>
+        {/* List */}
+        <View style={WRAP.card}>
+          <TableHeader />
+          {loading && !refreshing ? <EmptyState loading /> :
+            filtered.length === 0 ? (
+              <EmptyState empty icon="receipt-outline"
+                title={query ? 'Không tìm thấy' : 'Chưa có đơn hàng'}
+                actionLabel={!isCTV(role) ? 'Tạo đơn hàng' : undefined}
+                onAction={!isCTV(role) ? () => router.push('/addOrder') : undefined}
+              />
             ) : (
               <FlatList
-                data={filteredOrders}
-                renderItem={renderOrder}
-                keyExtractor={(item, i) => item.id?.toString() ?? String(i)}
+                data={filtered}
+                keyExtractor={(item, i) => item.id || String(i)}
+                renderItem={({ item, index }) => (
+                  <OrderRow item={item} index={index}
+                    isActive={selected?.id === item.id}
+                    onPress={handlePress}
+                  />
+                )}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
                 showsVerticalScrollIndicator={false}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchOrders(); }} />}
-                contentContainerStyle={{ paddingBottom: isWeb ? 32 : 100, gap: 6 }}
-                ListEmptyComponent={
-                  <View style={styles.emptyState}>
-                    <View style={styles.emptyIconWrap}><Ionicons name="receipt-outline" size={32} color="#94A3B8" /></View>
-                    <Text style={styles.emptyTitle}>{orders.length === 0 ? 'Chưa có đơn hàng nào' : 'Không tìm thấy đơn hàng'}</Text>
-                    <Text style={styles.emptySubtitle}>Tạo đơn hàng mới để bắt đầu</Text>
-                  </View>
-                }
+                contentContainerStyle={{ paddingBottom: isWeb ? 60 : 100 }}
               />
             )}
-          </View>
-          {isWeb && selected && (
-            <OrderDetailPanel order={selected} onClose={() => setSelected(null)} router={router} userDetail={userDetail} />
-          )}
         </View>
+
+        {/* ✅ Detail panel — dùng component riêng */}
+        {isWeb && selected && (
+          <OrderDetail
+            order={selected}
+            role={role}
+            onClose={() => setSelected(null)}
+            onUpdated={updated => setSelected(updated)}
+          />
+        )}
       </View>
-    </View>
+    </TabScreenLayout>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F8FAFC' },
-  watermark: { position: 'absolute', width: '80%', height: '60%', top: '20%', left: '10%', opacity: 0.05 },
-  container: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: isWeb ? 32 : 16, paddingTop: isWeb ? 28 : 30 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: isWeb ? 24 : 16 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  title: { fontSize: isWeb ? 28 : 24, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
-  headerCount: { fontSize: 13, color: '#64748B', marginTop: 2 },
-  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563EB', paddingHorizontal: isWeb ? 14 : 12, paddingVertical: 9, borderRadius: 8 },
-  addBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
-  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-  statCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' },
-  statIcon: { width: 36, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  statValue: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
-  statLabel: { fontSize: 11, color: '#64748B', marginTop: 1 },
-  toolbar: { gap: 10, marginBottom: 12 },
-  typeFilterRow: { flexDirection: 'row', gap: 8 },
-  typeFilterBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#E2E8F0' },
-  typeFilterText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
-  typeFilterBadge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 8, backgroundColor: '#F1F5F9' },
-  typeFilterBadgeText: { fontSize: 10, fontWeight: '700' },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: '#E2E8F0' },
-  searchBar: { flex: 1, fontSize: 14, color: '#0F172A' },
-  tabsScroll: { flexGrow: 0 },
-  tabItem: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 7, backgroundColor: '#FFFFFF', marginRight: 6, borderWidth: 1, borderColor: '#E2E8F0' },
-  activeTabItem: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
-  tabText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
-  activeTabText: { color: '#FFFFFF' },
-  tabCount: { fontSize: 11, color: '#94A3B8' },
-  mainArea: { flex: 1, flexDirection: 'row', gap: 0 },
-  listArea: { flex: 1 },
-  tableHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, marginBottom: 4 },
-  thCell: { fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5 },
-  orderRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: '#E2E8F0', gap: 10 },
-  orderRowActive: { borderColor: '#2563EB', backgroundColor: '#EFF6FF' },
-  orderRowCancelled: { borderColor: '#FECACA', backgroundColor: '#FFFAFA', opacity: 0.8 },
-  orderAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  orderAvatarText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
-  orderInfo: { flex: 1 },
-  orderIdText: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
-  orderTypePill: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 8 },
-  orderTypePillText: { fontSize: 9, fontWeight: '700' },
-  orderCustomer: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  orderDate: { flex: 1, fontSize: 12, color: '#64748B' },
-  orderItems: { flex: 1, fontSize: 12, color: '#94A3B8' },
-  orderAmount: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 11, fontWeight: '600' },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 8 },
-  emptyIconWrap: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#374151' },
-  emptySubtitle: { fontSize: 13, color: '#94A3B8' },
-  emptyText: { fontSize: 14, color: Colors.LightGray, fontWeight: '500', marginTop: 8 },
+const WRAP = StyleSheet.create({
+  card: {
+    flex: 1, backgroundColor: '#fff',
+    borderRadius: isWeb ? 12 : 0, borderWidth: 1, borderColor: '#E2E8F0',
+    overflow: 'hidden', margin: isWeb ? 16 : 0, marginTop: 0,
+    shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2,
+  },
 });

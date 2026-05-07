@@ -141,7 +141,7 @@ export default function EditUserScreen() {
         <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
             {/* Header */}
             <View style={S.header}>
-                <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
+                <TouchableOpacity onPress={() => router.replace('/(tabs)/user')} style={S.backBtn}>
                     <Ionicons name="arrow-back" size={20} color="#0F172A" />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>

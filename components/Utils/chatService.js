@@ -1,7 +1,3 @@
-// utils/chatService.js
-// Toàn bộ logic chat + notification — không cần Cloud Function
-// Dùng Firestore onSnapshot để realtime sync
-
 import { db } from '@/config/firebaseConfig';
 import {
     addDoc, collection, doc, getDoc, getDocs,
@@ -9,14 +5,6 @@ import {
     setDoc, updateDoc, where,
 } from 'firebase/firestore';
 
-// ─────────────────────────────────────────────────────────────
-// ROOM MANAGEMENT
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Tạo room chat khi đơn hàng được tạo.
- * roomId = 'order_{orderId}'  →  dễ tra cứu từ orderId
- */
 export const createOrderChatRoom = async ({ orderId, orderType, createdBy, createdByName, adminEmails = [] }) => {
     const roomId = `order_${orderId}`;
     const members = [createdBy, ...adminEmails];
@@ -79,26 +67,13 @@ export const createOrderChatRoom = async ({ orderId, orderType, createdBy, creat
     return roomId;
 };
 
-/**
- * Lấy roomId từ orderId (nếu tồn tại)
- */
 export const getRoomIdByOrderId = (orderId) => `order_${orderId}`;
 
-/**
- * Kiểm tra room có tồn tại không
- */
 export const checkRoomExists = async (roomId) => {
     const snap = await getDoc(doc(db, 'chatRooms', roomId));
     return snap.exists();
 };
 
-// ─────────────────────────────────────────────────────────────
-// MESSAGES
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Gửi tin nhắn thường
- */
 export const sendMessage = async ({ roomId, text, senderEmail, senderName }) => {
     if (!text.trim()) return;
 
@@ -145,9 +120,6 @@ export const sendMessage = async ({ roomId, text, senderEmail, senderName }) => 
     return msgRef.id;
 };
 
-/**
- * Gửi tin nhắn hệ thống (không phải người dùng)
- */
 export const sendSystemMessage = async (roomId, text) => {
     await addDoc(collection(db, 'chatRooms', roomId, 'messages'), {
         text,
@@ -159,9 +131,6 @@ export const sendSystemMessage = async (roomId, text) => {
     });
 };
 
-/**
- * Gửi tin nhắn khi đổi trạng thái đơn
- */
 export const sendStatusUpdateMessage = async ({ orderId, newStatus, changedBy, changedByName }) => {
     const roomId = getRoomIdByOrderId(orderId);
     const exists = await checkRoomExists(roomId);
@@ -202,9 +171,6 @@ export const sendStatusUpdateMessage = async ({ orderId, newStatus, changedBy, c
     }
 };
 
-/**
- * Đánh dấu đã đọc tất cả tin nhắn trong room
- */
 export const markRoomAsRead = async (roomId, userEmail) => {
     const roomRef = doc(db, 'chatRooms', roomId);
     const snap = await getDoc(roomRef);
@@ -214,10 +180,6 @@ export const markRoomAsRead = async (roomId, userEmail) => {
     await updateDoc(roomRef, { unreadCount: unread });
 };
 
-/**
- * Subscribe realtime messages — trả về hàm unsubscribe
- * Không dùng orderBy để tránh yêu cầu tạo index Firestore
- */
 export const subscribeMessages = (roomId, callback) => {
     const q = collection(db, 'chatRooms', roomId, 'messages');
     return onSnapshot(q, (snap) => {
@@ -236,13 +198,6 @@ export const subscribeMessages = (roomId, callback) => {
     });
 };
 
-// ─────────────────────────────────────────────────────────────
-// NOTIFICATIONS
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Tạo notification cho 1 user
- */
 export const createNotification = async ({ userEmail, type, title, body, orderId, roomId }) => {
     await addDoc(collection(db, 'notifications', userEmail, 'items'), {
         type,
