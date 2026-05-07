@@ -98,23 +98,13 @@ export default function ChatListScreen() {
 
     const handleRefresh = useCallback(() => {
         setRefreshing(true);
-        unsubRef.current?.();
-        subscribe();
         // onSnapshot tự realtime, chỉ cần trigger re-render
         setRooms(prev => [...prev]);
         setTimeout(() => setRefreshing(false), 800);
     }, []);
 
-                        {' '}{item.createdByName || item.createdBy}
-                    </Text>
-                </View>
+    const totalUnread = rooms.reduce((s, r) => s + (r.unreadCount?.[myEmail] || 0), 0);
 
-                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-            </TouchableOpacity>
-        );
-    };
-
-    const totalUnread = rooms.reduce((sum, r) => sum + getUnread(r), 0);
 
     return (
         <TabScreenLayout>
