@@ -259,8 +259,8 @@ export default function AddOrder() {
     setSubmitting(true);
     try {
       // ── Lấy trạng thái ban đầu từ DB ─────────────────────
-      const orderCategory = ORDER_TYPE_TO_CATEGORY[orderType];              // 'don_buon' | 'don_le'
-      const svcCategory = SERVICE_TYPE_TO_CATEGORY[orderTypeCfg.autoSvc]; // 'giao_hang' | 'lap_dat'
+      const orderCategory = ORDER_TYPE_TO_CATEGORY[orderType];
+      const svcCategory = SERVICE_TYPE_TO_CATEGORY[orderTypeCfg.autoSvc];
 
       const [orderStatuses, svcStatuses] = await Promise.all([
         fetchStatusList(orderCategory),

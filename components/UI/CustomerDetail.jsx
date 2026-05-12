@@ -65,7 +65,7 @@ export default function CustomerDetail({ customer, onClose, onEdit }) {
                         </TouchableOpacity>
                     )}
                     <TouchableOpacity style={[S.aBtn, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
-                        onPress={() => router.push('/addOrder')}>
+                        onPress={() => router.push({ pathname: '/addOrder', params: { customerParams: JSON.stringify(customer) } })}>
                         <Ionicons name="add-circle-outline" size={13} color="#059669" />
                         <Text style={[S.aBtnText, { color: '#059669' }]}>Tạo đơn</Text>
                     </TouchableOpacity>

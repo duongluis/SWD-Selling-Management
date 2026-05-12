@@ -1,3 +1,5 @@
+// app/chatList/index.jsx — refactored
+
 import { useSearch } from '@/components/Hooks/useSearch';
 import EmptyState from '@/components/Main/EmptyState';
 import ScreenHeader from '@/components/Main/ScreenHeader';
@@ -114,11 +116,6 @@ export default function ChatListScreen() {
                 searchValue={query}
                 onSearchChange={setQuery}
                 searchPlaceholder="Tìm đơn hàng, người tạo..."
-                leftSlot={
-                    <TouchableOpacity style={BK.btn} onPress={() => router.replace('/(tabs)/home')}>
-                        <Ionicons name="arrow-back" size={20} color="#0F172A" />
-                    </TouchableOpacity>
-                }
             />
 
             {loading ? <EmptyState loading /> :

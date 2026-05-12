@@ -2,7 +2,7 @@ import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { doc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { useContext, useState } from 'react';
 import {
   Alert,
@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { db } from '../../config/firebaseConfig';
 const isWeb = Platform.OS === 'web';
@@ -31,12 +32,31 @@ export default function AddCustomer() {
 
   const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
+
+  const checkingDuplicate = async () => {
+    const userQuery = await getDocs(
+      query(collection(db, 'customers'), where('phone', '==', form.phone))
+    );
+
+    if (userQuery.empty) {
+      return false;
+    } else {
+      showAlert("Đã tồn tại khách hàng trên hệ thống, vui lòng liên hệ quản trị viên để biết thêm thông tin ")
+      return true;
+    }
+  };
+
   const handleSave = async () => {
     if (!form.name || !form.phone) {
-      Alert.alert('THÔNG BÁO', 'VUI LÒNG NHẬP HỌ TÊN VÀ ĐIỆN THOẠI');
+      showAlert('THÔNG BÁO', 'VUI LÒNG NHẬP HỌ TÊN VÀ ĐIỆN THOẠI');
       return;
     }
     setSubmitting(true);
+
+    if (checkingDuplicate()) {
+      router.replace("(tabs)/home")
+      return;
+    }
     try {
       const newCustomer = {
         id: Date.now().toString(),
@@ -85,7 +105,7 @@ export default function AddCustomer() {
               <Text style={W.pageTitle}>Thêm khách hàng mới</Text>
               <Text style={W.pageSub}>Điền thông tin để thêm khách hàng vào danh sách của bạn</Text>
             </View>
-            <TouchableOpacity style={W.cancelBtn} onPress={() => router.back()}>
+            <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('(tabs)/customer')}>
               <Ionicons name="close" size={16} color="#64748B" />
               <Text style={W.cancelBtnText}>Huỷ</Text>
             </TouchableOpacity>

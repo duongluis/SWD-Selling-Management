@@ -43,24 +43,22 @@ const TYPE_CFG = {
 const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899'];
 
 // ── Table Header ──────────────────────────────────────────────
+
+//code 1 
 function TableHeader() {
   if (!isWeb) return null;
   return (
-    <View style={TH.row}>
-      <View style={{ width: 46 }} />
-      <Text style={[TH.cell, { flex: 2.2 }]}>Đơn hàng</Text>
-      <Text style={[TH.cell, { flex: 0.9 }]}>Ngày</Text>
-      <Text style={[TH.cell, { flex: 0.7 }]}>Sản phẩm</Text>
-      <Text style={[TH.cell, { flex: 1.2, textAlign: 'right' }]}>Tổng tiền</Text>
-      <Text style={[TH.cell, { flex: 1.2 }]}>Trạng thái</Text>
-      <View style={{ width: 22 }} />
+    <View style={[WRAP_BASE, TH.row]}>
+      <View style={COL.lead} />
+      <View style={COL.order}><Text style={TH.cell}>Đơn hàng</Text></View>
+      <View style={COL.date}><Text style={TH.cell}>Ngày</Text></View>
+      <View style={COL.sub}><Text style={TH.cell}>Sản phẩm</Text></View>
+      <View style={COL.amount}><Text style={[TH.cell, TH.cellRight]}>Tổng tiền</Text></View>
+      <View style={COL.status}><Text style={[TH.cell, TH.cellCenter]}>Trạng thái</Text></View>
+      <View style={COL.trail} />
     </View>
   );
 }
-const TH = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 10 },
-  cell: { fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.06, textTransform: 'uppercase' },
-});
 
 // ── Order Row ─────────────────────────────────────────────────
 function OrderRow({ item, index, isActive, onPress }) {
@@ -74,65 +72,83 @@ function OrderRow({ item, index, isActive, onPress }) {
     ? new Date(item.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : '—';
 
+
+  // ── 3. ROW ── (cùng số children, cùng COL với header)
   return (
     <TouchableOpacity
-      style={[ROW.wrap, isActive && ROW.wrapActive, isCancelled && ROW.wrapCancelled]}
+      style={[WRAP_BASE, ROW.wrap, isActive && ROW.wrapActive, isCancelled && ROW.wrapCancelled]}
       onPress={() => onPress(item)}
       activeOpacity={0.72}
     >
       {isActive && <View style={ROW.leftAccent} />}
-      <View style={[ROW.avatar, { backgroundColor: avatarColor + '22' }]}>
-        <Text style={[ROW.avatarText, { color: avatarColor }]}>{getInitials(item.customer)}</Text>
+
+      {/* 1. avatar (COL.lead) */}
+      <View style={[COL.lead, ROW.avatar, { backgroundColor: avatarColor + '22' }]}>
+        <Text style={[ROW.avatarText, { color: avatarColor }]}>
+          {getInitials(item.customer)}
+        </Text>
       </View>
-      <View style={ROW.mainCol}>
-        <View style={ROW.idRow}>
-          <Text style={[ROW.orderId, isCancelled && ROW.cancelled]}>Đơn hàng #{item.id}</Text>
+
+      {/* 2. order (COL.order) */}
+      <View style={COL.order}>
+        <View style={ROW.nameRow}>
+          <Text
+            style={[ROW.orderId, isCancelled && ROW.textStrike]}
+            numberOfLines={1}
+          >
+            Đơn hàng #{item.id}
+          </Text>
           {tcfg && (
-            <View style={[ROW.typePill, { backgroundColor: tcfg.bg }]}>
-              <Text style={[ROW.typePillText, { color: tcfg.c }]}>{tcfg.label}</Text>
+            <View style={[ROW.badge, { backgroundColor: tcfg.bg }]}>
+              <Text style={[ROW.badgeText, { color: tcfg.c }]}>{tcfg.label}</Text>
             </View>
           )}
         </View>
-        <Text style={[ROW.customer, isCancelled && ROW.cancelledLight]}>{item.customer}</Text>
+        <Text
+          style={[ROW.customer, isCancelled && ROW.textMuted]}
+          numberOfLines={1}
+        >
+          {item.customer}
+        </Text>
       </View>
-      {isWeb && <Text style={[ROW.col, ROW.colDate]}>{date}</Text>}
-      {isWeb && <Text style={[ROW.col, ROW.colSub]}>{pCount} sản phẩm</Text>}
-      <Text style={[ROW.col, ROW.colAmount, isCancelled && ROW.cancelledLight]}>{fmtCurrency(total)}</Text>
-      <View style={ROW.statusWrap}>
+
+      {/* 3. date */}
+      <View style={COL.date}>
+        <Text style={ROW.cellMuted} numberOfLines={1}>{date}</Text>
+      </View>
+
+      {/* 4. sub */}
+      <View style={COL.sub}>
+        <Text style={ROW.cellMuted} numberOfLines={1}>{pCount} sản phẩm</Text>
+      </View>
+
+      {/* 5. amount */}
+      <View style={COL.amount}>
+        <Text
+          style={[ROW.cellAmount, isCancelled && ROW.textMuted]}
+          numberOfLines={1}
+        >
+          {fmtCurrency(total)}
+        </Text>
+      </View>
+
+      {/* 6. status */}
+      <View style={COL.status}>
         <View style={[ROW.statusPill, { backgroundColor: cfg.bg, borderColor: cfg.bd }]}>
-          <View style={[ROW.statusDot, { backgroundColor: cfg.c }]} />
-          <Text style={[ROW.statusText, { color: cfg.c }]}>{item.status || 'PENDING'}</Text>
+          <View style={[ROW.dot, { backgroundColor: cfg.c }]} />
+          <Text style={[ROW.statusLabel, { color: cfg.c }]} numberOfLines={1}>
+            {item.status || 'PENDING'}
+          </Text>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={14} color={isActive ? '#2563EB' : '#CBD5E1'} />
+
+      {/* 7. trail (chevron) */}
+      <View style={COL.trail}>
+        <Ionicons name="chevron-forward" size={14} color={isActive ? '#2563EB' : '#CBD5E1'} />
+      </View>
     </TouchableOpacity>
   );
 }
-
-const ROW = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: isWeb ? 20 : 14, paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 10, position: 'relative' },
-  wrapActive: { backgroundColor: '#F0F7FF' },
-  wrapCancelled: { opacity: 0.6 },
-  leftAccent: { position: 'absolute', left: 0, top: 4, bottom: 4, width: 3, backgroundColor: '#2563EB', borderRadius: 2 },
-  avatar: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  avatarText: { fontSize: 12, fontWeight: '800' },
-  mainCol: { flex: isWeb ? 2.2 : 1, minWidth: 0 },
-  idRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
-  orderId: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
-  customer: { fontSize: 12, color: '#64748B' },
-  typePill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 },
-  typePillText: { fontSize: 10, fontWeight: '700' },
-  col: { paddingHorizontal: 2 },
-  colDate: { flex: 0.9, fontSize: 12, color: '#94A3B8' },
-  colSub: { flex: 0.7, fontSize: 12, color: '#94A3B8' },
-  colAmount: { flex: isWeb ? 1.2 : 1, fontSize: 13, fontWeight: '800', color: '#0F172A', textAlign: 'right' },
-  statusWrap: { flex: isWeb ? 1.2 : undefined, alignItems: isWeb ? 'flex-start' : 'center' },
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
-  statusDot: { width: 5, height: 5, borderRadius: 3 },
-  statusText: { fontSize: 11, fontWeight: '700' },
-  cancelled: { textDecorationLine: 'line-through', color: '#94A3B8' },
-  cancelledLight: { color: '#94A3B8' },
-});
 
 // ── Main Screen ───────────────────────────────────────────────
 export default function OrderScreen() {
@@ -240,4 +256,88 @@ const WRAP = StyleSheet.create({
     overflow: 'hidden', margin: isWeb ? 16 : 0, marginTop: 0,
     shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
+});
+
+// ── 1. SINGLE SOURCE OF TRUTH cho layout ──
+const COL = {
+  lead: { width: 36 },                         // ô avatar
+  order: { flex: 2, minWidth: 160 },            // ← minWidth giữ responsive
+  date: { flex: 1, minWidth: 90 },
+  sub: { flex: 1, minWidth: 90 },
+  amount: { flex: 1, minWidth: 110 },
+  status: { width: 130 },
+  trail: { width: 20 },
+};
+
+const WRAP_BASE = {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 10,
+  paddingHorizontal: isWeb ? 20 : 14,
+};
+
+// ── 4. STYLES — bỏ hết flex/width trong style (đã ở COL) ──
+const TH = StyleSheet.create({
+  row: {
+    backgroundColor: '#F8FAFC', paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: '#E2E8F0'
+  },
+  cell: {
+    fontSize: 11, fontWeight: '700', color: '#64748B',
+    letterSpacing: 0.5, textTransform: 'uppercase'
+  },
+  cellRight: { textAlign: 'center' },
+  cellCenter: { textAlign: 'center' },
+});
+
+const ROW = StyleSheet.create({
+  wrap: {
+    backgroundColor: '#fff', paddingVertical: 14,
+    borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9',
+    position: 'relative'
+  },
+  wrapActive: { backgroundColor: '#F0F7FF' },
+  wrapCancelled: { opacity: 0.6 },
+  leftAccent: {
+    position: 'absolute', left: 0, top: 4, bottom: 4,
+    width: 3, backgroundColor: '#2563EB', borderRadius: 2
+  },
+
+  // avatar — KHÔNG có width (đã ở COL.lead), chỉ style visual
+  avatar: {
+    height: 36, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center'
+  },
+  avatarText: { fontSize: 12, fontWeight: '800' },
+
+  // order column
+  nameRow: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: 6, marginBottom: 2
+  },
+  orderId: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
+  customer: { fontSize: 12, color: '#64748B' },
+  badge: {
+    paddingHorizontal: 6, paddingVertical: 1,
+    borderRadius: 6, flexShrink: 0
+  },
+  badgeText: { fontSize: 10, fontWeight: '700' },
+
+  // data cells
+  cellMuted: { fontSize: 12, color: '#94A3B8', textAlign: 'left' },
+  cellAmount: {
+    fontSize: 13, fontWeight: '500',
+    color: '#0F172A', textAlign: 'center'
+  },
+  // status
+  statusPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 9, paddingVertical: 4,
+    borderRadius: 20, borderWidth: 1, alignSelf: 'center'
+  },
+  dot: { width: 5, height: 5, borderRadius: 3 },
+  statusLabel: { fontSize: 11, fontWeight: '700' },
+
+  textStrike: { textDecorationLine: 'line-through', color: '#94A3B8' },
+  textMuted: { color: '#94A3B8' },
 });

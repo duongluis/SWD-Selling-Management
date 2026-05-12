@@ -6,13 +6,12 @@ import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import StatBar from '@/components/UI/StatBar';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
 import { UserDetailContext } from '@/context/UserDetailContext';
-import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useState } from 'react';
 import {
   FlatList, Platform, RefreshControl,
-  StyleSheet, Text, TouchableOpacity, View,
+  StyleSheet, Text, View,
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
@@ -42,9 +41,10 @@ function LeaderCard({ item, rank }) {
         <Text style={[L.revenue, isTop3 && { color: RANK_COLORS[rank] }]}>
           {fmtCurrency(item.revenueTotal || 0)}
         </Text>
-        {item.committedRevenue > 0 && (
-          <Text style={L.committed}>/ {fmtCurrency(item.committedRevenue)}</Text>
-        )}
+        {/* {item.committedRevenue > 0 && (
+          // <Text style={L.committed}>/ {fmtCurrency(item.committedRevenue)}</Text>
+        
+        )} */}
       </View>
     </View>
   );
@@ -84,11 +84,6 @@ export default function LeaderboardScreen() {
         title="Bảng xếp hạng"
         subtitle="Doanh số xuất sắc"
         showSearch={false}
-        leftSlot={
-          <TouchableOpacity style={BK.btn} onPress={() => router.replace('/(tabs)/home')}>
-            <Ionicons name="arrow-back" size={20} color="#0F172A" />
-          </TouchableOpacity>
-        }
       />
 
       <StatBar stats={statCards} />

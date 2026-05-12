@@ -8,6 +8,14 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, View } from 'react-native';
 import { UserDetailContext } from "../context/UserDetailContext";
 
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = `
+    input, textarea { outline: none !important; }
+  `;
+  document.head.appendChild(style);
+}
+
 SplashScreen.preventAutoHideAsync();
 
 // ── Session flag helpers (sessionStorage on web, module var on native) ──
@@ -70,6 +78,7 @@ export default function RootLayout() {
           const snap = await getDoc(doc(db, "users", user.email));
           if (snap.exists()) {
             setUserDetail(snap.data());
+            console.log("data", snap.data())
           } else {
             // Auth có nhưng chưa điền thông tin (bỏ dở bước 2)
             setUserDetail({ email: user.email, _incomplete: true });
