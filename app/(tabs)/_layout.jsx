@@ -43,12 +43,12 @@ const NAV_SECTIONS = [
     label: 'TIỆN ÍCH',
     items: [
       { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'Bảng xếp hạng', icon: 'trophy-outline', activeIcon: 'trophy', visible: () => true },
-      { key: 'commission', link: '(tabs)/commission', label: 'Hoa hồng', icon: 'cash-outline', activeIcon: 'cash', visible: () => true },
+      { key: 'commission', link: '(tabs)/commission', label: 'Hoa hồng', icon: 'cash-outline', activeIcon: 'cash', visible: (r) => r !== 'daily' },
       { key: 'revenue', link: '(tabs)/analytics', label: 'Báo cáo doanh thu', icon: 'bar-chart-outline', activeIcon: 'bar-chart', visible: () => true },
       { key: 'region', link: '(tabs)/regionAnalytics', label: 'Báo cáo khu vực', icon: 'map-outline', activeIcon: 'map', visible: () => true },
       { key: 'news', link: '(tabs)/news', label: 'Tin tức', icon: 'newspaper-outline', activeIcon: 'newspaper', visible: () => true },
       { key: 'information', link: '(tabs)/information', label: 'Bảng giá', icon: 'pricetag-outline', activeIcon: 'pricetag', visible: () => true },
-      { key: 'quotation', link: 'orderContract', label: 'Form báo giá', icon: 'document-text-outline', activeIcon: 'document-text', visible: () => true },
+      { key: 'quotation', link: 'orderContract?mode=template', label: 'Form báo giá', icon: 'document-text-outline', activeIcon: 'document-text', visible: () => true },
       { key: 'calculator', link: '(tabs)/calculator', label: 'Tính toán', icon: 'calculator-outline', activeIcon: 'calculator', visible: () => true },
     ],
   },
@@ -158,7 +158,7 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
             )}
             <NavItem item={{ key: 'users', link: '(tabs)/users', label: 'Danh sách người dùng', icon: 'people-circle-outline', activeIcon: 'people-circle' }}
               isActive={isUsersActive} collapsed={collapsed}
-              onPress={() => router.push('/(tabs)/users')} />
+              onPress={() => router.push('/(tabs)/user')} />
           </View>
         )}
       </ScrollView>
@@ -288,25 +288,23 @@ export default function TabLayout() {
   const pageLabel = NAV_SECTIONS.flatMap(s => s.items).find(n => n.key === activeTab)?.label || 'Tổng quan';
   const handleNavigate = (link) => router.push(`/${link}`);
 
-  const tabScreens = (
-    <>
-      <Tabs.Screen name="home" />
-      <Tabs.Screen name="order" />
-      <Tabs.Screen name="customer" />
-      <Tabs.Screen name="service" />
-      <Tabs.Screen name="leaderboard" />
-      <Tabs.Screen name="users" />
-      <Tabs.Screen name="customerctv" />
-      <Tabs.Screen name="analytics" />
-      <Tabs.Screen name="commission" />
-      <Tabs.Screen name="regionAnalytics" />
-      <Tabs.Screen name="news" />
-      <Tabs.Screen name="information" />
-      <Tabs.Screen name="chatList" />
-      <Tabs.Screen name="editProfile" />
-      <Tabs.Screen name="calculator" />
-    </>
-  );
+  const tabScreens = [
+    <Tabs.Screen key="home" name="home" />,
+    <Tabs.Screen key="order" name="order" />,
+    <Tabs.Screen key="customer" name="customer" />,
+    <Tabs.Screen key="service" name="service" />,
+    <Tabs.Screen key="leaderboard" name="leaderboard" />,
+    <Tabs.Screen key="users" name="users" />,
+    <Tabs.Screen key="customerctv" name="customerctv" />,
+    <Tabs.Screen key="analytics" name="analytics" />,
+    <Tabs.Screen key="commission" name="commission" />,
+    <Tabs.Screen key="regionAnalytics" name="regionAnalytics" />,
+    <Tabs.Screen key="news" name="news" />,
+    <Tabs.Screen key="information" name="information" />,
+    <Tabs.Screen key="chatList" name="chatList" />,
+    <Tabs.Screen key="editProfile" name="editProfile" />,
+    <Tabs.Screen key="calculator" name="calculator" />,
+  ];
 
   // ── Desktop Web ──────────────────────────────────────────
   if (isDesktopWeb) {

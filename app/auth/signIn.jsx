@@ -1,3 +1,4 @@
+import BgWatermark from "@/components/Main/BgWatermark";
 import { getFirebaseErrorMessage } from "@/components/Main/getFirebaseErrorMessage";
 import { showAlert } from "@/components/Main/showAlert";
 import auth, { db } from "@/config/firebaseConfig";
@@ -38,6 +39,7 @@ export default function SignIn() {
 
   return (
     <View style={styles.container}>
+      <BgWatermark />
       <Text style={styles.title}>Đăng nhập</Text>
       <Text style={styles.subtitle}>
         Vui lòng đăng nhập để truy cập tài khoản doanh nghiệp

@@ -1,3 +1,4 @@
+import BgWatermark from '@/components/Main/BgWatermark';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -217,6 +218,7 @@ export default function AddService() {
     // ─────────────────────────────────────────────────────────
     if (isWeb) return (
         <View style={W.root}>
+            <BgWatermark />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
                 <View style={W.pageHeader}>
                     <View>
@@ -380,6 +382,7 @@ export default function AddService() {
     // ─────────────────────────────────────────────────────────
     return (
         <View style={[M.container, { paddingTop: insets.top }]}>
+            <BgWatermark />
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
             <View style={M.header}>
                 <TouchableOpacity onPress={() => router.back()} style={M.backBtn}><Ionicons name="arrow-back" size={22} color="#0F172A" /></TouchableOpacity>

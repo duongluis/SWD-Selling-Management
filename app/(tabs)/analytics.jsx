@@ -134,7 +134,15 @@ export default function AnalyticsScreen() {
                 contentContainerStyle={A.scroll}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}>
 
-                <Text style={A.pageTitle}>Báo cáo doanh thu</Text>
+                <View style={A.pageHeader}>
+                    <Text style={A.pageTitle}>Báo cáo doanh thu</Text>
+                    <View style={A.userBadge}>
+                        <Ionicons name={isAdmin ? 'shield-checkmark-outline' : 'person-outline'} size={13} color="#2563EB" />
+                        <Text style={A.userBadgeText}>
+                            {isAdmin ? 'Toàn hệ thống' : (userDetail?.name || userDetail?.email || 'Của tôi')}
+                        </Text>
+                    </View>
+                </View>
 
                 {/* Top 3 stat cards */}
                 <View style={A.topCards}>
@@ -192,8 +200,8 @@ export default function AnalyticsScreen() {
                     <View style={A.tHead}>
                         <Text style={[A.th, { flex: 1.5 }]}>Đơn hàng</Text>
                         <Text style={[A.th, { flex: 1 }]}>Khách hàng</Text>
-                        <Text style={[A.th, { flex: 1, textAlign: 'right' }]}>Giá trị</Text>
-                        <Text style={[A.th, { flex: 0.8 }]}>Trạng thái</Text>
+                        <Text style={[A.th, { flex: 1, textAlign: 'center' }]}>Giá trị</Text>
+                        <Text style={[A.th, { flex: 0.8, textAlign: 'center' }]}>Trạng thái</Text>
                     </View>
                     {active.slice(0, 10).map((o, i) => {
                         const val = (o.items || []).reduce((s, p) => s + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0);
@@ -205,7 +213,7 @@ export default function AnalyticsScreen() {
                                     <Text style={{ fontSize: 10, color: '#94A3B8' }}>{o.createdAt?.slice(0, 10) || '—'}</Text>
                                 </View>
                                 <Text style={[A.td, { flex: 1 }]} numberOfLines={1}>{o.customer || '—'}</Text>
-                                <Text style={[A.td, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>{fmtShort(val)}</Text>
+                                <Text style={[A.td, { flex: 1, textAlign: 'center', fontWeight: '700' }]}>{fmtShort(val)}</Text>
                                 <View style={{ flex: 0.8 }}>
                                     <View style={[A.sBadge, { backgroundColor: isPaid ? '#ECFDF5' : '#FFFBEB' }]}>
                                         <Text style={{ fontSize: 10, fontWeight: '700', color: isPaid ? '#16A34A' : '#D97706' }}>
@@ -265,7 +273,10 @@ export default function AnalyticsScreen() {
 
 const A = StyleSheet.create({
     scroll: { padding: isWeb ? 32 : 16, paddingTop: isWeb ? 24 : 16 },
-    pageTitle: { fontSize: isWeb ? 26 : 22, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5, marginBottom: 20 },
+    pageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+    pageTitle: { fontSize: isWeb ? 26 : 22, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
+    userBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: '#BFDBFE' },
+    userBadgeText: { fontSize: 12, fontWeight: '600', color: '#2563EB', maxWidth: 160 },
     topCards: { flexDirection: isWeb ? 'row' : 'column', gap: 12, marginBottom: 16 },
     topCard: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 18, borderWidth: 1, borderColor: '#E2E8F0', gap: 4, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
     topCardIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
@@ -282,5 +293,5 @@ const A = StyleSheet.create({
     th: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' },
     tRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9' },
     td: { fontSize: 12, color: '#374151' },
-    sBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, alignSelf: 'flex-start' },
+    sBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, alignSelf: 'center' },
 });

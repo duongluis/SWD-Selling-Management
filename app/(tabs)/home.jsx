@@ -5,6 +5,7 @@ import NotificationPanel from '@/components/Main/NotificationPanel';
 import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import StatBar from '@/components/UI/StatBar';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
+import { getRole } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -29,21 +30,27 @@ function QuickAction({ name, icon, action, color, bg }) {
 
 // ── Order status badge ────────────────────────────────────────
 const STATUS_CFG = {
-  PENDING: { color: '#F59E0B', bg: '#FFFBEB', label: 'Chờ xử lý' },
-  COMPLETED: { color: '#10B981', bg: '#ECFDF5', label: 'Hoàn thành' },
-  CONFIRMED: { color: '#10B981', bg: '#ECFDF5', label: 'Xác nhận' },
-  SHIPPED: { color: '#3B82F6', bg: '#EFF6FF', label: 'Đang giao' },
+  'Chờ xác nhận': { color: '#D97706', bg: '#FFFBEB', label: 'Chờ xác nhận' },
+  'Chờ lắp đặt': { color: '#2563EB', bg: '#EFF6FF', label: 'Chờ lắp đặt' },
+  'Đang lắp đặt': { color: '#7C3AED', bg: '#F5F3FF', label: 'Đang lắp đặt' },
+  'Đã lắp đặt': { color: '#059669', bg: '#ECFDF5', label: 'Đã lắp đặt' },
+  'Chờ thanh toán': { color: '#EA580C', bg: '#FFF7ED', label: 'Chờ thanh toán' },
+  'Đã thanh toán': { color: '#16A34A', bg: '#DCFCE7', label: 'Đã thanh toán' },
+  'Đã hủy': { color: '#DC2626', bg: '#FEF2F2', label: 'Đã hủy' },
+  'Chờ giao hàng': { color: '#0284C7', bg: '#E0F2FE', label: 'Chờ giao hàng' },
+  'Đang giao hàng': { color: '#0369A1', bg: '#BAE6FD', label: 'Đang giao hàng' },
+  'Đã giao hàng': { color: '#065F46', bg: '#ECFDF5', label: 'Đã giao hàng' },
 };
 
 export default function HomeView() {
   const router = useRouter();
   const { userDetail } = useContext(UserDetailContext);
+  const role = getRole(userDetail);
   const { data: customerList, loading: customerLoading } = useScreenData('customers');
 
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
   const [recentOrders, setRecentOrders] = useState([]);
-
   useEffect(() => {
     if (!userDetail || customerLoading || !customerList.length) return;
     const fetchOrders = async () => {
@@ -68,8 +75,10 @@ export default function HomeView() {
   }, [userDetail, customerList, customerLoading]);
 
   const quickActions = [
-    { name: 'Đơn hàng mới', icon: 'add-circle-outline', action: () => router.push('/addOrder'), color: '#3B82F6', bg: '#EFF6FF' },
-    { name: 'Thêm khách', icon: 'person-add-outline', action: () => router.push('/addCustomer'), color: '#8B5CF6', bg: '#F5F3FF' },
+    ...(role !== 'ctv' ? [
+      { name: 'Đơn hàng mới', icon: 'add-circle-outline', action: () => router.push('/addOrder'), color: '#3B82F6', bg: '#EFF6FF' },
+      { name: 'Thêm khách', icon: 'person-add-outline', action: () => router.push('/addCustomer'), color: '#8B5CF6', bg: '#F5F3FF' },
+    ] : []),
     { name: 'Phòng chat', icon: 'chatbubbles-outline', action: () => router.push('/chatList'), color: '#059669', bg: '#ECFDF5' },
     { name: 'Hợp đồng', icon: 'document-text-outline', action: () => router.push('/orderContract?mode=template'), color: '#0C447C', bg: '#EFF6FF' },
   ];
@@ -107,10 +116,12 @@ export default function HomeView() {
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <NotificationPanel bellColor="#0F172A" bellSize={22} />
-              <TouchableOpacity style={H.webBtn} onPress={() => router.push('/addOrder')}>
-                <Ionicons name="add" size={16} color="#fff" />
-                <Text style={H.webBtnText}>Đơn hàng mới</Text>
-              </TouchableOpacity>
+              {role !== 'ctv' && (
+                <TouchableOpacity style={H.webBtn} onPress={() => router.push('/addOrder')}>
+                  <Ionicons name="add" size={16} color="#fff" />
+                  <Text style={H.webBtnText}>Đơn hàng mới</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
@@ -159,7 +170,7 @@ export default function HomeView() {
                 <Text style={H.emptyText}>Chưa có đơn hàng</Text>
               </View>
             ) : recentOrders.map(order => {
-              const cfg = STATUS_CFG[order.status] || STATUS_CFG.PENDING;
+              const cfg = STATUS_CFG[order.status] || { color: '#64748B', bg: '#F1F5F9', label: order.status || '—' };
               const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
               return (
                 <View key={order.id} style={H.orderRow}>

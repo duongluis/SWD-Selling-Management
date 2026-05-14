@@ -4,30 +4,63 @@ import { useScreenData } from '@/components/Hooks/useScreenData';
 import { useSearch } from '@/components/Hooks/useSearch';
 import EmptyState from '@/components/Main/EmptyState';
 import ScreenHeader from '@/components/Main/ScreenHeader';
+import { showAlert } from '@/components/Main/showAlert';
 import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import FilterChips from '@/components/UI/FilterChips';
 import ServiceDetail from '@/components/UI/ServiceDetail';
 import StatBar from '@/components/UI/StatBar';
 import { fmtDate } from '@/components/Utils/formatters';
 import { isCTV } from '@/components/Utils/roleHelper';
+import { syncOrderStatusFromService, isServiceStatusLocked } from '@/components/Utils/syncOrderStatus';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { doc, updateDoc } from 'firebase/firestore';
+import { useRef, useState } from 'react';
 import {
-  FlatList, Platform, RefreshControl,
+  Dimensions, FlatList, Modal, Platform, Pressable, RefreshControl,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
+import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
 const AVATAR_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4'];
 
 const STATUS_CFG = {
-  'Chờ xử lý': { c: '#D97706', bg: '#FFFBEB' },
-  'Đang xử lý': { c: '#2563EB', bg: '#EFF6FF' },
-  'Hoàn thành': { c: '#16A34A', bg: '#DCFCE7' },
-  'Đã hủy': { c: '#DC2626', bg: '#FEF2F2' },
+  'Chờ xử lý':  { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
+  'Đang xử lý': { c: '#2563EB', bg: '#EFF6FF', bd: '#BFDBFE' },
+  'Hoàn thành': { c: '#16A34A', bg: '#DCFCE7', bd: '#86EFAC' },
+  'Đã hủy':     { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
 };
-const scfg = s => STATUS_CFG[s] || { c: '#64748B', bg: '#F1F5F9' };
+const scfg = s => STATUS_CFG[s] || { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' };
+const STATUS_OPTIONS = ['Chờ xử lý', 'Đang xử lý', 'Hoàn thành', 'Đã hủy'];
+
+// ── Quick status menu (dùng trong Modal) ──────────────────────
+function SvcQuickMenu({ status, onSelect, style }) {
+  return (
+    <View style={[QM.menu, style]}>
+      {STATUS_OPTIONS.map(st => {
+        const cfg = scfg(st);
+        const active = st === status;
+        return (
+          <TouchableOpacity key={st}
+            style={[QM.item, active && { backgroundColor: cfg.bg }]}
+            onPress={() => onSelect(st)}
+          >
+            <View style={[QM.dot, { backgroundColor: cfg.c }]} />
+            <Text style={[QM.text, { color: active ? cfg.c : '#374151', fontWeight: active ? '700' : '500' }]}>{st}</Text>
+            {active && <Ionicons name="checkmark" size={13} color={cfg.c} style={{ marginLeft: 'auto' }} />}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+const QM = StyleSheet.create({
+  menu: { position: 'absolute', zIndex: 999, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', minWidth: 180, shadowColor: '#000', shadowOpacity: 0.13, shadowRadius: 14, shadowOffset: { width: 0, height: 5 }, elevation: 12 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#F8FAFC' },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  text: { fontSize: 13 },
+});
 
 const TYPE_CFG = {
   INSTALLATION: { icon: 'build-outline', label: 'Lắp đặt', c: '#7C3AED', bg: '#F5F3FF' },
@@ -62,10 +95,20 @@ const T = StyleSheet.create({
   hcell: { fontSize: 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.06, paddingHorizontal: 4 },
 });
 
-function ServiceRow({ item, index, isActive, onPress }) {
+function ServiceRow({ item, index, isActive, onPress, isAdmin, onStatusPress }) {
   const color = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const tcfg = TYPE_CFG[item.type] || TYPE_CFG.INSTALLATION;
   const scf = scfg(item.status);
+  const pillRef = useRef(null);
+  const canQuick = isAdmin && !isServiceStatusLocked(item.status);
+
+  const handleStatusPillPress = () => {
+    pillRef.current?.measure((_fx, _fy, w, h, pageX, pageY) => {
+      const sw = Dimensions.get('window').width;
+      onStatusPress?.(item, { top: pageY + h + 4, right: sw - pageX - w });
+    });
+  };
+
   return (
     <TouchableOpacity
       style={[R.row, isActive && R.rowActive]}
@@ -93,12 +136,22 @@ function ServiceRow({ item, index, isActive, onPress }) {
       )}
       {/* Ngày */}
       {isWeb && <Text style={[R.col, R.colSub, { flex: 0.8 }]}>{fmtDate(item.createdAt)}</Text>}
-      {/* Status */}
+      {/* Status — clickable khi admin */}
       <View style={[R.col, { flex: isWeb ? 1 : undefined }]}>
-        <View style={[R.pill, { backgroundColor: scf.bg }]}>
-          <View style={[R.dot, { backgroundColor: scf.c }]} />
-          <Text style={[R.pillText, { color: scf.c }]}>{item.status || 'Chờ xử lý'}</Text>
-        </View>
+        {canQuick ? (
+          <TouchableOpacity ref={pillRef} onPress={handleStatusPillPress} activeOpacity={0.75} style={{ alignSelf: 'flex-start' }}>
+            <View style={[R.pill, R.pillClickable, { backgroundColor: scf.bg, borderColor: scf.bd }]}>
+              <View style={[R.dot, { backgroundColor: scf.c }]} />
+              <Text style={[R.pillText, { color: scf.c }]}>{item.status || 'Chờ xử lý'}</Text>
+              <Ionicons name="chevron-down" size={10} color={scf.c} />
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={[R.pill, { backgroundColor: scf.bg }]}>
+            <View style={[R.dot, { backgroundColor: scf.c }]} />
+            <Text style={[R.pillText, { color: scf.c }]}>{item.status || 'Chờ xử lý'}</Text>
+          </View>
+        )}
       </View>
       <Ionicons name="chevron-forward" size={14} color={isActive ? '#2563EB' : '#CBD5E1'} />
     </TouchableOpacity>
@@ -117,6 +170,7 @@ const R = StyleSheet.create({
   typePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, alignSelf: 'flex-start' },
   typeText: { fontSize: 11, fontWeight: '700' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20, alignSelf: 'flex-start' },
+  pillClickable: { borderWidth: 1 },
   dot: { width: 5, height: 5, borderRadius: 3 },
   pillText: { fontSize: 11, fontWeight: '700' },
 });
@@ -126,6 +180,8 @@ export default function ServiceScreen() {
   const { data, loading, refreshing, refresh, stats, role } = useScreenData('services');
   const { query, setQuery, filter, setFilter, result } = useSearch(data, ['id', 'customer'], 'status');
   const [selected, setSelected] = useState(null);
+  const [quickMenu, setQuickMenu] = useState(null); // { item, pos: { top, right } }
+  const isAdmin = role === 'admin';
 
   const statCards = [
     { icon: 'build-outline', label: 'Tổng DV', value: String(stats.total || 0), color: '#8B5CF6', bg: '#F5F3FF' },
@@ -136,6 +192,26 @@ export default function ServiceScreen() {
   const handlePress = item => {
     if (isWeb) setSelected(p => p?.docId === item.docId ? null : item);
     else router.push({ pathname: '/ServiceView/[serviceID]', params: { serviceID: item.docId, serviceParam: JSON.stringify(item) } });
+  };
+
+  const handleStatusPress = (item, pos) => setQuickMenu({ item, pos });
+
+  const handleQuickStatusChange = (newStatus) => {
+    const item = quickMenu?.item;
+    setQuickMenu(null);
+    if (!item || newStatus === item.status) return;
+    showAlert('Cập nhật trạng thái', `Chuyển sang "${newStatus}"?`, async () => {
+      try {
+        await updateDoc(doc(db, 'service', item.docId), { status: newStatus });
+        syncOrderStatusFromService(
+          { type: item.type, orderId: item.orderId, phone: item.phone },
+          newStatus
+        ).then(newOrderStatus => {
+          if (newOrderStatus) showAlert('Đã đồng bộ', `Đơn hàng #${item.orderId} tự động chuyển sang "${newOrderStatus}"`);
+        }).catch(() => { });
+        refresh();
+      } catch (e) { showAlert('Lỗi', e.message); }
+    });
   };
 
   return (
@@ -153,7 +229,7 @@ export default function ServiceScreen() {
       <StatBar stats={statCards} />
       <FilterChips options={FILTERS} value={filter} onChange={f => { setFilter(f); setSelected(null); }} />
 
-      <View style={{ flex: 1, flexDirection: 'row', padding: isWeb ? 16 : 0, paddingTop: 0, gap: isWeb ? 0 : 0 }}>
+      <View style={{ flex: 1, flexDirection: 'row', padding: isWeb ? 16 : 0, paddingTop: 0 }}>
         {/* List — left */}
         <View style={WRAP.card}>
           <TableHead />
@@ -172,6 +248,8 @@ export default function ServiceScreen() {
                   <ServiceRow item={item} index={index}
                     isActive={selected?.docId === item.docId}
                     onPress={handlePress}
+                    isAdmin={isAdmin}
+                    onStatusPress={handleStatusPress}
                   />
                 )}
                 showsVerticalScrollIndicator={false}
@@ -185,10 +263,29 @@ export default function ServiceScreen() {
           <ServiceDetail
             service={selected}
             onClose={() => setSelected(null)}
-            onUpdated={u => setSelected(u)}
+            onUpdated={u => { setSelected(u); refresh(); }}
           />
         )}
       </View>
+
+      {/* Quick status dropdown modal */}
+      <Modal
+        visible={!!quickMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setQuickMenu(null)}
+        statusBarTranslucent
+      >
+        <Pressable style={{ flex: 1, backgroundColor: 'transparent' }} onPress={() => setQuickMenu(null)}>
+          <Pressable onPress={e => e.stopPropagation()}>
+            <SvcQuickMenu
+              status={quickMenu?.item?.status}
+              onSelect={handleQuickStatusChange}
+              style={{ top: quickMenu?.pos?.top, right: quickMenu?.pos?.right }}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </TabScreenLayout>
   );
 }

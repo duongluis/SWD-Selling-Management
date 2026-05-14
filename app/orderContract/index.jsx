@@ -4,6 +4,7 @@
 // mode=template → điền tay, không lưu DB
 // Xuất PDF: web dùng window.print(), mobile dùng expo-print
 
+import BgWatermark from '@/components/Main/BgWatermark';
 import { db } from '@/config/firebaseConfig';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -266,23 +267,6 @@ function TemplateForm({ form, setForm, catalog }) {
             <Text style={S.sectionHead}>Thông tin hợp đồng</Text>
             <HR />
 
-            <Text style={S.fieldLabel}>Loại đơn</Text>
-            <View style={S.typeRow}>
-                {['buon', 'le'].map(t => (
-                    <TouchableOpacity key={t}
-                        style={[S.typeBtn, form.orderType === t && S.typeBtnActive]}
-                        onPress={() => setForm(f => ({
-                            ...f, orderType: t,
-                            paymentMethod: t === 'buon' ? 'company' : 'customer'
-                        }))}
-                    >
-                        <Text style={[S.typeBtnText, form.orderType === t && S.typeBtnTextActive]}>
-                            {t === 'buon' ? 'Đơn buôn' : 'Đơn lẻ'}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-
             <Text style={S.subHead}>Bên mua</Text>
             <Text style={S.fieldLabel}>Tên khách hàng</Text>
             <TextInput style={S.input} placeholder="Nguyễn Văn A" placeholderTextColor="#CBD5E1"
@@ -355,23 +339,6 @@ function TemplateForm({ form, setForm, catalog }) {
             </TouchableOpacity>
 
             <HR />
-            <Text style={S.fieldLabel}>Hình thức thanh toán</Text>
-            <View style={S.typeRow}>
-                {[
-                    { key: 'customer', label: 'Khách hàng TT' },
-                    { key: 'company', label: 'Doanh nghiệp TT' },
-                ].map(opt => (
-                    <TouchableOpacity key={opt.key}
-                        style={[S.typeBtn, form.paymentMethod === opt.key && S.typeBtnActive]}
-                        onPress={() => setForm(f => ({ ...f, paymentMethod: opt.key }))}
-                    >
-                        <Text style={[S.typeBtnText, form.paymentMethod === opt.key && S.typeBtnTextActive]}>
-                            {opt.label}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-
             <Text style={S.fieldLabel}>Ghi chú đơn hàng</Text>
             <TextInput style={S.input} placeholder="Hướng dẫn đặc biệt..." placeholderTextColor="#CBD5E1"
                 value={form.note || ''} onChangeText={v => setForm(f => ({ ...f, note: v }))} />
@@ -698,6 +665,7 @@ export default function OrderContractScreen() {
 
     return (
         <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+            <BgWatermark />
             {/* Header */}
             <View style={S.header}>
                 <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>

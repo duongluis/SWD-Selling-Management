@@ -1,3 +1,4 @@
+import BgWatermark from '@/components/Main/BgWatermark';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -292,6 +293,7 @@ export default function ServiceDetailScreen() {
 
     return (
         <View style={[styles.container, !isWeb && { paddingTop: insets.top }]}>
+            <BgWatermark />
 
             {/* Header */}
             <View style={styles.header}>

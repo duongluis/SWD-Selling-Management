@@ -1,7 +1,8 @@
+import BgWatermark from '@/components/Main/BgWatermark';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { useContext, useState } from 'react';
 import {
@@ -26,8 +27,17 @@ export default function AddCustomer() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { userDetail, setUserDetail } = useContext(UserDetailContext);
+  const params = useLocalSearchParams();
 
-  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', note: '' });
+  const consultCreatedBy = params.consultCreatedBy || '';
+
+  const [form, setForm] = useState({
+    name: params.name || '',
+    phone: params.phone || '',
+    email: params.email || '',
+    address: params.address || '',
+    note: params.note || '',
+  });
   const [submitting, setSubmitting] = useState(false);
 
   const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
@@ -42,6 +52,7 @@ export default function AddCustomer() {
       return false;
     } else {
       showAlert("Đã tồn tại khách hàng trên hệ thống, vui lòng liên hệ quản trị viên để biết thêm thông tin ")
+      router.replace("(tabs)/home")
       return true;
     }
   };
@@ -52,11 +63,8 @@ export default function AddCustomer() {
       return;
     }
     setSubmitting(true);
+    if (await checkingDuplicate()) return;
 
-    if (checkingDuplicate()) {
-      router.replace("(tabs)/home")
-      return;
-    }
     try {
       const newCustomer = {
         id: Date.now().toString(),
@@ -74,7 +82,7 @@ export default function AddCustomer() {
         phone: form.phone.trim(),
         email: form.email?.trim() || '',
         note: form.note?.trim() || '',
-        createdBy: userDetail?.email,
+        createdBy: consultCreatedBy || userDetail?.email,
         createdAt: new Date().toISOString(),
       },
         { merge: true }
@@ -97,6 +105,7 @@ export default function AddCustomer() {
   if (isWeb) {
     return (
       <View style={W.root}>
+        <BgWatermark />
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
 
           {/* Page header */}
@@ -271,6 +280,7 @@ export default function AddCustomer() {
   // ─────────────────────────────────────────────────────────
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      <BgWatermark />
       <StatusBar barStyle="dark-content" backgroundColor={Colors.Background} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>

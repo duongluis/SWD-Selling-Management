@@ -1,5 +1,6 @@
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
+import { createNotification } from './chatService';
 
 // ── Mapping: (serviceType, newServiceStatus) → orderStatus ──
 // Chỉ map những trạng thái cần auto-sync (changeable:false ở đơn hàng)
@@ -11,8 +12,8 @@ const SERVICE_TO_ORDER_STATUS = {
     },
     // Dịch vụ Lắp đặt → Đơn lẻ
     INSTALLATION: {
-        'Đang xử lý': 'Đang lắp đặt',   // service chờ→đang  : order chờ lắp→đang lắp
-        'Hoàn thành': 'Đã lắp đặt',     // service hoàn thành: order đã lắp
+        'Đang xử lý': 'Đang lắp đặt',   // service đang xử lý → order đang lắp đặt
+        'Hoàn thành': 'Chờ thanh toán', // service hoàn thành → order chờ thanh toán
     },
 };
 
@@ -55,12 +56,25 @@ export async function syncOrderStatusFromService(service, newSvcStatus) {
         if (!orderDoc.exists()) return null;
 
         const orders = orderDoc.data().orders || [];
+        const targetOrder = orders.find(o => o.id === orderId);
         const updated = orders.map(o =>
             o.id === orderId ? { ...o, status: newOrderStatus } : o
         );
 
         await updateDoc(doc(db, 'orders', phone), { orders: updated });
         console.log(`[syncOrderStatus] Order #${orderId}: auto → "${newOrderStatus}"`);
+
+        // Gửi thông báo thanh toán khi dịch vụ lắp đặt hoàn thành
+        if (newOrderStatus === 'Chờ thanh toán' && targetOrder?.createdBy) {
+            createNotification({
+                userEmail: targetOrder.createdBy,
+                type: 'order_update',
+                title: '💰 Yêu cầu thanh toán',
+                body: `Lắp đặt đơn hàng #${orderId} đã hoàn thành. Vui lòng thanh toán để hoàn tất.`,
+                orderId,
+            }).catch(() => { });
+        }
+
         return newOrderStatus;
     } catch (e) {
         console.error('[syncOrderStatus] Lỗi:', e.message);
@@ -95,4 +109,44 @@ export function isOrderStatusLocked(orderStatus) {
 export function isServiceStatusLocked(svcStatus) {
     const LOCKED = new Set(['Đã hủy', 'CANCELLED']);
     return LOCKED.has(svcStatus);
+}
+
+// ── Order → Service sync mapping ─────────────────────────────
+const ORDER_TO_SERVICE_STATUS = {
+    'Chờ lắp đặt':  'Chờ xử lý',
+    'Đang lắp đặt': 'Đang xử lý',
+    'Chờ giao hàng':  'Chờ xử lý',
+    'Đang giao hàng': 'Đang xử lý',
+};
+
+/**
+ * Khi trạng thái đơn hàng thay đổi → tự động cập nhật dịch vụ liên kết.
+ *
+ * @param {string} orderId         - mã đơn hàng (service.orderId)
+ * @param {string} newOrderStatus  - trạng thái đơn hàng mới
+ * @returns {string|null}          - trạng thái dịch vụ mới nếu có sync, null nếu không
+ */
+export async function syncServiceStatusFromOrder(orderId, newOrderStatus) {
+    const newSvcStatus = ORDER_TO_SERVICE_STATUS[newOrderStatus];
+    if (!newSvcStatus || !orderId) return null;
+
+    try {
+        const snap = await getDocs(
+            query(collection(db, 'service'), where('orderId', '==', orderId))
+        );
+        if (snap.empty) return null;
+
+        // Chỉ cập nhật dịch vụ chưa bị khóa (không phải Đã hủy)
+        const toUpdate = snap.docs.filter(d => !isServiceStatusLocked(d.data().status));
+        if (toUpdate.length === 0) return null;
+
+        await Promise.all(toUpdate.map(d =>
+            updateDoc(doc(db, 'service', d.id), { status: newSvcStatus })
+        ));
+        console.log(`[syncServiceStatus] Order #${orderId}: services auto → "${newSvcStatus}"`);
+        return newSvcStatus;
+    } catch (e) {
+        console.error('[syncServiceStatus] Lỗi:', e.message);
+        return null;
+    }
 }

@@ -1,4 +1,5 @@
 // app/editUser/[userEmail]/index.jsx
+import BgWatermark from '@/components/Main/BgWatermark';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -139,6 +140,7 @@ export default function EditUserScreen() {
 
     return (
         <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+            <BgWatermark />
             {/* Header */}
             <View style={S.header}>
                 <TouchableOpacity onPress={() => router.replace('/(tabs)/user')} style={S.backBtn}>

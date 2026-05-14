@@ -1,3 +1,4 @@
+import BgWatermark from "@/components/Main/BgWatermark";
 import Colors from "@/constant/Colors";
 import { Ionicons } from "@expo/vector-icons";
 import { sendPasswordResetEmail } from "@firebase/auth";
@@ -20,17 +21,18 @@ export default function ResetPassword() {
     try {
       await sendPasswordResetEmail(auth, gmail);
       Alert.alert(
-        "Thông báo",
-        "Vui lòng kiểm tra gmail để lấy link đặt lại mật khẩu.",
+        "Đã gửi",
+        "Vui lòng kiểm tra hộp thư email để lấy link đặt lại mật khẩu.",
       );
     } catch (e) {
       console.log(e);
-      Alert.alert("Lỗi", e.message);
+      Alert.alert("Lỗi", e.code === 'auth/user-not-found' ? 'Email chưa được đăng ký' : e.message);
     }
   };
 
   return (
     <View style={styles.container}>
+      <BgWatermark />
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Ionicons
           name="chevron-back-circle-outline"
@@ -43,14 +45,13 @@ export default function ResetPassword() {
         <Ionicons name="lock-closed-outline" size={44} color={Colors.Blue} />
       </View>
 
-      <Text style={styles.title}>Reset Password</Text>
+      <Text style={styles.title}>Quên mật khẩu</Text>
       <Text style={styles.subtitle}>
-        Nhập địa chỉ email để chúng tôi gửi cho bạn thư xác nhận đặt lại mật
-        khẩu
+        Nhập địa chỉ email để chúng tôi gửi link đặt lại mật khẩu
       </Text>
 
       <View style={styles.formGroup}>
-        <Text style={styles.label}>Email Address</Text>
+        <Text style={styles.label}>Địa chỉ Email</Text>
         <TextInput
           placeholder="name@company.com"
           placeholderTextColor={Colors.LightGray}
@@ -63,11 +64,11 @@ export default function ResetPassword() {
       </View>
 
       <TouchableOpacity style={styles.resetButton} onPress={sendResetLink}>
-        <Text style={styles.resetButtonText}>Send Reset Link</Text>
+        <Text style={styles.resetButtonText}>Gửi email khôi phục</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.push("/auth/signIn")}>
-        <Text style={styles.link}>Back to Login</Text>
+        <Text style={styles.link}>Quay lại đăng nhập</Text>
       </TouchableOpacity>
     </View>
   );

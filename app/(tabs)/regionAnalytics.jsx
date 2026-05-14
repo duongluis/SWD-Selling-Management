@@ -12,6 +12,7 @@ import {
     ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
+import provinceData from '../../config/province.json';
 
 const isWeb = Platform.OS === 'web';
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
@@ -28,21 +29,22 @@ const REGION_COLORS = {
     'Miền Trung': { c: '#7C3AED', bg: '#F5F3FF', icon: 'map-outline' },
     'Miền Nam': { c: '#059669', bg: '#ECFDF5', icon: 'globe-outline' },
 };
-// Province → region mapping (simplified)
-const PROVINCE_REGION = {
-    'Hà Nội': 'Miền Bắc', 'Hải Phòng': 'Miền Bắc', 'Quảng Ninh': 'Miền Bắc',
-    'Bắc Ninh': 'Miền Bắc', 'Thái Nguyên': 'Miền Bắc', 'Nam Định': 'Miền Bắc',
-    'Đà Nẵng': 'Miền Trung', 'Huế': 'Miền Trung', 'Quảng Nam': 'Miền Trung',
-    'Nghệ An': 'Miền Trung', 'Bình Định': 'Miền Trung', 'Khánh Hòa': 'Miền Trung',
-    'TP.HCM': 'Miền Nam', 'Hồ Chí Minh': 'Miền Nam', 'Bình Dương': 'Miền Nam',
-    'Đồng Nai': 'Miền Nam', 'Long An': 'Miền Nam', 'Cần Thơ': 'Miền Nam',
-    'Vũng Tàu': 'Miền Nam', 'Bà Rịa': 'Miền Nam',
-};
+const PROVINCE_REGION = {};
+(provinceData.mien_bac || []).forEach(p => { PROVINCE_REGION[p.ten] = 'Miền Bắc'; });
+(provinceData.mien_trung || []).forEach(p => { PROVINCE_REGION[p.ten] = 'Miền Trung'; });
+(provinceData.mien_nam || []).forEach(p => { PROVINCE_REGION[p.ten] = 'Miền Nam'; });
+// Common address aliases
+const ALIASES = { 'TP.HCM': 'Hồ Chí Minh', 'TP HCM': 'Hồ Chí Minh', 'TPHCM': 'Hồ Chí Minh', 'Sài Gòn': 'Hồ Chí Minh', 'Hue': 'Thừa Thiên Huế', 'Huế': 'Thừa Thiên Huế', 'Đà Nẵng': 'Đà Nẵng' };
 
 function getRegion(address) {
     if (!address) return 'Khác';
+    const normalized = address;
+    // Check aliases first
+    for (const [alias, canonical] of Object.entries(ALIASES)) {
+        if (normalized.includes(alias) && PROVINCE_REGION[canonical]) return PROVINCE_REGION[canonical];
+    }
     for (const [province, region] of Object.entries(PROVINCE_REGION)) {
-        if (address.includes(province)) return region;
+        if (normalized.includes(province)) return region;
     }
     return 'Khác';
 }
@@ -62,6 +64,7 @@ function RegionCard({ region, data, total, isSelected, onSelect }) {
             <Text style={RC.name}>{region}</Text>
             <Text style={[RC.revenue, { color: cfg.c }]}>{fmtShort(data.revenue)}</Text>
             <Text style={RC.orders}>{data.orders} đơn hàng</Text>
+            <Text style={RC.customers}>{data.customerCount || 0} khách hàng</Text>
             <View style={RC.progressTrack}>
                 <View style={[RC.progressFill, { width: `${pct}%`, backgroundColor: cfg.c }]} />
             </View>
@@ -76,6 +79,7 @@ const RC = StyleSheet.create({
     name: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
     revenue: { fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
     orders: { fontSize: 11, color: '#64748B' },
+    customers: { fontSize: 11, color: '#7C3AED' },
     progressTrack: { height: 5, backgroundColor: '#F1F5F9', borderRadius: 3, marginTop: 6, overflow: 'hidden' },
     progressFill: { height: '100%', borderRadius: 3 },
     pct: { fontSize: 10, color: '#94A3B8', marginTop: 3 },
@@ -90,6 +94,7 @@ export default function RegionReportScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [users, setUsers] = useState([]);
     const [allOrders, setAllOrders] = useState([]);
+    const [customers, setCustomers] = useState([]);
     const [selected, setSelected] = useState(null);
 
     const fetchData = useCallback(async () => {
@@ -102,7 +107,10 @@ export default function RegionReportScreen() {
             const cSnap = isAdmin
                 ? await getDocs(collection(db, 'customers'))
                 : await getDocs(query(collection(db, 'customers'), where('createdBy', '==', userDetail.email)));
-            const phones = cSnap.docs.map(d => d.data().phone).filter(Boolean);
+            const custData = cSnap.docs.map(d => d.data());
+            setCustomers(custData);
+
+            const phones = custData.map(c => c.phone).filter(Boolean);
             const orders = [];
             await Promise.all(phones.slice(0, 100).map(async phone => {
                 try {
@@ -111,7 +119,7 @@ export default function RegionReportScreen() {
                     if (s.exists()) (s.data().orders || []).forEach(o => orders.push({ ...o, customerPhone: phone }));
                 } catch (_) { }
             }));
-            setAllOrders(orders.filter(o => o.status !== 'Đã hủy'));
+            setAllOrders(orders.filter(o => o.status === 'Đã thanh toán'));
         } catch (e) { console.error(e); }
         finally { setLoading(false); setRefreshing(false); }
     }, [userDetail?.email, isAdmin]);
@@ -121,12 +129,24 @@ export default function RegionReportScreen() {
     // Aggregate by region
     const regionData = useMemo(() => {
         const map = {};
-        REGIONS.forEach(r => { map[r] = { revenue: 0, orders: 0, users: [], products: {} }; });
-        map['Khác'] = { revenue: 0, orders: 0, users: [], products: {} };
+        REGIONS.forEach(r => { map[r] = { revenue: 0, orders: 0, customerCount: 0, users: [], products: {} }; });
+        map['Khác'] = { revenue: 0, orders: 0, customerCount: 0, users: [], products: {} };
+
+        // Đếm khách hàng theo địa chỉ đăng ký
+        customers.forEach(c => {
+            const region = getRegion(c.address);
+            if (!map[region]) map[region] = { revenue: 0, orders: 0, customerCount: 0, users: [], products: {} };
+            map[region].customerCount += 1;
+        });
+
+        // Build phone→customer map to use customer address for region lookup
+        const phoneToAddr = {};
+        customers.forEach(c => { if (c.phone) phoneToAddr[c.phone] = c.address; });
 
         allOrders.forEach(o => {
-            const region = getRegion(o.address);
-            if (!map[region]) map[region] = { revenue: 0, orders: 0, users: [], products: {} };
+            const addr = phoneToAddr[o.customerPhone] || o.address;
+            const region = getRegion(addr);
+            if (!map[region]) map[region] = { revenue: 0, orders: 0, customerCount: 0, users: [], products: {} };
             const val = (o.items || []).reduce((s, p) => s + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0);
             map[region].revenue += val;
             map[region].orders += 1;
@@ -140,7 +160,7 @@ export default function RegionReportScreen() {
             if (map[region]) map[region].users.push(u);
         });
         return map;
-    }, [allOrders, users]);
+    }, [allOrders, users, customers]);
 
     const totalRevenue = Object.values(regionData).reduce((s, d) => s + d.revenue, 0);
     const detailData = selected ? regionData[selected] : null;
@@ -179,8 +199,8 @@ export default function RegionReportScreen() {
                         <View style={G.summaryItem}>
                             <Ionicons name="people-outline" size={18} color="#7C3AED" />
                             <View>
-                                <Text style={G.summaryLabel}>Người dùng</Text>
-                                <Text style={G.summaryValue}>{users.length}</Text>
+                                <Text style={G.summaryLabel}>Khách hàng</Text>
+                                <Text style={G.summaryValue}>{customers.length}</Text>
                             </View>
                         </View>
                     </View>
@@ -216,6 +236,10 @@ export default function RegionReportScreen() {
                                 <View style={G.detailStat}>
                                     <Text style={G.detailStatLabel}>Người bán</Text>
                                     <Text style={G.detailStatValue}>{detailData.users?.length || 0}</Text>
+                                </View>
+                                <View style={G.detailStat}>
+                                    <Text style={G.detailStatLabel}>Khách hàng</Text>
+                                    <Text style={[G.detailStatValue, { color: '#7C3AED' }]}>{detailData.customerCount || 0}</Text>
                                 </View>
                             </View>
                             {/* Top products in region */}
@@ -263,11 +287,10 @@ export default function RegionReportScreen() {
                             <Text style={{ flex: 1.5, fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase' }}>Khu vực</Text>
                             <Text style={{ flex: 1, fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', textAlign: 'right' }}>Doanh thu</Text>
                             <Text style={{ flex: 0.8, fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', textAlign: 'right' }}>Đơn</Text>
-                            <Text style={{ flex: 0.8, fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', textAlign: 'right' }}>TB/đơn</Text>
+                            <Text style={{ flex: 0.8, fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', textAlign: 'right' }}>KH</Text>
                         </View>
                         {REGIONS.map((r, i) => {
-                            const d = regionData[r] || { revenue: 0, orders: 0 };
-                            const avg = d.orders > 0 ? d.revenue / d.orders : 0;
+                            const d = regionData[r] || { revenue: 0, orders: 0, customerCount: 0 };
                             const cfg = REGION_COLORS[r];
                             return (
                                 <View key={r} style={[{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 0.5, borderBottomColor: '#F8FAFC' }, i % 2 === 1 && { backgroundColor: '#FAFBFF' }]}>
@@ -277,7 +300,7 @@ export default function RegionReportScreen() {
                                     </View>
                                     <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: cfg.c, textAlign: 'right' }}>{fmtShort(d.revenue)}</Text>
                                     <Text style={{ flex: 0.8, fontSize: 12, color: '#374151', textAlign: 'right' }}>{d.orders}</Text>
-                                    <Text style={{ flex: 0.8, fontSize: 12, color: '#64748B', textAlign: 'right' }}>{fmtShort(avg)}</Text>
+                                    <Text style={{ flex: 0.8, fontSize: 12, color: '#7C3AED', textAlign: 'right' }}>{d.customerCount || 0}</Text>
                                 </View>
                             );
                         })}

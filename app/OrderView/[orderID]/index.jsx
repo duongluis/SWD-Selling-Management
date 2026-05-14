@@ -1,3 +1,4 @@
+import BgWatermark from "@/components/Main/BgWatermark";
 import Colors from "@/constant/Colors";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -56,6 +57,7 @@ export default function OrderDetailView() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      <BgWatermark />
       <StatusBar barStyle="dark-content" backgroundColor={Colors.Background} />
 
       {/* Header */}

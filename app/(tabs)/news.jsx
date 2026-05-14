@@ -1,5 +1,6 @@
 // app/news/index.jsx — Tin tức (admin CRUD + notification)
 
+import BgWatermark from '@/components/Main/BgWatermark';
 import { createNotification } from '@/components/Utils/chatService';
 import { getRole } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -8,14 +9,17 @@ import {
     addDoc, collection, deleteDoc, doc, getDocs, orderBy,
     query, serverTimestamp, updateDoc,
 } from 'firebase/firestore';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
+    ActivityIndicator, Image,
     Modal, Platform,
     ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { db } from '../../config/firebaseConfig';
+import { db, storage } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
 
@@ -38,6 +42,31 @@ function timeAgo(ts) {
     return `${Math.floor(h / 24)} ngày trước`;
 }
 
+// ── Upload ảnh ───────────────────────────────────────────────
+// Web: Firebase Storage yêu cầu cấu hình CORS server-side (gsutil/Firebase CLI).
+// Workaround: đọc blob → base64 data URL → lưu thẳng vào Firestore imageUrl.
+// Native: upload bình thường lên Firebase Storage.
+async function uploadImage(localUri, newsId) {
+    if (Platform.OS === 'web') {
+        const response = await fetch(localUri);
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result); // "data:image/jpeg;base64,..."
+            reader.onerror = () => reject(new Error('Không đọc được ảnh'));
+            reader.readAsDataURL(blob);
+        });
+    }
+    // Native: Firebase Storage
+    const ext = localUri.match(/\.(\w{2,5})(?:[?#]|$)/)?.[1]?.toLowerCase() || 'jpg';
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    const ref = storageRef(storage, `news/${newsId}/cover.${ext}`);
+    const response = await fetch(localUri);
+    const blob = await response.blob();
+    await uploadBytes(ref, blob, { contentType: mime });
+    return getDownloadURL(ref);
+}
+
 // ── News Form Modal ───────────────────────────────────────────
 function NewsFormModal({ visible, onClose, onSave, editItem }) {
     const [title, setTitle] = useState('');
@@ -45,20 +74,37 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
     const [category, setCategory] = useState('Hệ thống');
     const [notify, setNotify] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [imageUri, setImageUri] = useState(null); // local URI hoặc existing URL
 
     useEffect(() => {
         if (editItem) {
             setTitle(editItem.title || ''); setContent(editItem.content || '');
             setCategory(editItem.category || 'Hệ thống'); setNotify(false);
+            setImageUri(editItem.imageUrl || null);
         } else {
             setTitle(''); setContent(''); setCategory('Hệ thống'); setNotify(false);
+            setImageUri(null);
         }
     }, [editItem, visible]);
+
+    const pickImage = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') return;
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: isWeb ? 0.5 : 0.8, // web: giảm quality để base64 nhỏ hơn (~50-150KB)
+            allowsEditing: true,
+            aspect: [16, 9],
+        });
+        if (!result.canceled && result.assets?.[0]?.uri) {
+            setImageUri(result.assets[0].uri);
+        }
+    };
 
     const handleSave = async () => {
         if (!title.trim()) return;
         setSaving(true);
-        try { await onSave({ title, content, category, notify }); onClose(); }
+        try { await onSave({ title, content, category, notify, imageUri }); onClose(); }
         catch (e) { console.error(e); }
         finally { setSaving(false); }
     };
@@ -87,6 +133,28 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
                                     </TouchableOpacity>
                                 ))}
                             </View>
+                            {/* Ảnh bìa */}
+                            <Text style={FM.label}>Ảnh bìa</Text>
+                            <TouchableOpacity style={FM.imagePicker} onPress={pickImage}>
+                                {imageUri ? (
+                                    <>
+                                        <Image source={{ uri: imageUri }} style={FM.imagePreview} resizeMode="cover" />
+                                        <View style={FM.imageOverlay}>
+                                            <Ionicons name="camera-outline" size={20} color="#fff" />
+                                            <Text style={FM.imageOverlayText}>Đổi ảnh</Text>
+                                        </View>
+                                        <TouchableOpacity style={FM.imageRemove} onPress={() => setImageUri(null)}>
+                                            <Ionicons name="close-circle" size={20} color="#EF4444" />
+                                        </TouchableOpacity>
+                                    </>
+                                ) : (
+                                    <View style={FM.imageEmpty}>
+                                        <Ionicons name="image-outline" size={28} color="#94A3B8" />
+                                        <Text style={FM.imageEmptyText}>Chọn ảnh bìa</Text>
+                                        <Text style={FM.imageEmptyHint}>Tỉ lệ 16:9 khuyến nghị</Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
                             <Text style={FM.label}>Nội dung</Text>
                             <TextInput style={[FM.input, { minHeight: 120, textAlignVertical: 'top', paddingTop: 10 }]}
                                 value={content} onChangeText={setContent} placeholder="Nội dung tin tức..."
@@ -132,6 +200,14 @@ const FM = StyleSheet.create({
     catBtnActive: { backgroundColor: '#1E3A8A', borderColor: '#1E3A8A' },
     catBtnText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
     catBtnTextActive: { color: '#fff' },
+    imagePicker: { height: 160, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: '#E2E8F0', borderStyle: 'dashed', overflow: 'hidden', marginBottom: 4, position: 'relative' },
+    imagePreview: { width: '100%', height: '100%' },
+    imageOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center', gap: 4 },
+    imageOverlayText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+    imageRemove: { position: 'absolute', top: 8, right: 8 },
+    imageEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6 },
+    imageEmptyText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+    imageEmptyHint: { fontSize: 11, color: '#94A3B8' },
     notifyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, padding: 14, backgroundColor: '#EFF6FF', borderRadius: 10, borderWidth: 1, borderColor: '#BFDBFE' },
     toggle: { width: 44, height: 24, borderRadius: 12, backgroundColor: '#CBD5E1', padding: 2 },
     toggleOn: { backgroundColor: '#2563EB' },
@@ -147,10 +223,13 @@ const FM = StyleSheet.create({
 });
 
 // ── News Card ─────────────────────────────────────────────────
-function NewsCard({ item, isAdmin, onEdit, onDelete, featured }) {
+function NewsCard({ item, isAdmin, onEdit, onDelete, featured, onPress }) {
     const catCfg = CAT_COLORS[item.category] || { c: '#2563EB', bg: '#EFF6FF' };
     if (featured) return (
-        <View style={NC.featured}>
+        <TouchableOpacity style={NC.featured} activeOpacity={0.9} onPress={onPress}>
+            {item.imageUrl
+                ? <Image source={{ uri: item.imageUrl }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                : null}
             <View style={NC.featuredOverlay} />
             <View style={NC.featuredContent}>
                 <View style={[NC.catBadge, { backgroundColor: catCfg.c }]}>
@@ -158,9 +237,9 @@ function NewsCard({ item, isAdmin, onEdit, onDelete, featured }) {
                 </View>
                 <Text style={NC.featuredTitle}>{item.title}</Text>
                 <Text style={NC.featuredSub} numberOfLines={2}>{item.content}</Text>
-                <TouchableOpacity style={NC.readBtn}>
+                <View style={NC.readBtn}>
                     <Text style={NC.readBtnText}>Đọc chi tiết →</Text>
-                </TouchableOpacity>
+                </View>
             </View>
             {isAdmin && (
                 <View style={NC.adminBtns}>
@@ -172,24 +251,27 @@ function NewsCard({ item, isAdmin, onEdit, onDelete, featured }) {
                     </TouchableOpacity>
                 </View>
             )}
-        </View>
+        </TouchableOpacity>
     );
 
     return (
-        <View style={NC.card}>
+        <TouchableOpacity style={NC.card} activeOpacity={0.85} onPress={onPress}>
             <View style={[NC.catDot, { backgroundColor: catCfg.c }]} />
+            {item.imageUrl && (
+                <Image source={{ uri: item.imageUrl }} style={NC.thumb} resizeMode="cover" />
+            )}
             <View style={NC.cardContent}>
                 <View style={[NC.catChip, { backgroundColor: catCfg.bg }]}>
                     <Text style={[NC.catChipText, { color: catCfg.c }]}>{item.category || 'Tin tức'}</Text>
                 </View>
                 <Text style={NC.cardTime}>{timeAgo(item.createdAt)}</Text>
                 <Text style={NC.cardTitle}>{item.title}</Text>
-                <Text style={NC.cardBody} numberOfLines={3}>{item.content}</Text>
+                <Text style={NC.cardBody} numberOfLines={2}>{item.content}</Text>
                 <View style={NC.cardFooter}>
-                    <TouchableOpacity style={NC.detailBtn}>
+                    <View style={NC.detailBtn}>
                         <Text style={NC.detailBtnText}>Xem chi tiết</Text>
                         <Ionicons name="chevron-forward" size={13} color="#2563EB" />
-                    </TouchableOpacity>
+                    </View>
                     {isAdmin && (
                         <View style={{ flexDirection: 'row', gap: 6 }}>
                             <TouchableOpacity style={NC.editBtn} onPress={() => onEdit(item)}>
@@ -202,7 +284,7 @@ function NewsCard({ item, isAdmin, onEdit, onDelete, featured }) {
                     )}
                 </View>
             </View>
-        </View>
+        </TouchableOpacity>
     );
 }
 
@@ -220,6 +302,7 @@ const NC = StyleSheet.create({
     aBtn: { width: 30, height: 30, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
     card: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' },
     catDot: { width: 4 },
+    thumb: { width: 90, height: '100%' },
     cardContent: { flex: 1, padding: 14 },
     catChip: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20, marginBottom: 6 },
     catChipText: { fontSize: 10, fontWeight: '700' },
@@ -236,6 +319,7 @@ const NC = StyleSheet.create({
 export default function NewsScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const insets = useSafeAreaInsets();
+    const router = useRouter();
     const role = getRole(userDetail);
     const admin = role === 'admin';
 
@@ -258,12 +342,30 @@ export default function NewsScreen() {
     const featured = filtered[0];
     const rest = filtered.slice(1);
 
-    const handleSave = async ({ title, content, category, notify }) => {
+    const handleSave = async ({ title, content, category, notify, imageUri }) => {
         if (editItem) {
-            await updateDoc(doc(db, 'news', editItem.id), { title, content, category, updatedAt: serverTimestamp() });
+            let imageUrl = editItem.imageUrl || null;
+            // Nếu người dùng đổi ảnh mới: blob:/file: URI (native) hoặc blob: (web)
+            // Bỏ qua nếu đang giữ nguyên ảnh cũ (http: hoặc data: từ lần upload trước)
+            const isNewImage = imageUri && !imageUri.startsWith('http') && !imageUri.startsWith('data:');
+            if (isNewImage) {
+                imageUrl = await uploadImage(imageUri, editItem.id);
+            } else if (!imageUri) {
+                imageUrl = null;
+            }
+            await updateDoc(doc(db, 'news', editItem.id), { title, content, category, imageUrl, updatedAt: serverTimestamp() });
         } else {
-            const ref = await addDoc(collection(db, 'news'), { title, content, category, createdAt: serverTimestamp(), authorEmail: userDetail?.email, authorName: userDetail?.name });
-            // Gửi thông báo
+            const docRef = await addDoc(collection(db, 'news'), {
+                title, content, category, imageUrl: null,
+                createdAt: serverTimestamp(),
+                authorEmail: userDetail?.email,
+                authorName: userDetail?.name,
+            });
+            // Upload ảnh sau khi có docId
+            if (imageUri) {
+                const imageUrl = await uploadImage(imageUri, docRef.id);
+                await updateDoc(docRef, { imageUrl });
+            }
             if (notify) {
                 const usersSnap = await getDocs(query(collection(db, 'users')));
                 await Promise.all(usersSnap.docs
@@ -276,6 +378,9 @@ export default function NewsScreen() {
         fetchNews();
     };
 
+    const goToDetail = (item) =>
+        router.push({ pathname: '/newsDetail/[newsId]', params: { newsId: item.id, newsData: encodeURIComponent(JSON.stringify(item)) } });
+
     const handleDelete = async (item) => {
         await deleteDoc(doc(db, 'news', item.id));
         fetchNews();
@@ -283,6 +388,7 @@ export default function NewsScreen() {
 
     return (
         <View style={[N.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+            <BgWatermark />
             {/* Top tabs */}
             <View style={N.topBar}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
@@ -308,6 +414,7 @@ export default function NewsScreen() {
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={N.scroll}>
                     {featured && (
                         <NewsCard item={featured} isAdmin={admin} featured
+                            onPress={() => goToDetail(featured)}
                             onEdit={i => { setEditItem(i); setModalOpen(true); }}
                             onDelete={handleDelete}
                         />
@@ -318,6 +425,7 @@ export default function NewsScreen() {
                     </View>
                     {rest.map(item => (
                         <NewsCard key={item.id} item={item} isAdmin={admin}
+                            onPress={() => goToDetail(item)}
                             onEdit={i => { setEditItem(i); setModalOpen(true); }}
                             onDelete={handleDelete}
                         />

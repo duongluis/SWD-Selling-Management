@@ -1,3 +1,4 @@
+import BgWatermark from '@/components/Main/BgWatermark';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -85,10 +86,13 @@ export default function EditOrder() {
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
     const { userDetail } = useContext(UserDetailContext);
-    const isAdmin = (userDetail?.role || userDetail?.member || '').toLowerCase() === 'admin';
+    const _role = (userDetail?.role || userDetail?.member || '').toLowerCase();
+    const isAdmin = _role === 'admin';
+    const isCTV = ['cộng tác viên', 'ctv', 'collaborator'].includes(_role);
+    const canEdit = !isCTV;
 
     const existing = params.orderParam ? JSON.parse(params.orderParam) : {};
-    const phone = existing._phone || '';
+    const phone = existing.customerPhone || existing._phone || '';
 
     const [orderDate, setOrderDate] = useState(existing.createdAt || '');
     const [deliveryAddress, setDeliveryAddress] = useState(existing.address || '');
@@ -98,7 +102,10 @@ export default function EditOrder() {
 
     const updateItemQty = (id, qty) =>
         setItems(prev => prev.map(p => p.id === id ? { ...p, qty: Math.max(1, parseInt(qty) || 1) } : p));
-    const removeItem = (id) => setItems(prev => prev.filter(p => p.id !== id));
+    const removeItem = (id) => {
+        if (items.length <= 1) { showAlert('Thông báo', 'Đơn hàng phải có ít nhất 1 sản phẩm'); return; }
+        setItems(prev => prev.filter(p => p.id !== id));
+    };
     const total = items.reduce((s, p) => s + (p.price * p.qty || 0), 0);
 
     const handleSubmit = async () => {
@@ -128,6 +135,7 @@ export default function EditOrder() {
     // ─────────────────────────────────────────────────────────
     if (isWeb) return (
         <View style={W.root}>
+            <BgWatermark />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
 
                 {/* Page header */}
@@ -246,10 +254,10 @@ export default function EditOrder() {
                                 <View style={W.itemCountBadge}>
                                     <Text style={W.itemCountText}>{items.length}</Text>
                                 </View>
-                                {!isAdmin && (
+                                {isCTV && (
                                     <View style={W.lockBadge}>
                                         <Ionicons name="lock-closed" size={10} color="#94A3B8" />
-                                        <Text style={W.lockText}>Chỉ admin chỉnh số lượng</Text>
+                                        <Text style={W.lockText}>CTV không được sửa</Text>
                                     </View>
                                 )}
                             </View>
@@ -264,7 +272,7 @@ export default function EditOrder() {
                                         <Text style={W.itemPrice}>{fmt(item.price)} / cái</Text>
                                     </View>
 
-                                    {isAdmin ? (
+                                    {canEdit ? (
                                         <View style={W.qtyBox}>
                                             <TouchableOpacity
                                                 onPress={() => updateItemQty(item.id || String(i), item.qty - 1)}
@@ -286,7 +294,7 @@ export default function EditOrder() {
 
                                     <Text style={W.itemTotal}>{fmt(item.price * item.qty)}</Text>
 
-                                    {isAdmin && (
+                                    {canEdit && (
                                         <TouchableOpacity
                                             onPress={() => removeItem(item.id || String(i))}
                                             style={W.removeBtn}
@@ -368,10 +376,10 @@ export default function EditOrder() {
             <View style={S.group}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                     <Text style={[S.label, { flex: 1, marginBottom: 0 }]}>Sản phẩm</Text>
-                    {!isAdmin && (
+                    {isCTV && (
                         <View style={S.lockBadge}>
                             <Ionicons name="lock-closed" size={10} color="#94A3B8" />
-                            <Text style={S.lockText}>Chỉ admin chỉnh số lượng</Text>
+                            <Text style={S.lockText}>CTV không được sửa</Text>
                         </View>
                     )}
                 </View>
@@ -382,7 +390,7 @@ export default function EditOrder() {
                             <Text style={S.itemName} numberOfLines={1}>{item.name}</Text>
                             <Text style={S.itemPrice}>{fmt(item.price)}</Text>
                         </View>
-                        {isAdmin ? (
+                        {canEdit ? (
                             <View style={S.qtyBox}>
                                 <TouchableOpacity onPress={() => updateItemQty(item.id || String(i), item.qty - 1)} style={S.qtyBtn}>
                                     <Ionicons name="remove" size={14} color="#374151" />
@@ -396,7 +404,7 @@ export default function EditOrder() {
                             <Text style={S.qtyReadonly}>x{item.qty}</Text>
                         )}
                         <Text style={S.itemTotal}>{fmt(item.price * item.qty)}</Text>
-                        {isAdmin && (
+                        {canEdit && (
                             <TouchableOpacity onPress={() => removeItem(item.id || String(i))} style={S.removeBtn}>
                                 <Ionicons name="trash-outline" size={13} color="#EF4444" />
                             </TouchableOpacity>
@@ -418,6 +426,7 @@ export default function EditOrder() {
 
     return (
         <View style={{ flex: 1, backgroundColor: '#0A0F2C', paddingTop: insets.top }}>
+            <BgWatermark />
             <StatusBar barStyle="light-content" backgroundColor="#0A0F2C" />
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 }}>
                 <TouchableOpacity onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>

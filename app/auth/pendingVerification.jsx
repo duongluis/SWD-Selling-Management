@@ -1,3 +1,4 @@
+import BgWatermark from '@/components/Main/BgWatermark';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
@@ -21,6 +22,7 @@ export default function PendingVerification() {
 
     return (
         <View style={styles.container}>
+            <BgWatermark />
             <View style={styles.card}>
                 {/* Icon */}
                 <View style={styles.iconWrap}>

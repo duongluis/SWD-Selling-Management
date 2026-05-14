@@ -1,5 +1,6 @@
 // app/editProfile/index.jsx — Thông tin cá nhân (hồ sơ cá nhân)
 
+import BgWatermark from '@/components/Main/BgWatermark';
 import { showInfo } from '@/components/Main/showInfo';
 import { getRole, getRoleLabel } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -134,6 +135,7 @@ export default function EditProfileScreen() {
 
     return (
         <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+            <BgWatermark />
             {/* Header */}
             <View style={S.header}>
                 <TouchableOpacity style={S.backBtn} onPress={() => router.back()}>

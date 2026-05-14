@@ -238,7 +238,7 @@ const P = StyleSheet.create({
     badge: { position: 'absolute', top: 2, right: 2, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 2, borderColor: '#FFFFFF' },
     badgeText: { fontSize: 9, color: '#fff', fontWeight: '800' },
     backdrop: { flex: 1, backgroundColor: 'transparent' },
-    panel: { position: 'absolute', width: PANEL_WIDTH, backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 24 },
+    panel: { position: 'absolute', width: PANEL_WIDTH, backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 24, shadowOffset: { width: 0, height: 8 }, elevation: 24, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' },
     panelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     panelTitle: { fontSize: 14, fontWeight: '800', color: '#0F172A' },
     markAllBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#EFF6FF' },

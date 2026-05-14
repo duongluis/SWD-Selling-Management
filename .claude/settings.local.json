@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-Content \"D:\\\\Project Code\\\\App\\\\Project_002\\\\SWD-Selling-Management\\\\app\\\\auth\\\\changePassword.jsx\")",
+      "Bash(npx expo *)"
+    ]
+  }
+}

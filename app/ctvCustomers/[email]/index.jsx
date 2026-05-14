@@ -1,11 +1,12 @@
 // app/ctvCustomers/[email]/index.jsx
 // Admin xem dashboard khách hàng của 1 CTV cụ thể
+import BgWatermark from '@/components/Main/BgWatermark';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, FlatList, Image, Platform,
+    ActivityIndicator, FlatList, Platform,
     RefreshControl, ScrollView, StyleSheet, Text,
     TextInput, TouchableOpacity, View,
 } from 'react-native';
@@ -13,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
-const BG_IMAGE = require('../../../assets/images/logo-light.png');
 
 function getInitials(name) {
     if (!name) return '?';
@@ -139,8 +139,7 @@ export default function CTVCustomersScreen() {
 
     return (
         <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
-            <Image source={BG_IMAGE} style={S.watermark} resizeMode="contain" />
-
+            <BgWatermark />
             {/* Header */}
             <View style={S.header}>
                 <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
@@ -246,7 +245,6 @@ export default function CTVCustomersScreen() {
 
 const S = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },
-    watermark: { position: 'absolute', width: '80%', height: '60%', top: '20%', left: '10%', opacity: 0.05 },
     header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
     headerTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },

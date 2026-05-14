@@ -1,6 +1,7 @@
 // app/chat/[roomId]/index.jsx
 // Màn hình chat realtime cho 1 đơn hàng
 
+import BgWatermark from '@/components/Main/BgWatermark';
 import {
     markRoomAsRead, sendMessage, subscribeMessages,
 } from '@/components/Utils/chatService';
@@ -32,11 +33,15 @@ function MessageBubble({ msg, isMe, prevSender }) {
     const showAvatar = !isMe && !isSystem && prevSender !== msg.sender;
     const showSenderName = !isMe && !isSystem && prevSender !== msg.sender;
 
-    const timeStr = msg.createdAt?.toDate
-        ? msg.createdAt.toDate().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-        : msg.createdAt
-            ? new Date(msg.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-            : '';
+    const _dt = msg.createdAt?.toDate
+        ? msg.createdAt.toDate()
+        : msg.createdAt ? new Date(msg.createdAt) : null;
+    const timeStr = _dt
+        ? _dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+        : '';
+    const dateStr = _dt
+        ? _dt.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
+        : '';
 
     // System message
     if (isSystem) {
@@ -46,7 +51,7 @@ function MessageBubble({ msg, isMe, prevSender }) {
                     <Text style={[B.systemText, msg.type === 'status_update' && B.statusText]}>
                         {msg.text}
                     </Text>
-                    <Text style={B.systemTime}>{timeStr}</Text>
+                    <Text style={B.systemTime}>{dateStr} {timeStr}</Text>
                 </View>
             </View>
         );
@@ -70,7 +75,7 @@ function MessageBubble({ msg, isMe, prevSender }) {
                 <View style={[B.bubble, isMe ? B.bubbleMe : B.bubbleThem]}>
                     <Text style={[B.msgText, isMe && B.msgTextMe]}>{msg.text}</Text>
                 </View>
-                <Text style={[B.time, isMe && B.timeMe]}>{timeStr}</Text>
+                <Text style={[B.time, isMe && B.timeMe]}>{dateStr} {timeStr}</Text>
             </View>
         </View>
     );
@@ -166,6 +171,7 @@ export default function ChatScreen() {
 
     return (
         <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+            <BgWatermark />
             {/* Header */}
             <View style={S.header}>
                 <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>

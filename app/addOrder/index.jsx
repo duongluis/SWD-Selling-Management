@@ -1,3 +1,4 @@
+import BgWatermark from '@/components/Main/BgWatermark';
 import { createOrderChatRoom } from '@/components/Utils/chatService';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -70,8 +71,8 @@ const getRole = (u) => {
   if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
   return 'other';
 };
-const getPriceField = (role) => ({ daily: 'price_a', phantan: 'price_p', ctv: 'price_c' }[role] || 'price');
-const ROLE_LABEL = { admin: 'Giá niêm yết', daily: 'Giá đại lý', phantan: 'Giá NP', ctv: 'Giá CTV', other: 'Giá niêm yết' };
+const getRolePriceField = (role) => ({ daily: 'price_a', phantan: 'price_p', ctv: 'price_c' }[role] || 'price');
+const ROLE_LABEL = { admin: 'Giá niêm yết', daily: 'Giá đại lý', phantan: 'Giá đối tác', ctv: 'Giá CTV', other: 'Giá niêm yết' };
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
 // ── Order type config ─────────────────────────────────────────
@@ -152,7 +153,6 @@ export default function AddOrder() {
   const insets = useSafeAreaInsets();
   const { userDetail } = useContext(UserDetailContext);
   const role = getRole(userDetail);
-  const priceField = getPriceField(role);
 
   // ── Order type — locked by role ───────────────────────────
   const lockedType = ROLE_ORDER_TYPE[role];
@@ -216,6 +216,10 @@ export default function AddOrder() {
   const [autoService, setAutoService] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState(getDefaultPayment(lockedType || 'le'));
 
+  // Task 3/4: company payment → role-specific price; customer payment → listed price
+  const priceField = paymentMethod === 'customer' ? 'price' : getRolePriceField(role);
+  const priceLabel = paymentMethod === 'customer' ? 'Giá niêm yết' : ROLE_LABEL[role];
+
   const filteredCustomers = customerSearch.trim() === ''
     ? customerList
     : customerList.filter(c => (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone || '').includes(customerSearch));
@@ -256,6 +260,7 @@ export default function AddOrder() {
   const handleSubmit = async () => {
     if (!selectedCustomer) { showAlert('Thông báo', 'Vui lòng chọn khách hàng'); return; }
     if (products.length === 0) { showAlert('Thông báo', 'Vui lòng thêm ít nhất 1 sản phẩm'); return; }
+    if (!orderDate) { showAlert('Thông báo', 'Vui lòng chọn ngày giao hàng'); return; }
     setSubmitting(true);
     try {
       // ── Lấy trạng thái ban đầu từ DB ─────────────────────
@@ -276,11 +281,12 @@ export default function AddOrder() {
         orderType,
         paymentMethod,
         customer: selectedCustomer.name,
+        customerId: selectedCustomer.docId || '',
         items: products,
         createdAt: orderDate,
         address: deliveryAddress,
         note: notes,
-        status: initialOrderStatus,   // ✅ từ DB
+        status: initialOrderStatus,
         createdBy: userDetail?.email || '',
       };
       await setDoc(doc(db, 'orders', selectedCustomer.phone), { orders: arrayUnion(newOrder) }, { merge: true });
@@ -377,7 +383,7 @@ export default function AddOrder() {
             <Ionicons name="create-outline" size={13} color="#2563EB" />
             <TextInput
               style={{ flex: 1, fontSize: 14, color: '#0F172A', fontWeight: '500' }}
-              placeholder={newProduct.basePrice ? fmt(newProduct.basePrice) : ROLE_LABEL[role]}
+              placeholder={newProduct.basePrice ? fmt(newProduct.basePrice) : priceLabel}
               placeholderTextColor="#94A3B8"
               keyboardType="numeric"
               value={newProduct.price}
@@ -387,7 +393,7 @@ export default function AddOrder() {
         ) : (
           <View style={[ws ? W.addInput : styles.addProductInput, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9' }]}>
             <Ionicons name="lock-closed-outline" size={13} color="#94A3B8" />
-            <Text style={{ flex: 1, fontSize: 14, color: newProduct.price ? '#0F172A' : '#94A3B8' }}>{newProduct.price ? fmt(parseInt(newProduct.price)) : ROLE_LABEL[role]}</Text>
+            <Text style={{ flex: 1, fontSize: 14, color: newProduct.price ? '#0F172A' : '#94A3B8' }}>{newProduct.price ? fmt(parseInt(newProduct.price)) : priceLabel}</Text>
           </View>
         )}
       </View>
@@ -583,6 +589,7 @@ export default function AddOrder() {
   // ─────────────────────────────────────────────────────────
   if (isWeb) return (
     <View style={W.root}>
+      <BgWatermark />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
         <View style={W.pageHeader}>
           <View>
@@ -634,7 +641,7 @@ export default function AddOrder() {
                   ) : <Text style={W.inputPlaceholder}>{customerLoading ? 'Đang tải...' : 'Chọn khách hàng...'}</Text>}
                   <Ionicons name={showCustomerPicker ? 'chevron-up' : 'chevron-down'} size={16} color="#94A3B8" />
                 </TouchableOpacity>
-                {showCustomerPicker && <CustomerPickerDropdown ws />}
+                {showCustomerPicker && CustomerPickerDropdown({ ws: true })}
               </View>
 
               <View style={W.inputGroup}>
@@ -702,6 +709,7 @@ export default function AddOrder() {
   // ─────────────────────────────────────────────────────────
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      <BgWatermark />
       <StatusBar barStyle="light-content" backgroundColor="#0A0F2C" />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.replace('(tabs)/order')} style={styles.backBtn}><Ionicons name="arrow-back" size={20} color="#fff" /></TouchableOpacity>
@@ -735,7 +743,7 @@ export default function AddOrder() {
                 <Text style={selectedCustomer ? styles.input : styles.inputPlaceholder}>{selectedCustomer ? selectedCustomer.name : customerLoading ? 'Đang tải...' : 'Chọn khách hàng...'}</Text>
                 <Ionicons name={showCustomerPicker ? 'chevron-up' : 'chevron-down'} size={18} color="#B0B0C8" />
               </TouchableOpacity>
-              {showCustomerPicker && <CustomerPickerDropdown ws={false} />}
+              {showCustomerPicker && CustomerPickerDropdown({ ws: false })}
             </View>
 
             {/* Sản phẩm */}

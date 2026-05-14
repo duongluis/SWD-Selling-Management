@@ -1,17 +1,17 @@
 import Colors from '@/constant/Colors';
+import BgWatermark from '@/components/Main/BgWatermark';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, getDocs } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, FlatList, Image, Platform,
+    ActivityIndicator, FlatList, Platform,
     ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
-const BG_IMAGE = require('../../assets/images/logo-light.png')
 
 // ── Role helpers ─────────────────────────────────────────────
 const getRole = (u) => {
@@ -32,9 +32,9 @@ const PRICE_LABELS = {
 
 const getPriceFields = (role) => ({
     admin: ['price', 'price_a', 'price_p', 'price_c'],
-    daily: ['price_a'],
-    phantan: ['price_p'],
-    ctv: ['price_c'],
+    daily: ['price_a', 'price'],
+    phantan: ['price_p', 'price'],
+    ctv: ['price_c', 'price'],
 }[role] || ['price']);
 
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
@@ -274,13 +274,7 @@ export default function InformationScreen() {
 
     return (
         <View style={S.root}>
-
-            {/* ✅ Watermark — cố định chính giữa, mờ nhạt */}
-            <Image
-                source={BG_IMAGE}
-                style={S.watermark}
-                resizeMode="contain"
-            />
+            <BgWatermark />
             <View style={S.container}>
                 {/* Header */}
                 <View style={S.header}>
@@ -293,7 +287,7 @@ export default function InformationScreen() {
                         <Text style={S.headerTitle}>Thông tin</Text>
                         <View style={S.roleBadge}>
                             <Text style={S.roleBadgeText}>
-                                {{ admin: '👑 Quản trị viên', daily: '🏪 Đại lý', phantan: '🚚 đối tác', ctv: '🤝 Cộng tác viên' }[role] || ''}
+                                {{ admin: '👑 Quản trị viên', daily: '🏪 Đại lý', phantan: '🚚 Đối tác', ctv: '🤝 Cộng tác viên' }[role] || ''}
                             </Text>
                         </View>
                     </View>
@@ -364,14 +358,6 @@ const S = StyleSheet.create({
     root: {
         flex: 1,
         backgroundColor: "#F8FAFC",
-    },
-    watermark: {
-        position: "absolute",
-        width: "80%",           // ← to nhỏ tuỳ ý
-        height: "60%",          // ← cao thấp tuỳ ý
-        top: "20%",             // ← căn giữa dọc
-        left: "10%",            // ← căn giữa ngang
-        opacity: 0.05,          // ← 0.05 rất mờ / 0.15 rõ hơn
     },
     container: { flex: 1, backgroundColor: 'transparent', paddingTop: isWeb ? 0 : 44 },
     header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: isWeb ? 32 : 16, paddingVertical: isWeb ? 20 : 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },

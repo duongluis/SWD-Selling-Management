@@ -1,7 +1,10 @@
 // app/(tabs)/commission.jsx — Hoa hồng (responsive)
 
 import ScreenHeader from '@/components/Main/ScreenHeader';
+import { showAlert } from '@/components/Main/showAlert';
 import TabScreenLayout from '@/components/Main/TabScreenLayout';
+import FilterChips from '@/components/UI/FilterChips';
+import { createNotification } from '@/components/Utils/chatService';
 import { getRole } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -118,8 +121,17 @@ function CommCardMobile({ r, isAdmin, onApprove }) {
                     <Text style={MR.infoValue}>{fmtShort(r.totalValue)}</Text>
                 </View>
                 <View style={[MR.infoCol, { alignItems: 'flex-end' }]}>
-                    <Text style={MR.infoLabel}>Hoa hồng</Text>
-                    <Text style={[MR.infoValue, { color: '#2563EB', fontWeight: '800' }]}>{fmt(r.commission)}</Text>
+                    <Text style={MR.infoLabel}>
+                        {isAdmin ? `HH (${((r.sellerRate || 0) * 100).toFixed(0)}%)` : 'Hoa hồng'}
+                    </Text>
+                    <Text style={[MR.infoValue, { color: '#2563EB', fontWeight: '800' }]}>
+                        {fmt(r.commission)}
+                    </Text>
+                    {isAdmin && r.sellerEmail && (
+                        <Text style={[MR.infoLabel, { marginTop: 2, fontSize: 9 }]} numberOfLines={1}>
+                            {r.sellerEmail.split('@')[0]}
+                        </Text>
+                    )}
                 </View>
             </View>
             {isAdmin && r.status !== 'paid' && (
@@ -158,7 +170,7 @@ const COL_BASE = {
     order: { flex: 1.4, minWidth: 140 },
     customer: { flex: 1.2, minWidth: 120 },
     value: { flex: 1, minWidth: 90, alignItems: 'flex-end' },
-    commission: { flex: 1, minWidth: 110, alignItems: 'flex-end' },
+    commission: { flex: 1, minWidth: 110, alignItems: 'center' },
     status: { width: 130 },
 };
 const COL_ADMIN = {
@@ -166,7 +178,7 @@ const COL_ADMIN = {
     customer: { flex: 1, minWidth: 110 },
     seller: { flex: 1, minWidth: 130 },
     value: { flex: 1, minWidth: 90, alignItems: 'flex-end' },
-    commission: { flex: 1, minWidth: 110, alignItems: 'flex-end' },
+    commission: { flex: 1, minWidth: 110, alignItems: 'center' },
     status: { width: 130, alignItems: 'flex-start' },
     action: { width: 140 },
 };
@@ -201,13 +213,23 @@ function CommRowDesktop({ r, isAdmin, onApprove, odd }) {
             {isAdmin && (
                 <View style={COL.seller}>
                     <Text style={DT.td} numberOfLines={1}>{r.sellerEmail || '—'}</Text>
+                    {/* <Text style={DT.sub}>
+                        Tỷ lệ: {((r.sellerRate || 0) * 100).toFixed(0)}%
+                    </Text> */}
                 </View>
             )}
             <View style={COL.value}>
                 <Text style={[DT.td, { fontWeight: '600' }]} numberOfLines={1}>{fmtShort(r.totalValue)}</Text>
             </View>
             <View style={COL.commission}>
-                <Text style={[DT.td, { fontWeight: '800', color: '#2563EB' }]} numberOfLines={1}>{fmt(r.commission)}</Text>
+                <Text style={[DT.td, { fontWeight: '800', color: '#2563EB' }]} numberOfLines={1}>
+                    {fmt(r.commission)}
+                </Text>
+                {/* {isAdmin && (
+                    <Text style={DT.sub} numberOfLines={1}>
+                        Cho: {r.sellerEmail?.split('@')[0] || '—'}
+                    </Text>
+                )} */}
             </View>
             <View style={COL.status}>
                 <StatusBadge status={r.status} />
@@ -260,68 +282,116 @@ export default function CommissionScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [orders, setOrders] = useState([]);
     const [period, setPeriod] = useState('yearly');
-    const [search, setSearch] = useState('');   // ← state search
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
 
     const fetchData = useCallback(async () => {
         if (!userDetail?.email) return;
         try {
+            // Lấy khách hàng theo quyền: admin xem tất, còn lại chỉ xem do mình tạo
             const cSnap = isAdmin
                 ? await getDocs(collection(db, 'customers'))
                 : await getDocs(query(collection(db, 'customers'), where('createdBy', '==', userDetail.email)));
 
-            const sellerEmails = [...new Set(cSnap.docs.map(d => d.data().createdBy).filter(Boolean))];
-            const emailToRole = {};
-            await Promise.all(sellerEmails.map(async email => {
-                try {
-                    const uSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
-                    if (!uSnap.empty) emailToRole[email] = uSnap.docs[0].data().role || 'other';
-                } catch (_) { }
-            }));
-
-            const phoneToSeller = {};
+            // Map phone → createdBy của khách hàng (docId = phone)
+            const phoneToCreatedBy = {};
             cSnap.docs.forEach(d => {
-                const data = d.data();
-                if (data.phone) {
-                    const email = data.createdBy || userDetail.email;
-                    phoneToSeller[data.phone] = { email, role: emailToRole[email] || 'other' };
-                }
+                const ph = d.data().phone;
+                if (ph) phoneToCreatedBy[ph] = d.data().createdBy;
             });
 
-            const phones = Object.keys(phoneToSeller).filter(Boolean);
-            const allOrders = [];
+            const phones = [...new Set(cSnap.docs.map(d => d.data().phone).filter(Boolean))];
+            const rawOrders = [];
+
+            // Lấy orders → chỉ giữ lại đơn "Đã thanh toán"
             await Promise.all(phones.slice(0, 100).map(async phone => {
                 try {
                     const s = await getDoc(doc(db, 'orders', phone));
-                    if (s.exists()) {
-                        const seller = phoneToSeller[phone];
-                        const sellerRate = COMM_RATE[seller.role] ?? 0;
-                        (s.data().orders || []).forEach(o => allOrders.push({
-                            ...o, sellerEmail: seller.email, sellerRole: seller.role, sellerRate,
-                        }));
-                    }
+                    if (!s.exists()) return;
+                    (s.data().orders || [])
+                        .filter(o => o.status === 'Đã thanh toán')
+                        .forEach(o => {
+                            // Ưu tiên người tạo khách hàng, fallback người tạo đơn
+                            const sellerEmail = phoneToCreatedBy[phone] || o.createdBy || o.sellerEmail || userDetail.email;
+                            rawOrders.push({ ...o, phone, sellerEmail });
+                        });
                 } catch (_) { }
             }));
+
+            // Lookup role cho các sellerEmail (chỉ cần khi admin muốn hiển thị rate riêng)
+            let emailToRole = {};
+            if (isAdmin) {
+                const uniqueEmails = [...new Set(rawOrders.map(o => o.sellerEmail).filter(Boolean))];
+                await Promise.all(uniqueEmails.map(async email => {
+                    try {
+                        const uSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
+                        if (!uSnap.empty) emailToRole[email] = uSnap.docs[0].data().role || 'other';
+                    } catch (_) { }
+                }));
+            }
+
+            const allOrders = rawOrders.map(o => {
+                const sellerRole = emailToRole[o.sellerEmail] || 'other';
+                const sellerRate = isAdmin
+                    ? ((sellerRole === 'admin' || sellerRole === 'other') ? 0.05 : (COMM_RATE[sellerRole] ?? 0.05))
+                    : myRate;
+                return { ...o, sellerRole, sellerRate };
+            });
 
             setOrders(allOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
         } catch (e) { console.error(e); }
         finally { setLoading(false); setRefreshing(false); }
-    }, [userDetail?.email, isAdmin]);
+    }, [userDetail?.email, isAdmin, myRate]);
 
     useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
-    const handleApprove = useCallback(async (r) => {
-        try {
-            const phone = r.phone || r.customerPhone;
-            const ref = doc(db, 'orders', phone);
-            const snap = await getDoc(ref);
-            if (!snap.exists()) return;
-            const updated = (snap.data().orders || []).map(o =>
-                o.id === r.id ? { ...o, commissionStatus: 'paid' } : o
-            );
-            await updateDoc(ref, { orders: updated });
-            fetchData();
-        } catch (e) { console.error(e); }
-    }, [fetchData]);
+    const handleApprove = useCallback((r) => {
+        if (r.status === 'paid') return;
+
+        showAlert(
+            'Xác nhận thanh toán hoa hồng',
+            `Trả ${fmt(r.commission)} hoa hồng cho ${r.sellerEmail || 'người tạo đơn'}?\n\nĐơn: #${r.id}\nKhách hàng: ${r.customer || '—'}`,
+            async () => {
+                try {
+                    const phone = r.phone || r.customerPhone;
+                    if (!phone) {
+                        console.warn('Không tìm thấy phone cho đơn', r.id);
+                        return;
+                    }
+
+                    const ref = doc(db, 'orders', phone);
+                    const snap = await getDoc(ref);
+                    if (!snap.exists()) return;
+
+                    const updated = (snap.data().orders || []).map(o =>
+                        o.id === r.id ? { ...o, commissionStatus: 'paid' } : o
+                    );
+                    await updateDoc(ref, { orders: updated });
+
+                    // ✅ Optimistic update — đổi state ngay, không chờ fetchData
+                    setOrders(prev => prev.map(o =>
+                        o.id === r.id ? { ...o, commissionStatus: 'paid' } : o
+                    ));
+
+                    // Thông báo cho seller
+                    if (r.sellerEmail && r.sellerEmail !== userDetail?.email) {
+                        await createNotification({
+                            userEmail: r.sellerEmail,
+                            type: 'commission_paid',
+                            title: '💰 Hoa hồng đã được thanh toán',
+                            body: `Hoa hồng ${fmt(r.commission)} cho đơn #${r.id} (KH: ${r.customer || '—'}) đã được trả.`,
+                            orderId: r.id,
+                            roomId: `order_${r.id}`,
+                        });
+                    }
+                } catch (e) {
+                    console.error('handleApprove error:', e);
+                    // Rollback nếu lỗi
+                    fetchData();
+                }
+            }
+        );
+    }, [userDetail?.email, fetchData]);
 
     // ── Tính commRecords từ orders ──
     const commRecords = useMemo(() => {
@@ -329,22 +399,25 @@ export default function CommissionScreen() {
             const total = (o.items || []).reduce((s, p) => s + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0);
             const rate = isAdmin ? (o.sellerRate ?? 0) : myRate;
             const comm = total * rate;
-            const status = o.commissionStatus || (o.status === 'Đã thanh toán' ? 'paid' : 'pending');
+            const status = o.commissionStatus || 'pending';
             return { ...o, totalValue: total, commission: comm, status };
         });
     }, [orders, myRate, isAdmin]);
 
-    // ── Lọc theo search ──
+    // ── Lọc theo search + statusFilter ──
     const filteredRecords = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return commRecords;
-        return commRecords.filter(r =>
-            String(r.id || '').toLowerCase().includes(q) ||
-            String(r.customer || '').toLowerCase().includes(q) ||
-            String(r.sellerEmail || '').toLowerCase().includes(q) ||
-            String(r.phone || r.customerPhone || '').toLowerCase().includes(q)
-        );
-    }, [commRecords, search]);
+        return commRecords.filter(r => {
+            const ms = !q || (
+                String(r.id || '').toLowerCase().includes(q) ||
+                String(r.customer || '').toLowerCase().includes(q) ||
+                String(r.sellerEmail || '').toLowerCase().includes(q) ||
+                String(r.phone || r.customerPhone || '').toLowerCase().includes(q)
+            );
+            const mst = statusFilter === 'all' || r.status === statusFilter;
+            return ms && mst;
+        });
+    }, [commRecords, search, statusFilter]);
 
     const pending = commRecords.filter(r => r.status === 'pending').reduce((s, r) => s + r.commission, 0);
     const paid = commRecords.filter(r => r.status === 'paid').reduce((s, r) => s + r.commission, 0);
@@ -425,6 +498,16 @@ export default function CommissionScreen() {
                     </View>
                     <MiniBarChart bars={bars} />
                 </View>
+
+                <FilterChips
+                    options={[
+                        { key: 'all', label: 'Tất cả', count: commRecords.length },
+                        { key: 'pending', label: 'Chờ trả', count: commRecords.filter(r => r.status === 'pending').length },
+                        { key: 'paid', label: 'Đã trả', count: commRecords.filter(r => r.status === 'paid').length },
+                    ]}
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                />
 
                 <View style={S.card}>
                     <View style={S.cardHeader}>

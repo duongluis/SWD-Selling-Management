@@ -1,0 +1,212 @@
+===== DONE LOG — prompt.txt =====
+Cập nhật lần cuối: 2026-05-14
+
+[17] ✅ Báo cáo khu vực — lọc tỉnh/thành từ province.json
+    File: app/(tabs)/regionAnalytics.jsx
+    - Thay PROVINCE_REGION hardcode bằng build động từ config/province.json (34 tỉnh)
+    - (provinceData.mien_bac/mien_trung/mien_nam).forEach → PROVINCE_REGION[p.ten] = region
+
+[18] ✅ Màn đơn hàng — bổ sung bộ lọc theo trạng thái
+    File: app/(tabs)/order.jsx
+    - Thêm state statusFilter, FilterChips hàng 2: Tất cả / Chờ xác nhận / Đang xử lý / Đã thanh toán / Đã hủy
+    - "Đang xử lý" nhóm cả Chờ lắp đặt + Đang lắp đặt
+    - Sửa totalRevenue: đếm chỉ đơn status === 'Đã thanh toán' (bỏ filter !includes('hủy'))
+
+[19] ✅ Thông báo admin khi có consult mới
+    File: app/addConsult/index.jsx
+    - Thêm import query, where từ firebase/firestore
+    - Thêm import createNotification từ chatService
+    - Sau addDoc thành công: getDocs users where role==admin → createNotification cho từng admin
+
+[20] ✅ Consult chỉ cho sửa trạng thái khi đang tư vấn
+    File: app/CustomerView/[customerID]/index.jsx
+    - disabled={updatingStatus || !['pending','none'].includes(consultStatus)}
+
+[21] ✅ Lỗi: CTV không tìm thấy đơn hàng của Consult
+    File: components/Hooks/useScreenData.js
+    - fetchOrders: thêm case role==='ctv' — merge phones từ customers + consult của CTV
+
+[22] ✅ Màn đơn hàng chỉ cho sửa khi Chờ xác nhận
+    File: components/UI/OrderDetail.jsx
+    - Nút Sửa: {admin} → {(admin || createdBy===userDetail.email) && status==='Chờ xác nhận'}
+
+[23] ✅ BXH tính doanh thu từ đơn Đã thanh toán (không dùng revenueTotal cũ)
+    File: app/(tabs)/leaderboard.jsx
+    - fetchData: fetch customers → phones → orders → sum items khi status==='Đã thanh toán', group by createdBy
+    - Thêm import doc, getDoc
+
+[24] ✅ Lỗi: Đơn chưa thanh toán vẫn tính doanh thu
+    File: components/Hooks/useScreenData.js
+    - computeStats 'orders': revenue chỉ tính data.filter(o => o.status==='Đã thanh toán')
+
+[25] ✅ Lỗi: Hoa hồng tự đổi trạng thái sang đã trả
+    File: app/(tabs)/commission.jsx
+    - o.commissionStatus || (o.status==='Đã thanh toán' ? 'paid' : 'pending') → o.commissionStatus || 'pending'
+
+[26] ✅ Lỗi: Dropdown tìm kiếm addOrder mất focus sau 1 ký tự
+    File: app/addOrder/index.jsx
+    - CustomerPickerDropdown định nghĩa trong component → React unmount mỗi render
+    - Fix: gọi hàm trực tiếp CustomerPickerDropdown({ws:true/false}) thay vì JSX <CustomerPickerDropdown/>
+
+[10] ✅ Tin tức — chèn ảnh khi thêm tin + màn chi tiết blog
+    Files:
+      - app/(tabs)/news.jsx
+      - app/newsDetail/[newsId].jsx
+      - config/firebaseConfig.ts
+    Lưu trữ ảnh: Firebase Storage tại path news/{newsId}/cover.{ext}
+    - Export thêm `storage` từ firebaseConfig.ts
+    - Cài thêm expo-image-picker (~17.0.11)
+    - NewsFormModal: thêm nút chọn ảnh bìa (tỉ lệ 16:9), preview, xóa ảnh
+    - handleSave: upload ảnh lên Storage → lấy downloadURL → lưu vào Firestore
+    - NewsCard: hiển thị thumbnail ảnh, featured card dùng ảnh làm nền
+    - Bấm vào card → điều hướng sang /newsDetail/[newsId]
+    - Màn chi tiết: hero image, meta (category/ngày), tiêu đề, tác giả, nội dung đầy đủ
+
+[1] ✅ Màn đơn hàng — điều kiện changeable + bộ lọc loại đơn
+    File: components/UI/OrderDetail.jsx
+    - Thêm isStatusChangeable() đọc trường changeable từ config/status.json
+    - StatusChip chỉ cho phép mở dropdown khi changeable === true (và là admin)
+    File: app/(tabs)/order.jsx
+    - FilterChips "Tất cả / Đơn buôn / Đơn lẻ" đã có sẵn, useMemo lọc theo typeFilter
+
+[2] ✅ Màn hoa hồng — chỉ hiển thị đơn của người tạo, trạng thái "Đã thanh toán"
+    File: app/(tabs)/commission.jsx
+    - fetchData lấy customers theo createdBy == userDetail.email (non-admin)
+    - Lọc orders: chỉ giữ o.status === 'Đã thanh toán'
+
+[3] ✅ Màn báo cáo doanh thu — sửa giao diện, hiển thị theo người dùng / toàn bộ (admin)
+    File: app/(tabs)/analytics.jsx
+    - Thêm pageHeader với badge "Toàn hệ thống" (admin) hoặc tên người dùng
+
+[4] ✅ Màn báo cáo khu vực — sửa giao diện, hiển thị số khách hàng theo từng miền
+    File: app/(tabs)/regionAnalytics.jsx
+    - Thêm customers state, đếm customerCount theo getRegion(c.address)
+    - RegionCard hiển thị "X khách hàng"
+    - Summary bar đổi "Người dùng" → "Khách hàng" (customers.length)
+    - Detail panel thêm stat "Khách hàng"
+    - Bảng so sánh thay cột TB/đơn bằng cột KH (khách hàng)
+
+[5] ✅ Form báo giá — bỏ "Loại đơn" và "Hình thức thanh toán" khi không qua đơn hàng
+    File: app/orderContract/index.jsx
+    - Xóa block selector "Loại đơn" (buon/le) khỏi TemplateForm
+    - Xóa block selector "Hình thức thanh toán" (khách/công ty) khỏi TemplateForm
+    - Giữ nguyên giá trị mặc định: orderType='le', paymentMethod='customer'
+
+[6] ✅ Đổi mật khẩu — tạo giao diện và logic Firebase
+    File: app/auth/changePassword.jsx
+    - UI: 3 trường nhập (mật khẩu hiện tại, mới, xác nhận) với toggle hiện/ẩn
+    - Logic: reauthenticateWithCredential + updatePassword
+    - Xử lý lỗi auth/wrong-password, auth/invalid-credential
+    - Link sang /auth/resetPassword nếu quên mật khẩu
+
+[7] ✅ Chat chi tiết — hiển thị ngày cạnh giờ dưới mỗi tin nhắn
+    File: app/chat/[roomID]/index.jsx
+    - Thêm dateStr = toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit'})
+    - Hiển thị "{dateStr} {timeStr}" cho cả tin hệ thống và tin thường
+
+[8] ✅ Thông tin cá nhân — bỏ xác thực 2 lớp, tùy chọn hệ thống, vô hiệu hóa tài khoản
+    File: app/(tabs)/editProfile.jsx
+    - Phần "Xác thực 2 lớp (2FA)" đã comment out
+    - Section "Tùy chọn hệ thống" đã comment out
+    - Section "Vô hiệu hóa tài khoản" đã comment out
+
+[9] ✅ Reset password — sửa giao diện sang tiếng Việt, gửi mã về email
+    File: app/auth/resetPassword.jsx
+    - Tiêu đề "Reset Password" → "Quên mật khẩu"
+    - Label "Email Address" → "Địa chỉ Email"
+    - Nút "Send Reset Link" → "Gửi email khôi phục"
+    - Link "Back to Login" → "Quay lại đăng nhập"
+    - Xử lý lỗi auth/user-not-found
+
+[BONUS] ✅ Ảnh nền mờ logo-light trên tất cả các màn
+    File mới: components/Main/BgWatermark.jsx
+    - opacity: 0.04, position: absolute, pointerEvents: none
+    - Đã thêm vào TabScreenLayout và 22 màn hình không dùng TabScreenLayout
+
+[11] ✅ Ẩn tab Hoa hồng với vai trò Đại lý (daily)
+    File: app/(tabs)/_layout.jsx
+    - commission visible: () => true → visible: (r) => r !== 'daily'
+
+[12] ✅ CTV không tạo được khách hàng / đơn hàng từ màn Home
+    File: app/(tabs)/home.jsx
+    - quickActions lọc theo role: "Đơn hàng mới" và "Thêm khách" ẩn với CTV
+    - Web banner "Đơn hàng mới" button ẩn với CTV (role !== 'ctv')
+    - Thêm import getRole từ roleHelper
+
+[13] ✅ Trạng thái đơn hàng màn Home đồng nhất với màn Đơn hàng
+    File: app/(tabs)/home.jsx
+    - STATUS_CFG đổi sang tiếng Việt (Chờ xác nhận, Đang lắp đặt, Đã thanh toán, v.v.)
+    - Fallback: { color: '#64748B', bg: '#F1F5F9', label: order.status || '—' }
+
+[14] ✅ Form báo giá hiển thị đúng các trường
+    File: app/(tabs)/_layout.jsx
+    - quotation link: 'orderContract' → 'orderContract?mode=template'
+
+[15] ✅ Sửa lỗi không thể tạo khách hàng (addCustomer)
+    File: app/addCustomer/index.jsx
+    - Bug: checkingDuplicate() thiếu await → luôn trả về Promise truthy → return sớm mỗi lần
+    - Fix: đổi thành `if (await checkingDuplicate()) return;`
+    - Thêm useLocalSearchParams để nhận dữ liệu pre-fill từ màn tư vấn
+    - Khởi tạo form với params.name/phone/email/address/note nếu được truyền vào
+
+[27] ✅ FilterChips component — fix lỗi file chứa nội dung sai (StatBar)
+    File: components/UI/FilterChips.jsx
+    - Viết lại đúng: nhận options[{key,label,count?}], value, onChange
+    - Render hàng chip ngang, chip active nền xanh, press → onChange(key)
+
+[28] ✅ Bảng xếp hạng — bộ lọc thời gian + phân vùng theo vai trò
+    File: app/(tabs)/leaderboard.jsx
+    - Thêm FilterChips: Tất cả / Hôm nay / Tháng này / Quý 1-4 / Năm này
+    - Tách fetch (allOrders) và tính toán doanh thu (useMemo) riêng → đổi filter không fetch lại
+    - inPeriod(): lọc order.createdAt theo kỳ đã chọn
+    - Admin: 3 sections (Đại lý / Phân tán / Cộng tác viên) via RoleSection component
+    - Non-admin: chỉ hiển thị người dùng cùng vai trò
+    - normalizeRole() chuẩn hóa role/member field (vn/en)
+
+[29] ✅ Tạo đơn hàng — giá theo hình thức thanh toán
+    File: app/addOrder/index.jsx
+    - priceField động: company → giá theo vai trò (price_a/price_p/price_c); customer → price (niêm yết)
+    - Thêm customerId vào order object khi tạo
+
+[30] ✅ Sửa đơn hàng — cho phép non-CTV sửa, fix lỗi thiếu số điện thoại
+    File: app/editOrder/[orderID]/index.jsx
+    - canEdit = !isCTV (daily/phantan/admin được sửa qty và xóa sản phẩm)
+    - phone = existing.customerPhone || existing._phone || '' (fix lỗi phone trống)
+    - Bảo vệ sản phẩm cuối: removeItem alert khi items.length <= 1
+
+[31] ✅ Màn giá — hiển thị giá niêm yết cho vai trò không phải admin
+    File: app/(tabs)/information.jsx
+    - getPriceFields: daily=[price_a,price], phantan=[price_p,price], ctv=[price_c,price]
+
+[32] ✅ Consult thành công — thông báo admin + điều hướng tạo khách hàng
+    File: app/CustomerView/[customerID]/index.jsx
+    - Khi status='success': createNotification cho admin, type='consult_success'
+    - router.push('/addCustomer') với params từ consult data
+
+[33] ✅ Consult thất bại — bắt buộc nhập lý do
+    File: app/CustomerView/[customerID]/index.jsx
+    - Hiện inline TextInput khi chọn 'failed', block submit khi reason rỗng
+    - Lưu reason vào Firestore cùng với status update
+
+[34] ✅ Chi tiết consult — hiển thị sản phẩm quan tâm, CTV/admin sửa được
+    File: app/CustomerView/[customerID]/index.jsx
+    - Hiển thị customer.productNames dưới dạng chip xanh
+    - CTV và admin có thể thêm/xóa productNames
+
+[35] ✅ Lỗi: Bộ lọc báo cáo khu vực chưa hoạt động
+    File: app/(tabs)/regionAnalytics.jsx
+    - Build PROVINCE_REGION động từ province.json
+    - ALIASES map cho TP.HCM, Huế, v.v.
+    - Dùng customer.address (qua phone→customer map) thay vì order.address
+
+[36] ✅ Lỗi: Trạng thái đơn hàng không cập nhật khi admin sửa
+    File: app/(tabs)/order.jsx
+    - useEffect sync selected với data: khi data thay đổi, cập nhật selected theo id
+
+[16] ✅ Chỉnh sửa trạng thái consult → tự điền form tạo khách hàng
+    File: app/CustomerView/[customerID]/index.jsx
+    - Thêm import: doc, updateDoc từ firebase/firestore; db từ firebaseConfig
+    - isConsult: kiểm tra customer.status thuộc ['none','pending','success','failed']
+    - Hiển thị 3 nút trạng thái (Đang tư vấn / Thành công / Thất bại) khi isConsult = true
+    - handleConsultStatusChange: updateDoc vào collection 'consult'
+    - Khi chọn 'success' → router.push('/addCustomer') với params name/phone/address/note pre-filled

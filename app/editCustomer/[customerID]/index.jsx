@@ -2,6 +2,7 @@
 // Màn sửa khách hàng — nhận customerId (docId) từ CustomerDetail
 // Fetch từ customers/{docId} → cho phép sửa → updateDoc
 
+import BgWatermark from '@/components/Main/BgWatermark';
 import { showInfo } from '@/components/Main/showInfo';
 import { db } from '@/config/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
@@ -278,6 +279,7 @@ export default function EditCustomerScreen() {
 
     return (
         <View style={[W.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+            <BgWatermark />
             {/* Header */}
             <View style={W.header}>
                 <TouchableOpacity style={W.backBtn} onPress={() => router.back()}>

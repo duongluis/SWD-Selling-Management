@@ -1,3 +1,4 @@
+import BgWatermark from '@/components/Main/BgWatermark';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
@@ -605,6 +606,7 @@ export default function UserInfoView() {
 
     return (
         <View style={[S.root, { paddingTop: insets.top }]}>
+            <BgWatermark />
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
             <View style={S.header}>
                 {step > 0 ? (<TouchableOpacity onPress={goBack} style={S.headerBtn}><Ionicons name="arrow-back" size={20} color="#0F172A" /></TouchableOpacity>) : (<View style={S.headerBtn} />)}

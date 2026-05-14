@@ -1,3 +1,4 @@
+import BgWatermark from '@/components/Main/BgWatermark';
 import Colors from '@/constant/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -44,7 +45,7 @@ export default function SignUp() {
 
   return (
     <View style={styles.container}>
-
+      <BgWatermark />
       {/* Logo */}
       <View style={styles.logoWrap}>
         <Ionicons name="storefront" size={28} color="#2563EB" />

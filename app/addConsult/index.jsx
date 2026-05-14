@@ -2,10 +2,11 @@
 // Tạo bản ghi tư vấn mới — lưu vào db/consult/{id}
 // Khi tư vấn thành công → admin/CTV có thể chuyển thành khách hàng chính thức
 
+import BgWatermark from '@/components/Main/BgWatermark';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { addDoc, collection, getDocs } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
     ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
@@ -14,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
+import { createNotification } from '../../components/Utils/chatService';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
@@ -107,6 +109,17 @@ export default function AddConsultScreen() {
                 createdAt: new Date().toISOString(),
             });
             showSuccess('Đã tạo!', `Đã ghi nhận khách hàng "${name.trim()}"`, () => router.back());
+            getDocs(query(collection(db, 'users'), where('role', '==', 'admin'))).then(adminSnap => {
+                adminSnap.docs.forEach(d => {
+                    const adminEmail = d.data().email;
+                    if (adminEmail) createNotification({
+                        userEmail: adminEmail,
+                        type: 'new_consult',
+                        title: 'Tư vấn mới',
+                        body: `${userDetail?.name || userDetail?.email} đã thêm khách tư vấn: ${name.trim()} (${phone.trim()})`,
+                    }).catch(() => {});
+                });
+            }).catch(() => {});
         } catch (e) {
             showAlert('Lỗi', e.message);
         } finally {
@@ -116,6 +129,7 @@ export default function AddConsultScreen() {
 
     return (
         <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+            <BgWatermark />
             {/* Header */}
             <View style={S.header}>
                 <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>

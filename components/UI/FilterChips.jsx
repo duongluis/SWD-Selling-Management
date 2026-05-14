@@ -1,51 +1,41 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
-function StatCard({ icon, label, value, color, bg }) {
-    return (
-        <View style={[S.card, isWeb && S.cardWeb]}>
-            <View style={[S.iconWrap, { backgroundColor: bg }]}>
-                <Ionicons name={icon} size={16} color={color} />
-            </View>
-            <View>
-                <Text style={S.label}>{label}</Text>
-                <Text style={[S.value, { color }]}>{value}</Text>
-            </View>
-        </View>
-    );
-}
-
-/**
- * @param stats - array of { icon, label, value, color, bg }
- */
-export default function StatBar({ stats = [] }) {
-    if (!stats.length) return null;
-
-    if (isWeb) return (
-        <View style={S.rowWeb}>
-            {stats.map((s, i) => <StatCard key={i} {...s} />)}
-        </View>
-    );
+export default function FilterChips({ options = [], value, onChange }) {
+    if (!options.length) return null;
 
     return (
         <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={S.rowMobile}
+            style={{ flexGrow: 0 }}
+            contentContainerStyle={[S.row, isWeb && S.rowWeb]}
         >
-            {stats.map((s, i) => <StatCard key={i} {...s} />)}
+            {options.map(opt => {
+                const active = opt.key === value;
+                return (
+                    <TouchableOpacity
+                        key={opt.key}
+                        style={[S.chip, active && S.chipActive]}
+                        onPress={() => onChange && onChange(opt.key)}
+                        activeOpacity={0.75}
+                    >
+                        <Text style={[S.label, active && S.labelActive]}>
+                            {opt.label}{opt.count != null ? ` (${opt.count})` : ''}
+                        </Text>
+                    </TouchableOpacity>
+                );
+            })}
         </ScrollView>
     );
 }
 
 const S = StyleSheet.create({
-    rowWeb: { flexDirection: 'row', gap: 12, paddingHorizontal: 32, marginBottom: 16 },
-    rowMobile: { paddingHorizontal: 16, paddingBottom: 12, gap: 10 },
-    card: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFFFFF', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#E2E8F0', minWidth: 140 },
-    cardWeb: { flex: 1 },
-    iconWrap: { width: 36, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-    label: { fontSize: 11, color: '#64748B', marginBottom: 2 },
-    value: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
+    row: { paddingHorizontal: 16, paddingBottom: 10, gap: 8, flexDirection: 'row' },
+    rowWeb: { paddingHorizontal: 32 },
+    chip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+    chipActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+    label: { fontSize: 13, fontWeight: '500', color: '#475569' },
+    labelActive: { color: '#fff', fontWeight: '600' },
 });

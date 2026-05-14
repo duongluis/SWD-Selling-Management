@@ -3,6 +3,7 @@ import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
 
 // TODO: Add SDKs for Firebase products that you want to use
@@ -37,4 +38,5 @@ if (Platform.OS === 'web') {
 export const analytics = isSupported().then(yes => yes ? getAnalytics(app) : null);
 
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 export default auth;

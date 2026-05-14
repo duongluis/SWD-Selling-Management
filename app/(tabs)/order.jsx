@@ -13,7 +13,7 @@ import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
 import { isCTV } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FlatList, Platform, RefreshControl,
   StyleSheet, Text, TouchableOpacity, View,
@@ -156,19 +156,31 @@ export default function OrderScreen() {
   const { data, loading, refreshing, refresh, stats, role } = useScreenData('orders');
   const { query, setQuery } = useSearch(data, ['id', 'customer']);
   const [typeFilter, setTypeFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [selected, setSelected] = useState(null);
+
+  // Sync selected with latest data after refresh
+  useEffect(() => {
+    if (selected) {
+      const latest = data.find(o => o.id === selected.id);
+      if (latest) setSelected(latest);
+    }
+  }, [data]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return data.filter(o => {
       const ms = !q || (o.customer || '').toLowerCase().includes(q) || (o.id || '').toLowerCase().includes(q);
       const mt = typeFilter === 'all' || o.orderType === typeFilter;
-      return ms && mt;
+      let mst = true;
+      if (statusFilter === 'processing') mst = ['Chờ lắp đặt', 'Đang lắp đặt'].includes(o.status);
+      else if (statusFilter !== 'all') mst = o.status === statusFilter;
+      return ms && mt && mst;
     });
-  }, [data, query, typeFilter]);
+  }, [data, query, typeFilter, statusFilter]);
 
   const totalRevenue = useMemo(() =>
-    data.filter(o => !String(o.status).includes('hủy'))
+    data.filter(o => o.status === 'Đã thanh toán')
       .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + PARSE(p.price) * PARSE(p.qty || 1), 0), 0)
     , [data]);
 
@@ -201,10 +213,21 @@ export default function OrderScreen() {
         options={[
           { key: 'all', label: 'Tất cả' },
           { key: 'buon', label: 'Đơn buôn' },
-          { key: 'le', label: 'Đơn lẻ', count: data.filter(o => o.orderType === 'le').length },
+          { key: 'le', label: 'Đơn lẻ' },
         ]}
         value={typeFilter}
         onChange={t => { setTypeFilter(t); setSelected(null); }}
+      />
+      <FilterChips
+        options={[
+          { key: 'all', label: 'Tất cả trạng thái' },
+          { key: 'Chờ xác nhận', label: 'Chờ xác nhận' },
+          { key: 'processing', label: 'Đang xử lý' },
+          { key: 'Đã thanh toán', label: 'Đã thanh toán' },
+          { key: 'Đã hủy', label: 'Đã hủy' },
+        ]}
+        value={statusFilter}
+        onChange={s => { setStatusFilter(s); setSelected(null); }}
       />
 
       <View style={{ flex: 1, flexDirection: 'row', padding: isWeb ? 16 : 0, paddingTop: 0 }}>
@@ -241,7 +264,7 @@ export default function OrderScreen() {
             order={selected}
             role={role}
             onClose={() => setSelected(null)}
-            onUpdated={updated => setSelected(updated)}
+            onUpdated={updated => { setSelected(updated); refresh(); }}
           />
         )}
       </View>
@@ -319,7 +342,7 @@ const ROW = StyleSheet.create({
   customer: { fontSize: 12, color: '#64748B' },
   badge: {
     paddingHorizontal: 6, paddingVertical: 1,
-    borderRadius: 6, flexShrink: 0
+    borderRadius: 6
   },
   badgeText: { fontSize: 10, fontWeight: '700' },
 

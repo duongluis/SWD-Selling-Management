@@ -29,18 +29,36 @@ async function fetchOrders(myEmail, role) {
     if (role === 'admin') {
         const snap = await getDocs(collection(db, 'customers'));
         phones = snap.docs.map(d => d.data().phone).filter(Boolean);
+    } else if (role === 'ctv') {
+        // CTV: lấy từ customers + phones từ consults đã tư vấn thành công
+        const [custSnap, consultSnap] = await Promise.all([
+            getDocs(query(collection(db, 'customers'), where('createdBy', '==', myEmail))),
+            getDocs(query(collection(db, 'consult'), where('createdBy', '==', myEmail))),
+        ]);
+        const custPhones = custSnap.docs.map(d => d.data().phone).filter(Boolean);
+        const consultPhones = consultSnap.docs.map(d => d.data().phone).filter(Boolean);
+        phones = [...new Set([...custPhones, ...consultPhones])];
     } else {
         const snap = await getDocs(
             query(collection(db, 'customers'), where('createdBy', '==', myEmail))
         );
         phones = snap.docs.map(d => d.data().phone).filter(Boolean);
     }
+    // docId của customer === phone (setDoc dùng phone làm key)
+    const myCustomerIds = new Set(phones);
+
     const allOrders = [];
     await Promise.all(phones.slice(0, 100).map(async (phone) => {
         try {
             const snap = await getDoc(doc(db, 'orders', phone));
             if (!snap.exists()) return;
-            (snap.data().orders || []).forEach(o => allOrders.push(o));
+            (snap.data().orders || []).forEach(o => {
+                // Admin: lấy tất cả
+                // Còn lại: chỉ lấy đơn không có customerId (đơn cũ) hoặc customerId khớp với khách của mình
+                if (role === 'admin' || !o.customerId || myCustomerIds.has(o.customerId)) {
+                    allOrders.push({ ...o, customerPhone: phone });
+                }
+            });
         } catch (_) { }
     }));
     return allOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
@@ -100,7 +118,7 @@ function computeStats(type, data) {
         case 'orders': {
             const active = data.filter(o => o.status !== 'Đã hủy');
             const cancelled = data.filter(o => o.status === 'Đã hủy');
-            const revenue = active.reduce((s, o) =>
+            const revenue = data.filter(o => o.status === 'Đã thanh toán').reduce((s, o) =>
                 s + (o.items || []).reduce((ss, p) => ss + (p.price * p.qty || 0), 0), 0);
             return { total: data.length, active: active.length, cancelled: cancelled.length, revenue };
         }

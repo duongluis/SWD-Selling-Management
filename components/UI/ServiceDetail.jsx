@@ -1,6 +1,7 @@
 // components/UI/ServiceDetail.jsx — style giống order panel
 
 import { showAlert } from '@/components/Main/showAlert';
+import { syncOrderStatusFromService, isServiceStatusLocked } from '@/components/Utils/syncOrderStatus';
 import { fmtCurrency, fmtDate, fmtPhone } from '@/components/Utils/formatters';
 import { getRole } from '@/components/Utils/roleHelper';
 import { db } from '@/config/firebaseConfig';
@@ -8,21 +9,24 @@ import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { doc, updateDoc } from 'firebase/firestore';
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import {
-    Platform,
+    Dimensions, Modal, Platform, Pressable,
     ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 
 const PARSE = v => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 const isWeb = Platform.OS === 'web';
+
 const STATUS_CFG = {
-    'Chờ xử lý': { c: '#D97706', bg: '#FFFBEB' },
-    'Đang xử lý': { c: '#2563EB', bg: '#EFF6FF' },
-    'Hoàn thành': { c: '#16A34A', bg: '#DCFCE7' },
-    'Đã hủy': { c: '#DC2626', bg: '#FEF2F2' },
+    'Chờ xử lý':  { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
+    'Đang xử lý': { c: '#2563EB', bg: '#EFF6FF', bd: '#BFDBFE' },
+    'Hoàn thành': { c: '#16A34A', bg: '#DCFCE7', bd: '#86EFAC' },
+    'Đã hủy':     { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
 };
-const scfg = s => STATUS_CFG[s] || { c: '#64748B', bg: '#F1F5F9' };
+const scfg = s => STATUS_CFG[s] || { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' };
+
+const STATUS_OPTIONS = ['Chờ xử lý', 'Đang xử lý', 'Hoàn thành', 'Đã hủy'];
 
 const TYPE_LABEL = {
     INSTALLATION: 'Lắp đặt',
@@ -30,8 +34,54 @@ const TYPE_LABEL = {
     MAINTENANCE: 'Bảo dưỡng',
 };
 
-const STATUS_OPTIONS = ['Chờ xử lý', 'Đang xử lý', 'Hoàn thành', 'Đã hủy'];
+// ── Status Chip ───────────────────────────────────────────────
+function SvcStatusChip({ status, onPress, dropdown }) {
+    const cfg = scfg(status);
+    return (
+        <TouchableOpacity
+            style={[SD.chip, { backgroundColor: cfg.bg, borderColor: cfg.bd }]}
+            onPress={onPress}
+            activeOpacity={0.8}
+        >
+            <View style={[SD.dot, { backgroundColor: cfg.c }]} />
+            <Text style={[SD.chipText, { color: cfg.c }]}>{status || 'Chờ xử lý'}</Text>
+            {dropdown && <Ionicons name="chevron-down" size={11} color={cfg.c} />}
+        </TouchableOpacity>
+    );
+}
 
+// ── Status Menu ───────────────────────────────────────────────
+function SvcStatusMenu({ status, onSelect, onClose, style }) {
+    return (
+        <View style={[SD.menu, style]}>
+            {STATUS_OPTIONS.map(st => {
+                const cfg = scfg(st);
+                const active = st === status;
+                return (
+                    <TouchableOpacity key={st}
+                        style={[SD.menuItem, active && { backgroundColor: cfg.bg }]}
+                        onPress={() => { onSelect(st); onClose(); }}
+                    >
+                        <View style={[SD.dot, { backgroundColor: cfg.c }]} />
+                        <Text style={[SD.menuText, { color: active ? cfg.c : '#374151', fontWeight: active ? '700' : '500' }]}>{st}</Text>
+                        {active && <Ionicons name="checkmark" size={13} color={cfg.c} style={{ marginLeft: 'auto' }} />}
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
+    );
+}
+
+const SD = StyleSheet.create({
+    chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+    dot: { width: 6, height: 6, borderRadius: 3 },
+    chipText: { fontSize: 12, fontWeight: '700' },
+    menu: { position: 'absolute', zIndex: 999, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', minWidth: 180, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 10 },
+    menuItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#F8FAFC' },
+    menuText: { fontSize: 13 },
+});
+
+// ── Info Row ──────────────────────────────────────────────────
 function InfoRow({ icon, label, value }) {
     if (!value) return null;
     return (
@@ -49,23 +99,43 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
     const role = getRole(userDetail);
     const admin = role === 'admin';
 
+    const chipRef = useRef(null);
     const [local, setLocal] = useState(null);
     const [updating, setUpdating] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [menuPos, setMenuPos] = useState({ top: 0, right: 16 });
 
     useEffect(() => { if (service) setLocal(service); }, [service]);
     if (!service || !local) return null;
 
-    const typLabel = TYPE_LABEL[local.type] || 'Dịch vụ';
-    const statusCfg = scfg(local.status);
-    const items = local.orderItems || local.items || [];
-    const total = items.reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
+    const canChange = admin && !isServiceStatusLocked(local.status);
+
+    const openMenu = () => {
+        if (!canChange) return;
+        chipRef.current?.measure((_fx, _fy, w, h, pageX, pageY) => {
+            const sw = Dimensions.get('window').width;
+            setMenuPos({ top: pageY + h + 4, right: sw - pageX - w });
+            setMenuOpen(true);
+        });
+    };
 
     const handleStatusChange = async (newStatus) => {
-        if (!admin || !local.docId) return;
-        showAlert('Cập nhật', `Chuyển sang "${newStatus}"?`, async () => {
+        if (!admin || !local.docId || newStatus === local.status) return;
+        showAlert('Cập nhật trạng thái', `Chuyển sang "${newStatus}"?`, async () => {
             setUpdating(true);
             try {
                 await updateDoc(doc(db, 'service', local.docId), { status: newStatus });
+
+                // Auto-sync linked order (fire-and-forget)
+                syncOrderStatusFromService(
+                    { type: local.type, orderId: local.orderId, phone: local.phone },
+                    newStatus
+                ).then(newOrderStatus => {
+                    if (newOrderStatus) {
+                        showAlert('Đã đồng bộ', `Đơn hàng #${local.orderId} tự động chuyển sang "${newOrderStatus}"`);
+                    }
+                }).catch(() => { });
+
                 const next = { ...local, status: newStatus };
                 setLocal(next);
                 onUpdated?.(next);
@@ -73,6 +143,11 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
             finally { setUpdating(false); }
         });
     };
+
+    const typLabel = TYPE_LABEL[local.type] || 'Dịch vụ';
+    const statusCfg = scfg(local.status);
+    const items = local.orderItems || local.items || [];
+    const total = items.reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
 
     return (
         <View style={S.panel}>
@@ -83,17 +158,27 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                         <Ionicons name="close" size={15} color="#64748B" />
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                             <Text style={S.title}>{typLabel} · {local.id || local.docId?.slice(-6)}</Text>
-                            <View style={[S.statusPill, { backgroundColor: statusCfg.bg }]}>
-                                <View style={[S.statusDot, { backgroundColor: statusCfg.c }]} />
-                                <Text style={[S.statusText, { color: statusCfg.c }]}>{local.status || 'Chờ xử lý'}</Text>
-                            </View>
+                            {canChange ? (
+                                <View ref={chipRef}>
+                                    <SvcStatusChip
+                                        status={local.status}
+                                        onPress={openMenu}
+                                        dropdown
+                                    />
+                                </View>
+                            ) : (
+                                <View style={[S.statusPill, { backgroundColor: statusCfg.bg }]}>
+                                    <View style={[S.statusDot, { backgroundColor: statusCfg.c }]} />
+                                    <Text style={[S.statusText, { color: statusCfg.c }]}>{local.status || 'Chờ xử lý'}</Text>
+                                </View>
+                            )}
+                            {updating && <Text style={{ fontSize: 11, color: '#94A3B8' }}>Đang lưu…</Text>}
                         </View>
                         <Text style={S.subtitle}>{local.customer}</Text>
                     </View>
                 </View>
-                {/* Actions */}
                 <View style={S.actions}>
                     {admin && (
                         <TouchableOpacity style={S.aBtn}
@@ -122,7 +207,6 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                 {items.length > 0 && (
                     <View style={S.section}>
                         <Text style={S.sectionTitle}>Sản phẩm</Text>
-                        {/* Table header */}
                         <View style={S.tableHead}>
                             <Text style={[S.th, { flex: 2 }]}>Sản phẩm</Text>
                             <Text style={[S.th, { width: 36, textAlign: 'center' }]}>SL</Text>
@@ -133,11 +217,10 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                             <View key={i} style={[S.tableRow, i % 2 === 1 && { backgroundColor: '#FAFBFF' }]}>
                                 <Text style={[S.td, { flex: 2 }]}>{p.name}</Text>
                                 <Text style={[S.td, { width: 36, textAlign: 'center' }]}>{p.qty || 1}</Text>
-                                <Text style={[S.td, { width: 90, textAlign: 'right' }]}>{(PARSE(p.price)).toLocaleString('vi-VN')}đ</Text>
+                                <Text style={[S.td, { width: 90, textAlign: 'right' }]}>{PARSE(p.price).toLocaleString('vi-VN')}đ</Text>
                                 <Text style={[S.td, { width: 90, textAlign: 'right', fontWeight: '700' }]}>{(PARSE(p.price) * PARSE(p.qty || 1)).toLocaleString('vi-VN')}đ</Text>
                             </View>
                         ))}
-                        {/* Total */}
                         <View style={S.tableFoot}>
                             <Text style={{ flex: 1, fontSize: 13, fontWeight: '700', color: '#0F172A' }}>Tổng cộng</Text>
                             <Text style={{ fontSize: 14, fontWeight: '800', color: '#2563EB' }}>{fmtCurrency(total)}</Text>
@@ -145,30 +228,28 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                     </View>
                 )}
 
-                {/* Cập nhật trạng thái */}
-                {admin && (
-                    <View style={S.section}>
-                        <Text style={S.sectionTitle}>Cập nhật trạng thái</Text>
-                        <View style={S.statusBtns}>
-                            {STATUS_OPTIONS.map(st => {
-                                const cfg = scfg(st);
-                                const active = local.status === st;
-                                return (
-                                    <TouchableOpacity key={st}
-                                        style={[S.statusBtn, { backgroundColor: active ? cfg.c : cfg.bg, borderColor: cfg.c + '40' }, active && { borderColor: cfg.c }]}
-                                        onPress={() => handleStatusChange(st)}
-                                        disabled={updating || active}
-                                    >
-                                        <Text style={[S.statusBtnText, { color: active ? '#fff' : cfg.c }]}>{st}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-                    </View>
-                )}
-
                 <View style={{ height: 40 }} />
             </ScrollView>
+
+            {/* Status dropdown modal */}
+            <Modal
+                visible={menuOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setMenuOpen(false)}
+                statusBarTranslucent
+            >
+                <Pressable style={{ flex: 1, backgroundColor: 'transparent' }} onPress={() => setMenuOpen(false)}>
+                    <Pressable onPress={e => e.stopPropagation()}>
+                        <SvcStatusMenu
+                            status={local.status}
+                            onSelect={handleStatusChange}
+                            onClose={() => setMenuOpen(false)}
+                            style={{ top: menuPos.top, right: menuPos.right }}
+                        />
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </View>
     );
 }
@@ -197,7 +278,4 @@ const S = StyleSheet.create({
     tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 9, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9' },
     td: { fontSize: 12, color: '#0F172A' },
     tableFoot: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#EFF6FF', borderRadius: 8, marginTop: 4 },
-    statusBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    statusBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
-    statusBtnText: { fontSize: 12, fontWeight: '700' },
 });

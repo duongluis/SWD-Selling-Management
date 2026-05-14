@@ -5,14 +5,16 @@ import { showAlert } from '@/components/Main/showAlert';
 import { getRoomIdByOrderId, sendStatusUpdateMessage } from '@/components/Utils/chatService';
 import { fmtCurrency } from '@/components/Utils/formatters';
 import { isAdmin as checkAdmin } from '@/components/Utils/roleHelper';
+import { syncServiceStatusFromOrder } from '@/components/Utils/syncOrderStatus';
+import statusConfig from '@/config/status.json';
 import { db } from '@/config/firebaseConfig';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator, Platform, ScrollView, StyleSheet,
+    ActivityIndicator, Dimensions, Modal, Platform, ScrollView, StyleSheet,
     Text, TouchableOpacity, View,
 } from 'react-native';
 
@@ -38,10 +40,21 @@ const TYPE_CFG = {
     le: { label: 'Đơn lẻ', c: '#5B21B6', bg: '#F5F3FF' },
 };
 
-const STATUS_OPTIONS = [
-    'Chờ xác nhận', 'Chờ lắp đặt', 'Đang lắp đặt',
-    'Đã lắp đặt', 'Chờ thanh toán', 'Đã thanh toán', 'Đã hủy',
-];
+// Lấy danh sách trạng thái theo loại đơn từ status.json
+const getStatusOptions = (orderType) => {
+    const key = orderType === 'buon' ? 'don_buon' : 'don_le';
+    return (statusConfig[key] || statusConfig['don_le']).map(s => s.name);
+};
+
+// Kiểm tra trạng thái hiện tại có được phép thay đổi không
+const isStatusChangeable = (orderType, currentStatus) => {
+    // Các trạng thái tiếng Anh cũ luôn bị khoá
+    if (!currentStatus || ['CANCELLED', 'PENDING', 'COMPLETED'].includes(currentStatus)) return false;
+    const key = orderType === 'buon' ? 'don_buon' : 'don_le';
+    const found = (statusConfig[key] || statusConfig['don_le']).find(s => s.name === currentStatus);
+    // Fallback false: trạng thái không tìm thấy trong config → không cho đổi
+    return found ? found.changeable : false;
+};
 
 // ── Status Chip ───────────────────────────────────────────────
 export function StatusChip({ status, onPress, dropdown }) {
@@ -60,10 +73,10 @@ export function StatusChip({ status, onPress, dropdown }) {
 }
 
 // ── Status Menu ───────────────────────────────────────────────
-export function StatusMenu({ status, options, onChange, onClose }) {
+export function StatusMenu({ status, options, onChange, onClose, style }) {
     return (
-        <View style={SD.menu}>
-            {(options || STATUS_OPTIONS).map(s => {
+        <View style={[SD.menu, style]}>
+            {(options || getStatusOptions('le')).map(s => {
                 const cfg = scfg(s);
                 const active = s === status;
                 return (
@@ -85,7 +98,7 @@ const SD = StyleSheet.create({
     chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
     dot: { width: 6, height: 6, borderRadius: 3 },
     text: { fontSize: 12, fontWeight: '700' },
-    menu: { position: 'absolute', top: 32, right: 0, zIndex: 999, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', minWidth: 180, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 10 },
+    menu: { position: 'absolute', top: 32, right: 0, zIndex: 999, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', minWidth: 180, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 10 },
     menuItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#F8FAFC' },
     menuText: { fontSize: 13 },
 });
@@ -96,11 +109,23 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     const { userDetail } = useContext(UserDetailContext);
     const admin = checkAdmin(role);
 
+    const chipRef = useRef(null);
     const [localOrder, setLocalOrder] = useState(null);
     const [services, setServices] = useState([]);
     const [svLoading, setSvLoading] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [menuPos, setMenuPos] = useState({ top: 0, right: 16 });
     const [updating, setUpdating] = useState(false);
+
+    const openMenu = () => {
+        if (chipRef.current) {
+            chipRef.current.measure((_fx, _fy, width, height, pageX, pageY) => {
+                const sw = Dimensions.get('window').width;
+                setMenuPos({ top: pageY + height + 4, right: sw - pageX - width });
+                setMenuOpen(true);
+            });
+        }
+    };
 
     useEffect(() => {
         if (order) { setLocalOrder(order); fetchServices(order.id); }
@@ -128,7 +153,9 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                 const ordersChange = (snap.data().orders || []).map(o =>
                     o.id === localOrder.id ? { ...o, status: newStatus } : o
                 );
-                await updateDoc(ref, { ordersChange });
+                await updateDoc(ref, { orders: ordersChange });
+                // Auto-sync linked service status
+                Promise.resolve(syncServiceStatusFromOrder(localOrder.id, newStatus)).catch(() => { });
                 const next = { ...localOrder, status: newStatus };
                 setLocalOrder(next);
                 onUpdated?.(next);
@@ -178,28 +205,38 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         <Ionicons name="chatbubble-outline" size={13} color="#2563EB" />
                         <Text style={DP.aBtnText}>Chat</Text>
                     </TouchableOpacity>
-                    {admin && (
+                    {(admin || localOrder.createdBy === userDetail?.email) && localOrder.status === 'Chờ xác nhận' && (
                         <TouchableOpacity style={DP.aBtn}
                             onPress={() => router.push({ pathname: '/editOrder/[orderID]', params: { orderID: localOrder.id, orderParam: JSON.stringify(order) } })}>
                             <Ionicons name="create-outline" size={13} color="#2563EB" />
                             <Text style={DP.aBtnText}>Sửa</Text>
                         </TouchableOpacity>
                     )}
-                    <View style={{ position: 'relative', zIndex: 50 }}>
+                    <View ref={chipRef} collapsable={false}>
                         {updating
                             ? <ActivityIndicator size="small" color="#2563EB" />
-                            : <TouchableOpacity onPress={() => admin && setMenuOpen(p => !p)}>
-                                <StatusChip status={localOrder.status} dropdown={admin} />
-                            </TouchableOpacity>
+                            : <StatusChip
+                                status={localOrder.status}
+                                dropdown={admin && isStatusChangeable(localOrder.orderType, localOrder.status)}
+                                onPress={admin && isStatusChangeable(localOrder.orderType, localOrder.status) ? openMenu : undefined}
+                              />
                         }
-                        {menuOpen && admin && (
-                            <StatusMenu status={localOrder.status} options={STATUS_OPTIONS}
-                                onChange={handleStatusChange} onClose={() => setMenuOpen(false)}
-                            />
-                        )}
                     </View>
                 </View>
             </View>
+
+            {menuOpen && admin && (
+                <Modal transparent statusBarTranslucent animationType="none" onRequestClose={() => setMenuOpen(false)}>
+                    <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setMenuOpen(false)} />
+                    <StatusMenu
+                        status={localOrder.status}
+                        options={getStatusOptions(localOrder.orderType)}
+                        onChange={handleStatusChange}
+                        onClose={() => setMenuOpen(false)}
+                        style={{ top: menuPos.top, right: menuPos.right }}
+                    />
+                </Modal>
+            )}
 
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
                 {/* 2-col info */}
@@ -291,7 +328,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
 }
 
 const DP = StyleSheet.create({
-    root: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', borderRadius: isWeb ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
+    root: { width: 360, backgroundColor: 'transparent', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', borderRadius: isWeb ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
     header: { padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 6 },
     headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     date: { fontSize: 11, color: '#94A3B8' },

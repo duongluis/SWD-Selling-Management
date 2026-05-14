@@ -1,17 +1,25 @@
+import BgWatermark from "@/components/Main/BgWatermark";
+import { showAlert } from "@/components/Main/showAlert";
+import { createNotification } from "@/components/Utils/chatService";
+import { getRole } from "@/components/Utils/roleHelper";
 import Colors from "@/constant/Colors";
+import { UserDetailContext } from "@/context/UserDetailContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { collection, doc, getDocs, query, updateDoc, where } from "firebase/firestore";
+import { useContext, useState } from "react";
 import {
   Linking,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { db } from "../../../config/firebaseConfig";
 
 function getInitials(name) {
   if (!name) return "?";
@@ -63,6 +71,9 @@ export default function customerView() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
+  const { userDetail } = useContext(UserDetailContext);
+  const role = getRole(userDetail);
+  const canEditConsult = role === 'admin' || role === 'ctv';
   const [showDetail, setShowDetail] = useState(false);
 
   const customer = params.customerParam ? JSON.parse(params.customerParam) : {};
@@ -75,8 +86,57 @@ export default function customerView() {
     ? new Date(customer.createdAt).toLocaleDateString("vi-VN")
     : "";
 
+  const isConsult = ['none', 'pending', 'success', 'failed'].includes(customer.status);
+  const [consultStatus, setConsultStatus] = useState(customer.status || 'none');
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [showFailureInput, setShowFailureInput] = useState(false);
+  const [failureReason, setFailureReason] = useState(customer.reason || '');
+
+  const CONSULT_STATUS_OPTS = [
+    { key: 'pending', label: 'Đang tư vấn', icon: 'time-outline', color: '#2563EB', bg: '#EFF6FF' },
+    { key: 'success', label: 'Thành công', icon: 'checkmark-circle-outline', color: '#059669', bg: '#ECFDF5' },
+    { key: 'failed', label: 'Thất bại', icon: 'close-circle-outline', color: '#EF4444', bg: '#FEF2F2' },
+  ];
+
+  const handleConsultStatusChange = async (newStatus) => {
+    if (newStatus === consultStatus || !customer.docId) return;
+    if (newStatus === 'failed') { setShowFailureInput(true); return; }
+    await doUpdateStatus(newStatus, '');
+  };
+
+  const doUpdateStatus = async (newStatus, reason) => {
+    setUpdatingStatus(true);
+    try {
+      const updateData = { status: newStatus };
+      if (reason) updateData.reason = reason;
+      await updateDoc(doc(db, 'consult', customer.docId), updateData);
+      setConsultStatus(newStatus);
+
+      if (newStatus === 'success') {
+        // Notify admins
+        getDocs(query(collection(db, 'users'), where('role', '==', 'admin'))).then(snap => {
+          snap.docs.forEach(d => {
+            const adminEmail = d.data().email;
+            if (adminEmail) createNotification({
+              userEmail: adminEmail,
+              type: 'consult_success',
+              title: 'Consult thành công',
+              body: `${userDetail?.name || userDetail?.email} tư vấn thành công: ${name} (${phone})`,
+            }).catch(() => {});
+          });
+        }).catch(() => {});
+        router.push({
+          pathname: '/addCustomer',
+          params: { name: customer.name || '', phone: customer.phone || '', address: customer.address || '', note: customer.note || '', consultCreatedBy: customer.createdBy || '' },
+        });
+      }
+    } catch (e) { console.error(e); }
+    finally { setUpdatingStatus(false); }
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      <BgWatermark />
       <StatusBar barStyle="dark-content" backgroundColor={Colors.Background} />
 
       {/* Header */}
@@ -224,6 +284,93 @@ export default function customerView() {
               ))}
             {!phone && !email && !address && (
               <Text style={styles.noDetail}>Chưa có thông tin liên hệ</Text>
+            )}
+          </View>
+        )}
+
+        {/* Sản phẩm quan tâm */}
+        {isConsult && (customer.productNames?.length > 0 || canEditConsult) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sản phẩm quan tâm</Text>
+            {(customer.productNames || []).length > 0 ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {(customer.productNames || []).map((p, i) => (
+                  <View key={i} style={{ backgroundColor: '#EFF6FF', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1, borderColor: '#BFDBFE' }}>
+                    <Text style={{ fontSize: 12, color: '#2563EB', fontWeight: '600' }}>{p}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.noDetail}>Chưa có sản phẩm nào được chọn</Text>
+            )}
+          </View>
+        )}
+
+        {/* Trạng thái tư vấn */}
+        {isConsult && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Trạng thái tư vấn</Text>
+            {CONSULT_STATUS_OPTS.map(opt => {
+              const active = consultStatus === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.statusOpt, active && { borderColor: opt.color, backgroundColor: opt.bg }]}
+                  onPress={() => handleConsultStatusChange(opt.key)}
+                  activeOpacity={0.8}
+                  disabled={updatingStatus || !['pending', 'none'].includes(consultStatus)}
+                >
+                  <Ionicons name={opt.icon} size={18} color={active ? opt.color : Colors.LightGray} />
+                  <Text style={[styles.statusOptText, active && { color: opt.color, fontWeight: '700' }]}>
+                    {opt.label}
+                  </Text>
+                  {active && <Ionicons name="checkmark-circle" size={18} color={opt.color} />}
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* Failure reason input */}
+            {showFailureInput && (
+              <View style={{ marginTop: 10, gap: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#EF4444' }}>Lý do thất bại *</Text>
+                <View style={[styles.statusOpt, { borderColor: '#FECACA', backgroundColor: '#FEF2F2' }]}>
+                  <TextInput
+                    style={{ flex: 1, fontSize: 14, color: '#0F172A', minHeight: 60, textAlignVertical: 'top' }}
+                    placeholder="Nhập lý do thất bại..."
+                    placeholderTextColor="#94A3B8"
+                    multiline
+                    value={failureReason}
+                    onChangeText={setFailureReason}
+                  />
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10, backgroundColor: '#F1F5F9' }}
+                    onPress={() => { setShowFailureInput(false); setFailureReason(''); }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#64748B' }}>Hủy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 2, alignItems: 'center', paddingVertical: 10, borderRadius: 10, backgroundColor: '#EF4444' }}
+                    onPress={() => {
+                      if (!failureReason.trim()) { showAlert('Thông báo', 'Vui lòng nhập lý do thất bại'); return; }
+                      setShowFailureInput(false);
+                      doUpdateStatus('failed', failureReason.trim());
+                    }}
+                    disabled={updatingStatus}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Xác nhận thất bại</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Show stored failure reason */}
+            {consultStatus === 'failed' && (customer.reason || failureReason) && (
+              <View style={{ marginTop: 8, backgroundColor: '#FEF2F2', borderRadius: 10, padding: 12 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444', marginBottom: 4 }}>LÝ DO THẤT BẠI</Text>
+                <Text style={{ fontSize: 13, color: '#374151' }}>{customer.reason || failureReason}</Text>
+              </View>
             )}
           </View>
         )}
@@ -467,4 +614,6 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   emptyOrdersText: { fontSize: 13, color: Colors.LightGray, fontWeight: "500" },
+  statusOpt: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.Border, backgroundColor: Colors.White, marginBottom: 6 },
+  statusOptText: { flex: 1, fontSize: 14, fontWeight: "500", color: Colors.TextPrimary },
 });
