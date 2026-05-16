@@ -1,1 +1,2 @@
-
+* LƯU Ý (KHÔNG ĐƯỢC XÓA DÒNG NÀY): chỉ sửa đoạn cần sửa, không sửa lại cả file, sau khi sửa xong thì note lại vào done_log.txt
+* Sửa lại code theo logic sau: 

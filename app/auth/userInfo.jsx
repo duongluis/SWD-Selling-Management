@@ -1,6 +1,7 @@
 import BgWatermark from '@/components/Main/BgWatermark';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import bcrypt from 'bcryptjs';
 import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
 import { useCallback, useState } from 'react';
@@ -284,6 +285,7 @@ export default function UserInfoView() {
             const uid = userCredential.user.uid;
             const email = userCredential.user.email;
 
+            const passwordHash = await bcrypt.hash(signUpPassword, 10);
             const roleMap = { daily: 'đại lý', partner: 'Đối tác', ctv: 'cộng tác viên' };
             const payload = {
                 uid, email,
@@ -291,6 +293,7 @@ export default function UserInfoView() {
                 role: roleMap[role], member: roleMap[role],
                 bizModel, verified: false,
                 createdAt: new Date().toISOString(),
+                passwordHash,
             };
             if (emailContact.trim()) payload.emailContact = emailContact.trim();
             if (bizModel === 'company') {

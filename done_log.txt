@@ -1,5 +1,26 @@
 ===== DONE LOG — prompt.txt =====
-Cập nhật lần cuối: 2026-05-14
+Cập nhật lần cuối: 2026-05-15
+
+[37] ✅ Màn đơn hàng — bỏ "Xem HĐ", thay bằng "Xuất HĐ" (biên bản bàn giao trực tiếp)
+    File: components/UI/OrderDetail.jsx
+    - Thêm _getLogo, _printHtml, _buildHandoverHtml (xuất BIÊN BẢN BÀN GIAO HÀNG)
+    - Thêm state exporting + handleExport
+    - Nút "Xem HĐ" (navigate orderContract) → "Xuất HĐ" (xuất PDF trực tiếp, có spinner)
+    - Template HTML: tiêu đề BIÊN BẢN BÀN GIAO, watermark logo, bảng SP, điều khoản theo loại đơn
+
+[38] ✅ CustomerView — thêm nút "Tạo đơn" trong action row
+    File: app/CustomerView/[customerID]/index.jsx
+    - Nút "Tạo đơn" chỉ hiện khi !isConsult (khách hàng thật, không phải consult)
+    - navigate /addOrder với params: customerParam = JSON.stringify(customer)
+
+[39] ✅ addOrder — pre-select khách hàng từ CustomerView
+    File: app/addOrder/index.jsx
+    - Thêm useLocalSearchParams
+    - useEffect: khi customerList load xong + params.customerParam có dữ liệu → tìm theo docId/phone → setSelectedCustomer + setDeliveryAddress
+
+[40] ✅ editCustomer — thêm trường SĐT vào form công ty
+    File: app/editCustomer/[customerID]/index.jsx
+    - Thêm Field "Số điện thoại" (required) ngay sau "Tên công ty" trong bizModel === 'company'
 
 [17] ✅ Báo cáo khu vực — lọc tỉnh/thành từ province.json
     File: app/(tabs)/regionAnalytics.jsx

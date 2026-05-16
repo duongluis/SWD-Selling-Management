@@ -1,10 +1,12 @@
 import BgWatermark from '@/components/Main/BgWatermark';
 import { showAlert } from '@/components/Main/showAlert';
-import auth from '@/config/firebaseConfig';
+import auth, { db } from '@/config/firebaseConfig';
 import Colors from '@/constant/Colors';
 import { Ionicons } from '@expo/vector-icons';
+import bcrypt from 'bcryptjs';
 import { router } from 'expo-router';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { doc, updateDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
     ActivityIndicator, Platform, StyleSheet, Text,
@@ -63,6 +65,8 @@ export default function ChangePassword() {
             const credential = EmailAuthProvider.credential(user.email, current);
             await reauthenticateWithCredential(user, credential);
             await updatePassword(user, newPw);
+            const passwordHash = await bcrypt.hash(newPw, 10);
+            await updateDoc(doc(db, 'users', user.email), { passwordHash });
             showAlert('Thành công', 'Mật khẩu đã được cập nhật thành công');
             router.back();
         } catch (e) {

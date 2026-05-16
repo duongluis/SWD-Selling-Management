@@ -57,7 +57,7 @@ function UserRow({ item, index, isActive, onPress }) {
     const role = rcfg(item.role || item.member);
     return (
         <TouchableOpacity
-            style={[R.row, isActive && R.rowActive, !item.verified && R.rowPending]}
+            style={[R.row, isActive && R.rowActive, item.locked ? R.rowLocked : !item.verified && R.rowPending]}
             onPress={() => onPress(item)}
             activeOpacity={0.72}
         >
@@ -82,9 +82,14 @@ function UserRow({ item, index, isActive, onPress }) {
             )}
             {/* Ngày tạo */}
             {isWeb && <Text style={[R.col, R.colSub, { flex: 1 }]}>{fmtDate(item.createdAt)}</Text>}
-            {/* Verified */}
+            {/* Status */}
             <View style={[R.col, { flex: isWeb ? 1 : undefined }]}>
-                {item.verified ? (
+                {item.locked ? (
+                    <View style={[R.pill, { backgroundColor: '#FEF2F2' }]}>
+                        <Ionicons name="lock-closed" size={13} color="#DC2626" />
+                        <Text style={[R.pillText, { color: '#DC2626' }]}>Bị khóa</Text>
+                    </View>
+                ) : item.verified ? (
                     <View style={[R.pill, { backgroundColor: '#ECFDF5' }]}>
                         <Ionicons name="checkmark-circle" size={13} color="#16A34A" />
                         <Text style={[R.pillText, { color: '#16A34A' }]}>Đã duyệt</Text>
@@ -104,6 +109,7 @@ const R = StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 10, position: 'relative' },
     rowActive: { backgroundColor: '#F0F7FF' },
     rowPending: { borderLeftWidth: 3, borderLeftColor: '#FDE68A' },
+    rowLocked: { borderLeftWidth: 3, borderLeftColor: '#FCA5A5', backgroundColor: '#FFF5F5' },
     leftBar: { position: 'absolute', left: 0, top: 4, bottom: 4, width: 3, backgroundColor: '#2563EB', borderRadius: 2 },
     avatar: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative' },
     avatarText: { fontSize: 13, fontWeight: '800' },

@@ -5,7 +5,8 @@ import auth, { db } from "@/config/firebaseConfig";
 import Colors from "@/constant/Colors";
 import { UserDetailContext } from "@/context/UserDetailContext";
 import { Ionicons } from "@expo/vector-icons";
-import { signInWithEmailAndPassword } from "@firebase/auth";
+import bcrypt from 'bcryptjs';
+import { signInWithEmailAndPassword, signOut } from "@firebase/auth";
 import { router } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import { useContext, useState } from "react";
@@ -23,17 +24,41 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const { setUserDetail } = useContext(UserDetailContext);
 
+  const checkAndEnter = (userData) => {
+    if (userData?.locked) {
+      showAlert('Tài khoản bị khóa', 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+      return false;
+    }
+    setUserDetail(userData);
+    router.replace("../(tabs)/home");
+    return true;
+  };
+
   const signInByClick = async () => {
     try {
       const res = await signInWithEmailAndPassword(auth, gmail, password);
       if (res.user) {
         const result = await getDoc(doc(db, "users", gmail));
-        setUserDetail(result.data());
-        router.replace("../(tabs)/home");
+        const userData = result.data();
+        if (userData?.locked) {
+          await signOut(auth);
+        }
+        checkAndEnter(userData);
       }
-    } catch (e) {
-      showAlert(getFirebaseErrorMessage(e));
-      console.log(e);
+    } catch (firebaseError) {
+      // Fallback: kiểm tra tài khoản/mật khẩu trực tiếp từ Firestore
+      try {
+        const result = await getDoc(doc(db, "users", gmail));
+        if (!result.exists()) throw firebaseError;
+        const userData = result.data();
+        if (!userData.passwordHash) throw firebaseError;
+        const match = await bcrypt.compare(password, userData.passwordHash);
+        if (!match) throw firebaseError;
+        checkAndEnter(userData);
+      } catch {
+        showAlert(getFirebaseErrorMessage(firebaseError));
+        console.log(firebaseError);
+      }
     }
   };
 

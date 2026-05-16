@@ -2,7 +2,17 @@
   "permissions": {
     "allow": [
       "Bash(Get-Content \"D:\\\\Project Code\\\\App\\\\Project_002\\\\SWD-Selling-Management\\\\app\\\\auth\\\\changePassword.jsx\")",
-      "Bash(npx expo *)"
+      "Bash(npx expo *)",
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('xlsx'\\); require\\('jszip'\\); console.log\\('ok'\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"try{require\\('react-refresh/babel'\\);console.log\\('ok'\\)}catch\\(e\\){console.log\\('missing:',e.message\\)}\")",
+      "Bash(findstr react-refresh *)",
+      "Bash(findstr react *)",
+      "Bash(findstr /i \"react-refresh\" package.json package-lock.json)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(Object.entries\\({...p.dependencies,...p.devDependencies}\\).filter\\(\\([k]\\)=>k.includes\\('refresh'\\)\\)\\)\\)\")",
+      "Bash(node -e \"const p=require\\('./package-lock.json'\\); const entry = p.packages?.['node_modules/react-refresh']; console.log\\(JSON.stringify\\(entry\\)\\)\")",
+      "Bash(Select-String \"react-refresh\")"
     ]
   }
 }

@@ -224,6 +224,9 @@ export default function EditCustomerScreen() {
                     <Field label="Tên công ty" required>
                         <Input value={form.companyName} onChange={set('companyName')} placeholder="Công ty TNHH ABC" />
                     </Field>
+                    <Field label="Số điện thoại" required>
+                        <Input value={form.phone} onChange={set('phone')} placeholder="0901 234 567" keyboardType="phone-pad" />
+                    </Field>
                     <Field label="Mã số thuế">
                         <Input value={form.taxCode} onChange={set('taxCode')} placeholder="0123456789" keyboardType="numeric" />
                     </Field>

@@ -309,7 +309,7 @@ export default function CommissionScreen() {
                     const s = await getDoc(doc(db, 'orders', phone));
                     if (!s.exists()) return;
                     (s.data().orders || [])
-                        .filter(o => o.status === 'Đã thanh toán')
+                        .filter(o => o.status === 'Đã thanh toán' || o.status === 'Chờ thanh toán')
                         .forEach(o => {
                             // Ưu tiên người tạo khách hàng, fallback người tạo đơn
                             const sellerEmail = phoneToCreatedBy[phone] || o.createdBy || o.sellerEmail || userDetail.email;

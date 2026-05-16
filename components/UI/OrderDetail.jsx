@@ -21,6 +21,95 @@ import {
 const isWeb = Platform.OS === 'web';
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 
+// ── Xuất biên bản bàn giao ────────────────────────────────────
+async function _getLogo() {
+    try {
+        const { Asset } = await import('expo-asset');
+        const a = Asset.fromModule(require('../../assets/images/logo-light.png'));
+        await a.downloadAsync();
+        return a.uri;
+    } catch { return null; }
+}
+async function _printHtml(html) {
+    if (isWeb) {
+        const w = window.open('', '_blank');
+        w.document.write(html);
+        w.document.close();
+        setTimeout(() => w.print(), 400);
+    } else {
+        try {
+            const Print = await import('expo-print');
+            await Print.printAsync({ html });
+        } catch (e) { console.error(e); }
+    }
+}
+function _buildHandoverHtml({ order, seller, logoBase64 }) {
+    const fN = (n) => Math.round(n || 0).toLocaleString('vi-VN');
+    const fV = (n) => fN(n) + ' đ';
+    const hdNum = `BB-${new Date().getFullYear()}-${(order.id || '001').slice(-6).padStart(6, '0')}`;
+    const today = new Date().toLocaleDateString('vi-VN');
+    const items = order.items || [];
+    const subtotal = items.reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
+    const rows = items.map((p, i) => `<tr>
+      <td style="text-align:center;color:#94a3b8">${i + 1}</td>
+      <td>${p.name || ''}</td>
+      <td style="text-align:center">${fN(p.qty)}</td>
+      <td style="text-align:right">${fV(p.price)}</td>
+      <td style="text-align:right;font-weight:600">${fV(PARSE(p.price) * PARSE(p.qty || 1))}</td>
+      <td style="color:#64748b;font-style:italic">${p.note || '—'}</td>
+    </tr>`).join('');
+    return `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Biên bản ${hdNum}</title>
+<style>body{font-family:Arial,sans-serif;margin:0;padding:32px;color:#0f172a;font-size:13px;position:relative}
+.watermark{position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);width:80%;opacity:0.1;pointer-events:none;z-index:0;object-fit:contain}
+body>*:not(.watermark){position:relative;z-index:1}
+h1{font-size:20px;font-weight:700;margin:0 0 4px;text-align:center}
+.sub{color:#64748b;font-size:12px;text-align:center;margin-bottom:8px}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0 20px}
+.party{border-radius:8px;padding:14px;border:1px solid #e2e8f0}
+.party-title{font-size:10px;font-weight:700;letter-spacing:.06em;color:#185fa5;text-transform:uppercase;margin-bottom:8px}
+.party-name{font-size:15px;font-weight:700;margin-bottom:4px}
+.party-detail{font-size:11px;color:#64748b;line-height:1.6}
+table{width:100%;border-collapse:collapse;margin:12px 0}
+th{font-size:10px;font-weight:700;text-transform:uppercase;color:#94a3b8;padding:10px 12px;text-align:left;border-bottom:1px solid #e2e8f0}
+td{padding:10px 12px;border-bottom:1px solid #f1f5f9}
+.tfoot td{font-weight:600;font-size:13px;border-top:1px solid #e2e8f0}
+.total-row td{font-size:15px;font-weight:700;color:#185fa5}
+.info-box{border-radius:8px;padding:12px;margin:16px 0;font-size:12px;color:#64748b}
+.terms{font-size:11px;color:#94a3b8;line-height:1.7;margin:12px 0}
+.sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px}
+.sig-col{border-top:1px solid #cbd5e1;padding-top:10px;text-align:center}
+.sig-label{font-size:11px;color:#64748b;margin-bottom:40px}
+.sig-name{font-size:13px;font-weight:700}
+@media print{body{padding:16px}}</style></head><body>
+${logoBase64 ? `<img class="watermark" src="${logoBase64}" alt=""/>` : ''}
+<h1>BIÊN BẢN BÀN GIAO HÀNG HỆ THỐNG LỌC TỔNG SINH HOẠT</h1>
+<div class="sub">Mã biên bản: ${hdNum} &nbsp;·&nbsp; Ngày ${today}</div>
+<div class="parties">
+  <div class="party"><div class="party-title">Bên nhận (A)</div><div class="party-name">${order.customer || '—'}</div>
+  <div class="party-detail">SĐT: ${order.phone || '—'}<br>Địa chỉ: ${order.address || '—'}</div></div>
+  <div class="party"><div class="party-title">Bên giao (B)</div><div class="party-name">${seller?.name || 'SWD Company'}</div>
+  <div class="party-detail">SĐT: ${seller?.phone || '—'}<br>Email: ${seller?.email || '—'}</div></div>
+</div>
+<table><thead><tr>
+  <th style="width:30px">#</th><th>Sản phẩm</th>
+  <th style="width:60px;text-align:center">SL</th>
+  <th style="width:110px;text-align:right">Đơn giá</th>
+  <th style="width:120px;text-align:right">Thành tiền</th>
+  <th style="width:120px">Ghi chú</th>
+</tr></thead><tbody>${rows}</tbody>
+<tfoot>
+  <tr class="total-row"><td colspan="4">Tổng thanh toán</td><td style="text-align:right">${fV(subtotal)}</td><td></td></tr>
+</tfoot></table>
+<div class="info-box">${order.note ? 'Ghi chú: ' + order.note : 'Ghi chú: Không có'}</div>
+<div class="terms">${order.orderType === 'buon'
+        ? 'Hàng hoá được kiểm tra tại thời điểm giao nhận. Mọi khiếu nại cần phản ánh trong vòng 24 giờ kể từ khi nhận hàng.'
+        : 'Lắp đặt miễn phí trong vòng 24 giờ kể từ khi giao hàng thành công.'}</div>
+<div class="sig">
+  <div class="sig-col"><div class="sig-label">Đại diện bên nhận</div><div class="sig-name">${order.customer || '—'}</div><div style="font-size:11px;color:#94a3b8">Ký và ghi rõ họ tên</div></div>
+  <div class="sig-col"><div class="sig-label">Đại diện bên giao</div><div class="sig-name">${seller?.name || 'SWD Company'}</div><div style="font-size:11px;color:#94a3b8">Ký và đóng dấu</div></div>
+</div></body></html>`;
+}
+
 // ── Status config ─────────────────────────────────────────────
 const S_CFG = {
     'Chờ xác nhận': { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
@@ -116,6 +205,18 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const [menuPos, setMenuPos] = useState({ top: 0, right: 16 });
     const [updating, setUpdating] = useState(false);
+    const [exporting, setExporting] = useState(false);
+
+    const handleExport = async () => {
+        if (!localOrder) return;
+        setExporting(true);
+        try {
+            const logo = await _getLogo();
+            const html = _buildHandoverHtml({ order: localOrder, seller: userDetail, logoBase64: logo });
+            await _printHtml(html);
+        } catch (e) { console.error(e); }
+        finally { setExporting(false); }
+    };
 
     const openMenu = () => {
         if (chipRef.current) {
@@ -195,10 +296,12 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                     )}
                 </View>
                 <View style={DP.actions}>
-                    <TouchableOpacity style={DP.aBtn}
-                        onPress={() => router.push({ pathname: '/orderContract', params: { orderParam: JSON.stringify(localOrder) } })}>
-                        <Ionicons name="document-text-outline" size={13} color="#2563EB" />
-                        <Text style={DP.aBtnText}>Xem HĐ</Text>
+                    <TouchableOpacity style={DP.aBtn} onPress={handleExport} disabled={exporting}>
+                        {exporting
+                            ? <ActivityIndicator size="small" color="#2563EB" style={{ width: 13 }} />
+                            : <Ionicons name="document-text-outline" size={13} color="#2563EB" />
+                        }
+                        <Text style={DP.aBtnText}>{exporting ? 'Đang xuất...' : 'Xuất HĐ'}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={DP.aBtn}
                         onPress={() => router.push({ pathname: '/chat/[roomID]', params: { roomID: getRoomIdByOrderId(localOrder.id), orderId: localOrder.id } })}>

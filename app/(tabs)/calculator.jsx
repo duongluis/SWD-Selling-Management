@@ -20,11 +20,11 @@ const fmtVND = n => (n || 0).toLocaleString('vi-VN');
 const parseNum = s => parseFloat(String(s).replace(/[^0-9.]/g, '')) || 0;
 
 const ROLE_LABEL_MAP = {
-    admin: { label: 'Tất cả giá', field: 'price' },
-    daily: { label: 'Giá đại lý', field: 'price_a' },
-    phantan: { label: 'Giá đối tác', field: 'price_p' },
-    ctv: { label: 'Giá CTV', field: 'price_c' },
-    other: { label: 'Giá niêm yết', field: 'price' },
+    admin: { label: 'Giá ưu đãi', field: 'price' },
+    daily: { label: 'Giá ưu đãi', field: 'price_a' },
+    phantan: { label: 'Giá ưu đãi', field: 'price_p' },
+    ctv: { label: 'Giá ưu đãi', field: 'price_c' },
+    other: { label: 'Giá ưu đãi', field: 'price' },
 };
 
 // ── Product picker modal ─────────────────────────────────────
@@ -89,17 +89,18 @@ const PK = StyleSheet.create({
 function CalcRow({ item, index, priceField, role, onChange, onRemove }) {
     const admin = isAdmin(role);
 
-    // Giá bán = giá theo role (hoặc admin thì lấy price gốc làm default)
-    const baseListPrice = parseNum(item.listPrice);  // giá niêm yết (editable)
-    const baseSellPrice = parseNum(item.sellPrice);  // giá bán vai trò (không sửa trừ admin)
+    const baseListPrice = parseNum(item.listPrice);  // giá niêm yết (editable, chỉ để tham khảo)
+    const baseSellPrice = parseNum(item.sellPrice);  // giá ưu đãi theo vai trò
     const qty = parseNum(item.qty) || 1;
-    const discount = parseNum(item.discount);   // % chiết khấu
+    const discount = parseNum(item.discount);   // hoa hồng %
 
+    // thành tiền = giá ưu đãi × (1 - hoa hồng%)
     const sellAfterDisc = discount > 0
-        ? baseListPrice * (1 - discount / 100)
+        ? baseSellPrice * (1 - discount / 100)
         : baseSellPrice;
 
-    const commission = (baseListPrice - sellAfterDisc) * qty;
+    // hoa hồng = (niêm yết - ưu đãi × (1 - CK%)) × SL  →  mặc định = niêm yết - ưu đãi
+    const commission = (baseListPrice - baseSellPrice * (1 - discount / 100)) * qty;
     const totalSell = sellAfterDisc * qty;
     const totalList = baseListPrice * qty;
 
@@ -146,12 +147,12 @@ function CalcRow({ item, index, priceField, role, onChange, onRemove }) {
                         selectTextOnFocus
                     />
                 ) : (
-                    <Text style={[R.readOnly, { color: '#7C3AED' }]}>{fmtVND(sellAfterDisc)}</Text>
+                    <Text style={[R.readOnly, { color: '#7C3AED' }]}>{fmtVND(baseSellPrice)}</Text>
                 )}
             </View>
 
             {/* Chiết khấu % */}
-            <View style={[R.cell, { width: 100, alignItems: 'center' }]}>
+            <View style={[R.cell, { flex: 1.1, alignItems: 'flex-end' }]}>
                 <View style={R.discountWrap}>
                     <TextInput
                         style={R.discountInput}
@@ -197,7 +198,7 @@ const R = StyleSheet.create({
     productSub: { fontSize: 10, color: '#94A3B8', marginTop: 2 },
     numInput: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, color: '#0F172A', textAlign: 'center', ...(isWeb ? { outlineStyle: 'none' } : {}) },
     readOnly: { fontSize: 13, fontWeight: '700', textAlign: 'right' },
-    discountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, gap: 4, width: 80 },
+    discountWrap: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-end', backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, gap: 4, width: 80 },
     discountInput: { width: 44, fontSize: 13, color: '#D97706', textAlign: 'right', ...(isWeb ? { outlineStyle: 'none' } : {}) },
     discountPct: { fontSize: 12, color: '#D97706', fontWeight: '700', width: 14 },
     commValue: { fontSize: 13, fontWeight: '800', textAlign: 'right' },
@@ -250,25 +251,7 @@ export default function CalculatorScreen() {
     const handleChange = (index, field, value) => {
         setItems(prev => prev.map((item, i) => {
             if (i !== index) return item;
-            const updated = { ...item, [field]: value };
-            // Khi sửa chiết khấu → tự tính sellPrice
-            if (field === 'discount') {
-                const disc = parseNum(value);
-                const list = parseNum(updated.listPrice);
-                if (disc > 0) {
-                    updated.sellPrice = String(list * (1 - disc / 100));
-                } else {
-                    // reset về giá role
-                    updated.sellPrice = String(parseNum(item.productRef?.[priceField]) || parseNum(item.listPrice));
-                }
-            }
-            // Khi sửa listPrice → recalc sellPrice nếu có discount
-            if (field === 'listPrice') {
-                const disc = parseNum(updated.discount);
-                if (disc > 0) {
-                    updated.sellPrice = String(parseNum(value) * (1 - disc / 100));
-                }
-            }
+            const updated = { ...item, [field]: value }; m
             return updated;
         }));
     };
@@ -280,12 +263,13 @@ export default function CalculatorScreen() {
     const totals = useMemo(() => {
         return items.reduce((acc, item) => {
             const list = parseNum(item.listPrice);
-            const disc = parseNum(item.discount);
-            const sell = disc > 0 ? list * (1 - disc / 100) : parseNum(item.sellPrice);
+            const sell = parseNum(item.sellPrice);  // giá ưu đãi
+            const disc = parseNum(item.discount);   // hoa hồng %
             const qty = parseNum(item.qty) || 1;
+            const sellAfterDisc = disc > 0 ? (sell * (1 - disc / 100)) : sell;
             acc.totalList += list * qty;
-            acc.totalSell += sell * qty;
-            acc.totalComm += (list - sell) * qty;
+            acc.totalSell += sellAfterDisc * qty;
+            acc.totalComm += (list - (sell * (1 - disc / 100))) * qty;
             acc.totalQty += qty;
             return acc;
         }, { totalList: 0, totalSell: 0, totalComm: 0, totalQty: 0 });
@@ -296,7 +280,7 @@ export default function CalculatorScreen() {
         { label: 'SL', width: 70, align: 'center' },
         { label: 'Giá niêm yết', flex: 1.4, align: 'right' },
         { label: roleInfo.label, flex: 1.4, align: 'right' },  // Giá bán theo role
-        { label: 'Chiết khấu', width: 100, align: 'center' },
+        { label: 'Chiết khấu %', flex: 1.1, align: 'right' },
         { label: 'Hoa hồng', flex: 1.3, align: 'right' },
         { label: 'Thành tiền', flex: 1.4, align: 'right' },
         { label: '', width: 36, align: 'center' },
@@ -345,11 +329,11 @@ export default function CalculatorScreen() {
                     </View>
                     <View style={S.legendItem}>
                         <View style={[S.legendDot, { backgroundColor: '#059669' }]} />
-                        <Text style={S.legendText}>HH = (NL − BH) × SL</Text>
+                        <Text style={S.legendText}>HH = ( NL - ( BH × (1 - CK%) ) ) × SL</Text>
                     </View>
                     <View style={S.legendItem}>
                         <View style={[S.legendDot, { backgroundColor: '#D97706' }]} />
-                        <Text style={S.legendText}>Chiết khấu: BH = NL × (1 − %CK)</Text>
+                        <Text style={S.legendText}>Thành tiền = BH × (1 − CK%)</Text>
                     </View>
                 </View>
 
@@ -412,7 +396,7 @@ export default function CalculatorScreen() {
                                 <Text style={[S.subtotalValue, { flex: 1.4, textAlign: 'right', color: '#7C3AED' }]}>
                                     {fmtVND(totals.totalSell)}
                                 </Text>
-                                <View style={{ width: 100 }} />
+                                <View style={{ flex: 1.1 }} />
                                 <Text style={[S.subtotalValue, { flex: 1.3, textAlign: 'right', color: totals.totalComm >= 0 ? '#059669' : '#EF4444' }]}>
                                     {fmtVND(totals.totalComm)}
                                 </Text>

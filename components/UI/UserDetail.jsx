@@ -1,6 +1,7 @@
 // components/UI/UserDetail.jsx — style giống order panel
 
 import { showAlert } from '@/components/Main/showAlert';
+import { createWelcomeChatRoom } from '@/components/Utils/chatService';
 import { fmtCurrency, fmtDate, fmtPhone } from '@/components/Utils/formatters';
 import { db } from '@/config/firebaseConfig';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -52,13 +53,27 @@ export default function UserDetail({ user, onClose, onUpdated }) {
     const color = hashColor(local.email);
     const isCompany = local.bizModel === 'company';
     const verified = !!local.verified;
+    const locked = !!local.locked;
     const roleLabel = ROLE_LABEL[local.role || local.member] || local.role || '—';
+
+    const handleLock = () => {
+        const action = locked ? 'Mở khóa' : 'Khóa';
+        showAlert(action, `${action} tài khoản "${local.name}"?`, async () => {
+            try {
+                await updateDoc(doc(db, 'users', local.email), { locked: !locked });
+                const next = { ...local, locked: !locked };
+                setLocal(next);
+                onUpdated?.(next);
+            } catch (e) { showAlert('Lỗi', e.message); }
+        });
+    };
 
     const handleApprove = () => {
         showAlert('Phê duyệt', `Phê duyệt tài khoản "${local.name}"?`, async () => {
             setApproving(true);
             try {
                 await updateDoc(doc(db, 'users', local.email), { verified: true });
+                createWelcomeChatRoom({ userEmail: local.email, userName: local.name }).catch(() => {});
                 const next = { ...local, verified: true };
                 setLocal(next);
                 onUpdated?.(next);
@@ -79,11 +94,18 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                         <Text style={S.title} numberOfLines={1}>{local.name || local.companyName || '—'}</Text>
                         <Text style={S.subtitle} numberOfLines={1}>{local.email}</Text>
                     </View>
-                    {/* Verified badge */}
-                    <View style={[S.verBadge, verified ? S.verBadgeOk : S.verBadgePending]}>
-                        <Ionicons name={verified ? 'checkmark-circle' : 'time'} size={13} color={verified ? '#16A34A' : '#D97706'} />
-                        <Text style={[S.verText, { color: verified ? '#16A34A' : '#D97706' }]}>{verified ? 'Đã xác minh' : 'Chờ duyệt'}</Text>
-                    </View>
+                    {/* Status badge */}
+                    {locked ? (
+                        <View style={[S.verBadge, { backgroundColor: '#FEF2F2' }]}>
+                            <Ionicons name="lock-closed" size={13} color="#DC2626" />
+                            <Text style={[S.verText, { color: '#DC2626' }]}>Bị khóa</Text>
+                        </View>
+                    ) : (
+                        <View style={[S.verBadge, verified ? S.verBadgeOk : S.verBadgePending]}>
+                            <Ionicons name={verified ? 'checkmark-circle' : 'time'} size={13} color={verified ? '#16A34A' : '#D97706'} />
+                            <Text style={[S.verText, { color: verified ? '#16A34A' : '#D97706' }]}>{verified ? 'Đã xác minh' : 'Chờ duyệt'}</Text>
+                        </View>
+                    )}
                 </View>
                 {/* Actions */}
                 <View style={S.actions}>
@@ -94,6 +116,12 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                             <Text style={[S.aBtnText, { color: '#059669' }]}>{approving ? 'Đang xử lý...' : 'Phê duyệt'}</Text>
                         </TouchableOpacity>
                     )}
+                    <TouchableOpacity
+                        style={[S.aBtn, locked ? { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' } : { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
+                        onPress={handleLock}>
+                        <Ionicons name={locked ? 'lock-open-outline' : 'lock-closed-outline'} size={13} color={locked ? '#059669' : '#DC2626'} />
+                        <Text style={[S.aBtnText, { color: locked ? '#059669' : '#DC2626' }]}>{locked ? 'Mở khóa' : 'Khóa TK'}</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity style={S.aBtn}
                         onPress={() => router.push({ pathname: '/editUser/[userEmail]', params: { userEmail: local.email, userParam: JSON.stringify(local) } })}>
                         <Ionicons name="create-outline" size={13} color="#2563EB" />

@@ -182,6 +182,16 @@ export default function customerView() {
 
           {/* Actions */}
           <View style={styles.actionRow}>
+            {!isConsult && (
+              <TouchableOpacity
+                style={[styles.actionBtn, { borderColor: '#2563EB', backgroundColor: '#EFF6FF' }]}
+                onPress={() => router.push({ pathname: '/addOrder', params: { customerParam: JSON.stringify(customer) } })}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle-outline" size={16} color="#2563EB" />
+                <Text style={[styles.actionBtnText, { color: '#2563EB' }]}>Tạo đơn</Text>
+              </TouchableOpacity>
+            )}
             {phone && (
               <TouchableOpacity
                 style={styles.actionBtn}

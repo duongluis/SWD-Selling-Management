@@ -4,6 +4,7 @@ import { useScreenData } from '@/components/Hooks/useScreenData';
 import NotificationPanel from '@/components/Main/NotificationPanel';
 import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import StatBar from '@/components/UI/StatBar';
+import { exportCSV, exportExcel, exportImagesZip, fetchExportData } from '@/components/Utils/exportData';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
 import { getRole } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -11,10 +12,131 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
+
+// ── Export Modal ──────────────────────────────────────────────
+function ExportModal({ visible, onClose }) {
+  const [status, setStatus] = useState('');
+  const [running, setRunning] = useState(false);
+
+  const run = async (fn) => {
+    setRunning(true);
+    setStatus('Đang tải dữ liệu...');
+    try {
+      const data = await fetchExportData(setStatus);
+      await fn(data);
+      setStatus('✅ Xuất thành công!');
+    } catch (e) {
+      setStatus(`❌ Lỗi: ${e.message}`);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const runZip = async () => {
+    setRunning(true);
+    setStatus('Đang tải dữ liệu...');
+    try {
+      const data = await fetchExportData(setStatus);
+      const count = await exportImagesZip(data.news, setStatus);
+      setStatus(count === 0 ? '⚠️ Không có ảnh nào để xuất' : `✅ Đã xuất ${count} ảnh vào ZIP`);
+    } catch (e) {
+      setStatus(`❌ Lỗi: ${e.message}`);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const handleClose = () => { setStatus(''); setRunning(false); onClose(); };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+      <View style={EX.overlay}>
+        <View style={EX.modal}>
+          <View style={EX.header}>
+            <View style={EX.headerIcon}><Ionicons name="download-outline" size={18} color="#2563EB" /></View>
+            <Text style={EX.headerTitle}>Xuất dữ liệu</Text>
+            <TouchableOpacity onPress={handleClose} style={EX.closeBtn} disabled={running}>
+              <Ionicons name="close" size={18} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={EX.desc}>
+            Xuất toàn bộ dữ liệu (khách hàng, đơn hàng, người dùng, tin tức) về máy. Chỉ hỗ trợ trên Web.
+          </Text>
+
+          <View style={EX.options}>
+            <TouchableOpacity style={EX.optBtn} onPress={() => run(exportExcel)} disabled={running}>
+              <View style={[EX.optIcon, { backgroundColor: '#ECFDF5' }]}>
+                <Ionicons name="document-outline" size={22} color="#059669" />
+              </View>
+              <View style={EX.optText}>
+                <Text style={EX.optTitle}>Excel (.xlsx)</Text>
+                <Text style={EX.optSub}>Tất cả bảng dữ liệu trong 1 file</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <View style={EX.optDivider} />
+
+            <TouchableOpacity style={EX.optBtn} onPress={() => run(exportCSV)} disabled={running}>
+              <View style={[EX.optIcon, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="grid-outline" size={22} color="#2563EB" />
+              </View>
+              <View style={EX.optText}>
+                <Text style={EX.optTitle}>CSV (nhiều file)</Text>
+                <Text style={EX.optSub}>Mỗi bảng tải xuống riêng lẻ</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+            </TouchableOpacity>
+
+            <View style={EX.optDivider} />
+
+            <TouchableOpacity style={EX.optBtn} onPress={runZip} disabled={running}>
+              <View style={[EX.optIcon, { backgroundColor: '#FFF7ED' }]}>
+                <Ionicons name="images-outline" size={22} color="#EA580C" />
+              </View>
+              <View style={EX.optText}>
+                <Text style={EX.optTitle}>Ảnh (.zip)</Text>
+                <Text style={EX.optSub}>Toàn bộ ảnh trong tin tức</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+
+          {(running || status) ? (
+            <View style={EX.statusRow}>
+              {running && <ActivityIndicator size="small" color="#2563EB" style={{ marginRight: 8 }} />}
+              <Text style={[EX.statusText, status.startsWith('❌') && { color: '#EF4444' }]}>{status}</Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const EX = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modal: { backgroundColor: '#fff', borderRadius: 16, width: isWeb ? 420 : '100%', overflow: 'hidden' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  headerIcon: { width: 32, height: 32, borderRadius: 9, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  closeBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+  desc: { fontSize: 13, color: '#64748B', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6, lineHeight: 20 },
+  options: { paddingHorizontal: 20, paddingBottom: 4 },
+  optBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  optIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  optText: { flex: 1 },
+  optTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 2 },
+  optSub: { fontSize: 12, color: '#64748B' },
+  optDivider: { height: 1, backgroundColor: '#F1F5F9' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', margin: 16, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+  statusText: { flex: 1, fontSize: 13, color: '#374151', fontWeight: '500' },
+});
 
 // ── Quick action ──────────────────────────────────────────────
 function QuickAction({ name, icon, action, color, bg }) {
@@ -51,6 +173,7 @@ export default function HomeView() {
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
   const [recentOrders, setRecentOrders] = useState([]);
+  const [exportOpen, setExportOpen] = useState(false);
   useEffect(() => {
     if (!userDetail || customerLoading || !customerList.length) return;
     const fetchOrders = async () => {
@@ -101,7 +224,14 @@ export default function HomeView() {
               <Text style={H.greeting}>👋 Xin chào {userDetail?.role}</Text>
               <Text style={H.userName}>{userDetail?.name}</Text>
             </View>
-            <NotificationPanel bellColor="#0F172A" bellSize={22} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {role === 'admin' && (
+                <TouchableOpacity style={H.exportBtn} onPress={() => setExportOpen(true)}>
+                  <Ionicons name="download-outline" size={16} color="#2563EB" />
+                </TouchableOpacity>
+              )}
+              <NotificationPanel bellColor="#0F172A" bellSize={22} />
+            </View>
           </View>
         )}
 
@@ -116,6 +246,12 @@ export default function HomeView() {
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <NotificationPanel bellColor="#0F172A" bellSize={22} />
+              {role === 'admin' && (
+                <TouchableOpacity style={H.webBtnSecondary} onPress={() => setExportOpen(true)}>
+                  <Ionicons name="download-outline" size={15} color="#2563EB" />
+                  <Text style={H.webBtnSecondaryText}>Xuất dữ liệu</Text>
+                </TouchableOpacity>
+              )}
               {role !== 'ctv' && (
                 <TouchableOpacity style={H.webBtn} onPress={() => router.push('/addOrder')}>
                   <Ionicons name="add" size={16} color="#fff" />
@@ -193,6 +329,10 @@ export default function HomeView() {
 
         <View style={{ height: isWeb ? 32 : 100 }} />
       </ScrollView>
+
+      {role === 'admin' && (
+        <ExportModal visible={exportOpen} onClose={() => setExportOpen(false)} />
+      )}
     </TabScreenLayout>
   );
 }
@@ -207,6 +347,9 @@ const H = StyleSheet.create({
   webSub: { fontSize: 14, color: '#64748B' },
   webBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563EB', paddingHorizontal: 16, paddingVertical: 9, borderRadius: 8 },
   webBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  webBtnSecondary: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EFF6FF', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8, borderWidth: 1, borderColor: '#BFDBFE' },
+  webBtnSecondaryText: { color: '#2563EB', fontSize: 13, fontWeight: '600' },
+  exportBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', alignItems: 'center', justifyContent: 'center' },
   contentGrid: { flexDirection: 'column', gap: 16 },
   contentGridWeb: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
   card: { backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 14, padding: 20, borderWidth: 1, borderColor: '#E2E8F0' },

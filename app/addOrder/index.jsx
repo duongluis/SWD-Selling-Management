@@ -3,7 +3,7 @@ import { createOrderChatRoom } from '@/components/Utils/chatService';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { arrayUnion, collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useState } from 'react';
 import {
@@ -150,6 +150,7 @@ const PD = StyleSheet.create({
 // ── Main ─────────────────────────────────────────────────────
 export default function AddOrder() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const { userDetail } = useContext(UserDetailContext);
   const role = getRole(userDetail);
@@ -190,6 +191,19 @@ export default function AddOrder() {
   }, [userDetail?.email, role]);
 
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+
+  // Pre-select khách hàng nếu được truyền từ CustomerView
+  useEffect(() => {
+    if (!params.customerParam || customerLoading) return;
+    try {
+      const c = JSON.parse(params.customerParam);
+      const found = customerList.find(cu => cu.docId === c.docId || cu.phone === c.phone);
+      if (found) {
+        setSelectedCustomer(found);
+        setDeliveryAddress(found.address || '');
+      }
+    } catch (_) {}
+  }, [params.customerParam, customerList, customerLoading]);
 
   // ── Catalog ───────────────────────────────────────────────
   const [catalog, setCatalog] = useState([]);
@@ -673,7 +687,7 @@ export default function AddOrder() {
                   <TouchableOpacity onPress={() => removeProduct(p.id)} style={W.removeBtn}><Ionicons name="trash-outline" size={14} color="#EF4444" /></TouchableOpacity>
                 </View>
               ))}
-              {showAddProduct ? <AddProductForm ws /> : (
+              {showAddProduct ? AddProductForm({ ws: true }) : (
                 <TouchableOpacity style={W.addProductBtn} onPress={() => setShowAddProduct(true)}>
                   <Ionicons name="add" size={16} color="#2563EB" />
                   <Text style={W.addProductBtnText}>Thêm sản phẩm</Text>
@@ -727,7 +741,7 @@ export default function AddOrder() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Ngày giao hàng</Text>
+              <Text style={styles.inputLabel}>Ngày giao hàng <Text style={{ color: '#EF4444' }}>*</Text></Text>
               <DateField orderDate={orderDate} setOrderDate={setOrderDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} showDatePicker={showDatePicker} setShowDatePicker={setShowDatePicker} />
             </View>
 
@@ -759,7 +773,7 @@ export default function AddOrder() {
                   <View style={styles.productItemRight}><Text style={styles.productItemTotal}>{fmt(p.price * p.qty)}</Text><TouchableOpacity onPress={() => removeProduct(p.id)}><Ionicons name="close-circle" size={18} color="#F44336" /></TouchableOpacity></View>
                 </View>
               ))}
-              {showAddProduct ? <AddProductForm ws={false} /> : (
+              {showAddProduct ? AddProductForm({ ws: false }) : (
                 <TouchableOpacity style={styles.addProductBtn} onPress={() => setShowAddProduct(true)} activeOpacity={0.8}>
                   <Ionicons name="add" size={18} color="#2563EB" /><Text style={styles.addProductBtnText}>Thêm sản phẩm</Text>
                 </TouchableOpacity>

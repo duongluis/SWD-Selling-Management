@@ -67,6 +67,46 @@ export const createOrderChatRoom = async ({ orderId, orderType, createdBy, creat
     return roomId;
 };
 
+export const createWelcomeChatRoom = async ({ userEmail, userName }) => {
+    const roomId = `welcome_${userEmail.replace(/[@.]/g, '_')}`;
+
+    // Không tạo lại nếu đã tồn tại
+    const existing = await getDoc(doc(db, 'chatRooms', roomId));
+    if (existing.exists()) return roomId;
+
+    const adminSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+    const adminEmails = adminSnap.docs.map(d => d.data().email).filter(Boolean);
+
+    const allMembers = [...new Set([userEmail, ...adminEmails])];
+    const unreadCount = {};
+    adminEmails.forEach(a => { unreadCount[a] = 1; });
+    unreadCount[userEmail] = 0;
+
+    await setDoc(doc(db, 'chatRooms', roomId), {
+        roomId,
+        type: 'welcome',
+        userEmail,
+        members: allMembers,
+        lastMessage: `Chào mừng ${userName || userEmail} đến với hệ thống!`,
+        lastAt: new Date().toISOString(),
+        unreadCount,
+        createdAt: new Date().toISOString(),
+    });
+
+    await sendSystemMessage(roomId, `🎉 Tài khoản của ${userName || userEmail} đã được phê duyệt. Chào mừng bạn đến với hệ thống!`);
+
+    // Thông báo cho user
+    await createNotification({
+        userEmail,
+        type: 'account_verified',
+        title: '✅ Tài khoản đã được phê duyệt',
+        body: 'Tài khoản của bạn đã được xác minh. Bắt đầu sử dụng hệ thống ngay!',
+        roomId,
+    });
+
+    return roomId;
+};
+
 export const getRoomIdByOrderId = (orderId) => `order_${orderId}`;
 
 export const checkRoomExists = async (roomId) => {

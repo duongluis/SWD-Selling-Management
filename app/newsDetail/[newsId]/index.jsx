@@ -1,4 +1,4 @@
-// app/newsDetail/[newsId].jsx — Chi tiết tin tức (blog view)
+// app/newsDetail/[newsId]/index.jsx — Chi tiết tin tức (blog view)
 
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,7 +9,7 @@ import {
     ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { db } from '../../config/firebaseConfig';
+import { db } from '../../../config/firebaseConfig';
 
 const isWeb = Platform.OS === 'web';
 
@@ -26,8 +26,25 @@ function formatDate(ts) {
     return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// Renders an array of content blocks [{type:'text'|'image', value:string}]
+function BlockContent({ blocks }) {
+    return blocks.map((block, i) => {
+        if (block.type === 'image' && block.value) {
+            return (
+                <View key={i} style={S.inlineImgWrap}>
+                    <Image source={{ uri: block.value }} style={S.inlineImage} resizeMode="contain" />
+                </View>
+            );
+        }
+        if (block.type === 'text' && block.value) {
+            return <Text key={i} style={S.contentBlock}>{block.value}</Text>;
+        }
+        return null;
+    });
+}
+
 export default function NewsDetailScreen() {
-    const { newsId, newsData } = useLocalSearchParams();
+    const { newsId } = useLocalSearchParams();
     const router = useRouter();
     const insets = useSafeAreaInsets();
 
@@ -35,14 +52,6 @@ export default function NewsDetailScreen() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Thử parse từ param trước (tránh gọi Firestore khi không cần)
-        if (newsData) {
-            try {
-                setNews(JSON.parse(decodeURIComponent(newsData)));
-                setLoading(false);
-                return;
-            } catch (_) { }
-        }
         if (!newsId) { setLoading(false); return; }
         getDoc(doc(db, 'news', newsId))
             .then(s => s.exists() ? setNews({ ...s.data(), id: s.id }) : null)
@@ -67,6 +76,7 @@ export default function NewsDetailScreen() {
     );
 
     const catCfg = CAT_COLORS[news.category] || { c: '#2563EB', bg: '#EFF6FF' };
+    const hasBlocks = news.blocks?.length > 0;
 
     return (
         <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
@@ -85,7 +95,7 @@ export default function NewsDetailScreen() {
                 {/* Hero image */}
                 {news.imageUrl ? (
                     <View style={S.heroWrap}>
-                        <Image source={{ uri: news.imageUrl }} style={S.heroImage} resizeMode="cover" />
+                        <Image source={{ uri: news.imageUrl }} style={S.heroImage} resizeMode="contain" />
                         <View style={S.heroOverlay} />
                     </View>
                 ) : (
@@ -123,12 +133,18 @@ export default function NewsDetailScreen() {
                 <View style={S.divider} />
 
                 {/* Content */}
-                <Text style={S.content}>{news.content}</Text>
-
-                {/* Images thêm trong bài (nếu có nhiều ảnh) */}
-                {(news.images || []).map((uri, i) => (
-                    <Image key={i} source={{ uri }} style={S.inlineImage} resizeMode="cover" />
-                ))}
+                {hasBlocks ? (
+                    <BlockContent blocks={news.blocks} />
+                ) : (
+                    <>
+                        <Text style={S.contentBlock}>{news.content}</Text>
+                        {(news.images || []).map((uri, i) => (
+                            <View key={i} style={S.inlineImgWrap}>
+                                <Image source={{ uri }} style={S.inlineImage} resizeMode="contain" />
+                            </View>
+                        ))}
+                    </>
+                )}
 
                 <View style={{ height: 60 }} />
             </ScrollView>
@@ -151,7 +167,7 @@ const S = StyleSheet.create({
     headerTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#0F172A' },
     scroll: { padding: isWeb ? 32 : 16 },
 
-    heroWrap: { borderRadius: 16, overflow: 'hidden', height: isWeb ? 380 : 220, marginBottom: 20, position: 'relative' },
+    heroWrap: { borderRadius: 16, overflow: 'hidden', height: isWeb ? 380 : 220, marginBottom: 20, position: 'relative', backgroundColor: '#0F172A' },
     heroImage: { width: '100%', height: '100%' },
     heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.08)' },
     heroPlaceholder: {
@@ -177,12 +193,13 @@ const S = StyleSheet.create({
 
     divider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 16 },
 
-    content: {
+    contentBlock: {
         fontSize: isWeb ? 16 : 14, color: '#374151',
         lineHeight: isWeb ? 28 : 24, letterSpacing: 0.1,
+        marginBottom: 16,
     },
+    inlineImgWrap: { borderRadius: 12, overflow: 'hidden', marginBottom: 16, backgroundColor: '#F1F5F9' },
     inlineImage: {
         width: '100%', height: isWeb ? 360 : 220,
-        borderRadius: 12, marginTop: 20,
     },
 });
