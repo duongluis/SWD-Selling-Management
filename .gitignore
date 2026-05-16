@@ -45,3 +45,5 @@ app-example
 .env
 dist/
 price.json
+/.claude
+prompt.txt
