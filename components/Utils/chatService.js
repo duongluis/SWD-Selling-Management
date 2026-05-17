@@ -238,13 +238,34 @@ export const subscribeMessages = (roomId, callback) => {
     });
 };
 
-export const createNotification = async ({ userEmail, type, title, body, orderId, roomId }) => {
+// Thay toàn bộ hàm createNotification bằng đoạn code dưới đây
+export const createNotification = async ({ userEmail, type, title, body, orderId, roomId, path }) => {
+    let notificationPath = path;
+    if (!notificationPath) {
+        // Tự động tạo path dựa trên loại thông báo và các ID có sẵn
+        if (roomId) {
+            // Thông báo liên quan đến chat
+            if (orderId) {
+                notificationPath = `/chat/${roomId}?orderId=${orderId}`;
+            } else {
+                notificationPath = `/chat/${roomId}`;
+            }
+        } else if (orderId) {
+            // Thông báo liên quan đến đơn hàng nhưng chưa có room chat
+            notificationPath = '/(tabs)/order';
+        } else if (type === 'account_verified') {
+            notificationPath = '/';
+        } else {
+            notificationPath = '/';
+        }
+    }
     await addDoc(collection(db, 'notifications', userEmail, 'items'), {
         type,
         title,
         body,
         orderId: orderId || null,
         roomId: roomId || null,
+        path: notificationPath,   // ← thêm trường path
         read: false,
         createdAt: new Date().toISOString(),
     });

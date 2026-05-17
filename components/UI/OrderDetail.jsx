@@ -2,17 +2,17 @@
 // Panel chi tiết đơn hàng — dùng ở order.jsx (web) và OrderView (mobile)
 
 import { showAlert } from '@/components/Main/showAlert';
-import { getRoomIdByOrderId, sendStatusUpdateMessage } from '@/components/Utils/chatService';
+import { createNotification, getRoomIdByOrderId, sendStatusUpdateMessage } from '@/components/Utils/chatService';
 import { fmtCurrency } from '@/components/Utils/formatters';
 import { isAdmin as checkAdmin } from '@/components/Utils/roleHelper';
 import { syncServiceStatusFromOrder } from '@/components/Utils/syncOrderStatus';
-import statusConfig from '@/config/status.json';
 import { db } from '@/config/firebaseConfig';
+import statusConfig from '@/config/status.json';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator, Dimensions, Modal, Platform, ScrollView, StyleSheet,
     Text, TouchableOpacity, View,
@@ -30,6 +30,7 @@ async function _getLogo() {
         return a.uri;
     } catch { return null; }
 }
+
 async function _printHtml(html) {
     if (isWeb) {
         const w = window.open('', '_blank');
@@ -43,6 +44,7 @@ async function _printHtml(html) {
         } catch (e) { console.error(e); }
     }
 }
+
 function _buildHandoverHtml({ order, seller, logoBase64 }) {
     const fN = (n) => Math.round(n || 0).toLocaleString('vi-VN');
     const fV = (n) => fN(n) + ' đ';
@@ -102,8 +104,8 @@ ${logoBase64 ? `<img class="watermark" src="${logoBase64}" alt=""/>` : ''}
 </tfoot></table>
 <div class="info-box">${order.note ? 'Ghi chú: ' + order.note : 'Ghi chú: Không có'}</div>
 <div class="terms">${order.orderType === 'buon'
-        ? 'Hàng hoá được kiểm tra tại thời điểm giao nhận. Mọi khiếu nại cần phản ánh trong vòng 24 giờ kể từ khi nhận hàng.'
-        : 'Lắp đặt miễn phí trong vòng 24 giờ kể từ khi giao hàng thành công.'}</div>
+            ? 'Hàng hoá được kiểm tra tại thời điểm giao nhận. Mọi khiếu nại cần phản ánh trong vòng 24 giờ kể từ khi nhận hàng.'
+            : 'Lắp đặt miễn phí trong vòng 24 giờ kể từ khi giao hàng thành công.'}</div>
 <div class="sig">
   <div class="sig-col"><div class="sig-label">Đại diện bên nhận</div><div class="sig-name">${order.customer || '—'}</div><div style="font-size:11px;color:#94a3b8">Ký và ghi rõ họ tên</div></div>
   <div class="sig-col"><div class="sig-label">Đại diện bên giao</div><div class="sig-name">${seller?.name || 'SWD Company'}</div><div style="font-size:11px;color:#94a3b8">Ký và đóng dấu</div></div>
@@ -129,6 +131,8 @@ const TYPE_CFG = {
     le: { label: 'Đơn lẻ', c: '#5B21B6', bg: '#F5F3FF' },
 };
 
+const LOCKED_STATUSES = ['Đã thanh toán', 'Hoàn thành', 'Đã hủy', 'CANCELLED', 'PENDING', 'COMPLETED'];
+
 // Lấy danh sách trạng thái theo loại đơn từ status.json
 const getStatusOptions = (orderType) => {
     const key = orderType === 'buon' ? 'don_buon' : 'don_le';
@@ -137,11 +141,9 @@ const getStatusOptions = (orderType) => {
 
 // Kiểm tra trạng thái hiện tại có được phép thay đổi không
 const isStatusChangeable = (orderType, currentStatus) => {
-    // Các trạng thái tiếng Anh cũ luôn bị khoá
     if (!currentStatus || ['CANCELLED', 'PENDING', 'COMPLETED'].includes(currentStatus)) return false;
     const key = orderType === 'buon' ? 'don_buon' : 'don_le';
     const found = (statusConfig[key] || statusConfig['don_le']).find(s => s.name === currentStatus);
-    // Fallback false: trạng thái không tìm thấy trong config → không cho đổi
     return found ? found.changeable : false;
 };
 
@@ -152,7 +154,8 @@ export function StatusChip({ status, onPress, dropdown }) {
         <TouchableOpacity
             style={[SD.chip, { backgroundColor: cfg.bg, borderColor: cfg.bd }]}
             onPress={onPress}
-            activeOpacity={0.8}
+            activeOpacity={onPress ? 0.8 : 1}
+            disabled={!onPress}
         >
             <View style={[SD.dot, { backgroundColor: cfg.c }]} />
             <Text style={[SD.text, { color: cfg.c }]}>{status || 'PENDING'}</Text>
@@ -169,12 +172,15 @@ export function StatusMenu({ status, options, onChange, onClose, style }) {
                 const cfg = scfg(s);
                 const active = s === status;
                 return (
-                    <TouchableOpacity key={s}
+                    <TouchableOpacity
+                        key={s}
                         style={[SD.menuItem, active && { backgroundColor: cfg.bg }]}
                         onPress={() => { onChange(s); onClose(); }}
                     >
                         <View style={[SD.dot, { backgroundColor: cfg.c }]} />
-                        <Text style={[SD.menuText, { color: active ? cfg.c : '#374151', fontWeight: active ? '700' : '500' }]}>{s}</Text>
+                        <Text style={[SD.menuText, { color: active ? cfg.c : '#374151', fontWeight: active ? '700' : '500' }]}>
+                            {s}
+                        </Text>
                         {active && <Ionicons name="checkmark" size={13} color={cfg.c} style={{ marginLeft: 'auto' }} />}
                     </TouchableOpacity>
                 );
@@ -187,7 +193,7 @@ const SD = StyleSheet.create({
     chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
     dot: { width: 6, height: 6, borderRadius: 3 },
     text: { fontSize: 12, fontWeight: '700' },
-    menu: { position: 'absolute', top: 32, right: 0, zIndex: 999, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', minWidth: 180, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 10 },
+    menu: { position: 'absolute', zIndex: 9999, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', minWidth: 180, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 10 },
     menuItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#F8FAFC' },
     menuText: { fontSize: 13 },
 });
@@ -197,8 +203,9 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     const router = useRouter();
     const { userDetail } = useContext(UserDetailContext);
     const admin = checkAdmin(role);
-
     const chipRef = useRef(null);
+
+    // ── State — khai báo TRƯỚC mọi return ──
     const [localOrder, setLocalOrder] = useState(null);
     const [services, setServices] = useState([]);
     const [svLoading, setSvLoading] = useState(false);
@@ -206,9 +213,69 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     const [menuPos, setMenuPos] = useState({ top: 0, right: 16 });
     const [updating, setUpdating] = useState(false);
     const [exporting, setExporting] = useState(false);
+    const [orderCreator, setOrderCreator] = useState(null);
 
+    // ── Fetch helpers — dùng useCallback để không phụ thuộc closure ──
+    const fetchServices = useCallback(async (orderId) => {
+        if (!orderId) return;
+        setSvLoading(true);
+        try {
+            const snap = await getDocs(
+                query(collection(db, 'service'), where('orderId', '==', orderId))
+            );
+            setServices(snap.docs.map(d => ({ ...d.data(), docId: d.id })));
+        } catch (_) { }
+        finally { setSvLoading(false); }
+    }, []);
+
+    const fetchOrderCreator = useCallback(async (o) => {
+        try {
+            const phone = o?.phone || o?.customerPhone;
+            if (!phone) return;
+            const custSnap = await getDocs(
+                query(collection(db, 'customers'), where('phone', '==', phone))
+            );
+            if (!custSnap.empty) {
+                setOrderCreator(custSnap.docs[0].data().createdBy || null);
+            }
+        } catch (_) { }
+    }, []);
+
+    // ── Effect — 1 useEffect duy nhất ──
+    useEffect(() => {
+        if (order) {
+            setLocalOrder(order);
+            setMenuOpen(false);
+            fetchServices(order.id);
+            fetchOrderCreator(order);
+        }
+    }, [order, fetchServices, fetchOrderCreator]);
+
+    // ── Guard — đặt SAU toàn bộ hooks ──
+    if (!order || !localOrder) return null;
+
+    // ── Derived values ──
+    const total = (localOrder.items || []).reduce(
+        (s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0
+    );
+    const tcfg = TYPE_CFG[localOrder.orderType];
+    const date = localOrder.createdAt
+        ? new Date(localOrder.createdAt).toLocaleDateString('vi-VN', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+        })
+        : null;
+
+    // Quyền sửa: admin hoặc người tạo đơn, trừ các trạng thái đã khoá
+    const isCreator = !!orderCreator && orderCreator === userDetail?.email;
+    const canEditOrder = (admin || isCreator)
+        && !LOCKED_STATUSES.includes(localOrder.status);
+
+    // Quyền đổi status: chỉ admin
+    const canChangeStatus = admin
+        && isStatusChangeable(localOrder.orderType, localOrder.status);
+
+    // ── Handlers ──
     const handleExport = async () => {
-        if (!localOrder) return;
         setExporting(true);
         try {
             const logo = await _getLogo();
@@ -219,27 +286,12 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     };
 
     const openMenu = () => {
-        if (chipRef.current) {
-            chipRef.current.measure((_fx, _fy, width, height, pageX, pageY) => {
-                const sw = Dimensions.get('window').width;
-                setMenuPos({ top: pageY + height + 4, right: sw - pageX - width });
-                setMenuOpen(true);
-            });
-        }
-    };
-
-    useEffect(() => {
-        if (order) { setLocalOrder(order); fetchServices(order.id); }
-    }, [order]);
-
-    const fetchServices = async (orderId) => {
-        if (!orderId) return;
-        setSvLoading(true);
-        try {
-            const snap = await getDocs(query(collection(db, 'service'), where('orderId', '==', orderId)));
-            setServices(snap.docs.map(d => ({ ...d.data(), docId: d.id })));
-        } catch (_) { }
-        finally { setSvLoading(false); }
+        if (!canChangeStatus || !chipRef.current) return;
+        chipRef.current.measure((_fx, _fy, width, height, pageX, pageY) => {
+            const sw = Dimensions.get('window').width;
+            setMenuPos({ top: pageY + height + 4, right: sw - pageX - width });
+            setMenuOpen(true);
+        });
     };
 
     const handleStatusChange = async (newStatus) => {
@@ -251,35 +303,49 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                 const ref = doc(db, 'orders', phone);
                 const snap = await getDoc(ref);
                 if (!snap.exists()) return;
+
                 const ordersChange = (snap.data().orders || []).map(o =>
                     o.id === localOrder.id ? { ...o, status: newStatus } : o
                 );
                 await updateDoc(ref, { orders: ordersChange });
-                // Auto-sync linked service status
-                Promise.resolve(syncServiceStatusFromOrder(localOrder.id, newStatus)).catch(() => { });
+
+                // Sync service + gửi chat message (fire-and-forget)
+                Promise.resolve(
+                    syncServiceStatusFromOrder(localOrder.id, newStatus)
+                ).catch(() => { });
+                sendStatusUpdateMessage({
+                    orderId: localOrder.id,
+                    newStatus,
+                    changedBy: userDetail?.email,
+                    changedByName: userDetail?.name,
+                }).catch(() => { });
+
+                // Thông báo người tạo đơn → dẫn tới màn chat
+                const roomId = getRoomIdByOrderId(localOrder.id);
+                if (orderCreator && orderCreator !== userDetail?.email) {
+                    await createNotification({
+                        userEmail: orderCreator,
+                        type: 'order_status_changed',
+                        title: '🔄 Trạng thái đơn hàng thay đổi',
+                        body: `Đơn #${localOrder.id} (KH: ${localOrder.customer || '—'}) chuyển sang "${newStatus}"`,
+                        orderId: localOrder.id,
+                        roomId,
+                        path: `/chat/${roomId}?orderId=${localOrder.id}`,
+                    });
+                }
+
                 const next = { ...localOrder, status: newStatus };
                 setLocalOrder(next);
                 onUpdated?.(next);
-                sendStatusUpdateMessage({
-                    orderId: localOrder.id, newStatus,
-                    changedBy: userDetail?.email, changedByName: userDetail?.name,
-                }).catch(() => { });
             } catch (e) { showAlert('Lỗi', e.message); }
-            finally { setUpdating(false); }
+            finally { setUpdating(false); setMenuOpen(false); }
         });
     };
 
-    if (!order || !localOrder) return null;
-
-    const total = (localOrder.items || []).reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
-    const tcfg = TYPE_CFG[localOrder.orderType];
-    const date = localOrder.createdAt
-        ? new Date(localOrder.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        : null;
-
+    // ── Render ──
     return (
         <View style={DP.root}>
-            {/* Header */}
+            {/* ── Header ── */}
             <View style={DP.header}>
                 <View style={DP.headerTop}>
                     {date && <Text style={DP.date}>{date}</Text>}
@@ -287,6 +353,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         <Ionicons name="close" size={15} color="#64748B" />
                     </TouchableOpacity>
                 </View>
+
                 <View style={DP.titleRow}>
                     <Text style={DP.title}>Order #{localOrder.id}</Text>
                     {tcfg && (
@@ -295,7 +362,9 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         </View>
                     )}
                 </View>
+
                 <View style={DP.actions}>
+                    {/* Xuất HĐ */}
                     <TouchableOpacity style={DP.aBtn} onPress={handleExport} disabled={exporting}>
                         {exporting
                             ? <ActivityIndicator size="small" color="#2563EB" style={{ width: 13 }} />
@@ -303,34 +372,66 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         }
                         <Text style={DP.aBtnText}>{exporting ? 'Đang xuất...' : 'Xuất HĐ'}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={DP.aBtn}
-                        onPress={() => router.push({ pathname: '/chat/[roomID]', params: { roomID: getRoomIdByOrderId(localOrder.id), orderId: localOrder.id } })}>
+
+                    {/* Chat */}
+                    <TouchableOpacity
+                        style={DP.aBtn}
+                        onPress={() => router.push({
+                            pathname: '/chat/[roomID]',
+                            params: {
+                                roomID: getRoomIdByOrderId(localOrder.id),
+                                orderId: localOrder.id,
+                            },
+                        })}
+                    >
                         <Ionicons name="chatbubble-outline" size={13} color="#2563EB" />
                         <Text style={DP.aBtnText}>Chat</Text>
                     </TouchableOpacity>
-                    {(admin || localOrder.createdBy === userDetail?.email) && localOrder.status === 'Chờ xác nhận' && (
-                        <TouchableOpacity style={DP.aBtn}
-                            onPress={() => router.push({ pathname: '/editOrder/[orderID]', params: { orderID: localOrder.id, orderParam: JSON.stringify(order) } })}>
+
+                    {/* Sửa — admin hoặc người tạo đơn, trạng thái chưa khoá */}
+                    {canEditOrder && (
+                        <TouchableOpacity
+                            style={DP.aBtn}
+                            onPress={() => router.push({
+                                pathname: '/editOrder/[orderID]',
+                                params: {
+                                    orderID: localOrder.id,
+                                    orderParam: JSON.stringify(localOrder),
+                                },
+                            })}
+                        >
                             <Ionicons name="create-outline" size={13} color="#2563EB" />
                             <Text style={DP.aBtnText}>Sửa</Text>
                         </TouchableOpacity>
                     )}
+
+                    {/* Status chip — measure để định vị modal menu */}
                     <View ref={chipRef} collapsable={false}>
                         {updating
                             ? <ActivityIndicator size="small" color="#2563EB" />
                             : <StatusChip
                                 status={localOrder.status}
-                                dropdown={admin && isStatusChangeable(localOrder.orderType, localOrder.status)}
-                                onPress={admin && isStatusChangeable(localOrder.orderType, localOrder.status) ? openMenu : undefined}
-                              />
+                                dropdown={canChangeStatus}
+                                onPress={canChangeStatus ? openMenu : undefined}
+                            />
                         }
                     </View>
                 </View>
             </View>
 
+            {/* ── Status dropdown — dùng Modal để vượt overflow ── */}
             {menuOpen && admin && (
-                <Modal transparent statusBarTranslucent animationType="none" onRequestClose={() => setMenuOpen(false)}>
-                    <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setMenuOpen(false)} />
+                <Modal
+                    transparent
+                    statusBarTranslucent
+                    animationType="none"
+                    onRequestClose={() => setMenuOpen(false)}
+                >
+                    <TouchableOpacity
+                        style={StyleSheet.absoluteFillObject}
+                        activeOpacity={1}
+                        onPress={() => setMenuOpen(false)}
+                    />
                     <StatusMenu
                         status={localOrder.status}
                         options={getStatusOptions(localOrder.orderType)}
@@ -341,8 +442,10 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                 </Modal>
             )}
 
+            {/* ── Body ── */}
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                {/* 2-col info */}
+
+                {/* 2-col: khách hàng + dịch vụ */}
                 <View style={DP.infoGrid}>
                     <View style={[DP.infoCol, { borderRightWidth: 0.5, borderRightColor: '#F1F5F9' }]}>
                         <View style={DP.infoColLabel}>
@@ -360,27 +463,36 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                             </View>
                         )}
                     </View>
+
                     <View style={DP.infoCol}>
                         <View style={DP.infoColLabel}>
                             <Ionicons name="construct-outline" size={13} color="#94A3B8" />
                             <Text style={DP.infoColLabelText}>Dịch vụ</Text>
                             {services.length > 0 && (
-                                <View style={DP.svCountBadge}><Text style={DP.svCountText}>{services.length}</Text></View>
+                                <View style={DP.svCountBadge}>
+                                    <Text style={DP.svCountText}>{services.length}</Text>
+                                </View>
                             )}
                         </View>
-                        {svLoading ? <ActivityIndicator size="small" color="#2563EB" style={{ marginTop: 8 }} /> :
-                            services.length === 0 ? <Text style={DP.noSv}>Chưa có dịch vụ</Text> :
-                                services.slice(0, 2).map((sv, i) => {
+                        {svLoading
+                            ? <ActivityIndicator size="small" color="#2563EB" style={{ marginTop: 8 }} />
+                            : services.length === 0
+                                ? <Text style={DP.noSv}>Chưa có dịch vụ</Text>
+                                : services.slice(0, 2).map((sv, i) => {
                                     const c = scfg(sv.status);
                                     return (
                                         <View key={sv.docId || i} style={DP.svRow}>
                                             <Ionicons name="construct-outline" size={13} color="#8B5CF6" />
                                             <View style={{ flex: 1 }}>
                                                 <Text style={DP.svId}>#{sv.id || sv.docId?.slice(-6)}</Text>
-                                                <Text style={DP.svType}>{sv.type === 'DELIVERY' ? 'Giao hàng' : 'Lắp đặt'}</Text>
+                                                <Text style={DP.svType}>
+                                                    {sv.type === 'DELIVERY' ? 'Giao hàng' : 'Lắp đặt'}
+                                                </Text>
                                             </View>
                                             <View style={[DP.svStatus, { backgroundColor: c.bg }]}>
-                                                <Text style={[DP.svStatusText, { color: c.c }]}>{sv.status || 'Chờ xử lý'}</Text>
+                                                <Text style={[DP.svStatusText, { color: c.c }]}>
+                                                    {sv.status || 'Chờ xử lý'}
+                                                </Text>
                                             </View>
                                         </View>
                                     );
@@ -397,25 +509,35 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                 {/* Sản phẩm */}
                 <View style={DP.section}>
                     <View style={DP.sectionHead}>
-                        <View style={DP.sectionIcon}><Ionicons name="water-outline" size={13} color="#2563EB" /></View>
+                        <View style={DP.sectionIcon}>
+                            <Ionicons name="water-outline" size={13} color="#2563EB" />
+                        </View>
                         <Text style={DP.sectionTitle}>Sản phẩm</Text>
-                        <View style={DP.sectionBadge}><Text style={DP.sectionBadgeText}>{(localOrder.items || []).length}</Text></View>
+                        <View style={DP.sectionBadge}>
+                            <Text style={DP.sectionBadgeText}>{(localOrder.items || []).length}</Text>
+                        </View>
                     </View>
                     {(localOrder.items || []).map((p, i) => {
                         const lt = PARSE(p.price) * PARSE(p.qty || 1);
                         return (
                             <View key={i} style={DP.prodRow}>
-                                <View style={DP.prodIcon}><Ionicons name="water-outline" size={14} color="#2563EB" /></View>
+                                <View style={DP.prodIcon}>
+                                    <Ionicons name="water-outline" size={14} color="#2563EB" />
+                                </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={DP.prodName}>{p.name}</Text>
-                                    <Text style={DP.prodSub}>x{p.qty || 1} · {fmtCurrency(PARSE(p.price))}</Text>
+                                    <Text style={DP.prodSub}>
+                                        x{p.qty || 1} · {fmtCurrency(PARSE(p.price))}
+                                    </Text>
                                 </View>
                                 <Text style={DP.prodTotal}>{fmtCurrency(lt)}</Text>
                             </View>
                         );
                     })}
                     {localOrder.note && (
-                        <View style={DP.noteBox}><Text style={DP.noteText}>{localOrder.note}</Text></View>
+                        <View style={DP.noteBox}>
+                            <Text style={DP.noteText}>{localOrder.note}</Text>
+                        </View>
                     )}
                 </View>
 
@@ -424,6 +546,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                     <Text style={DP.totalLabel}>Tổng cộng</Text>
                     <Text style={DP.totalValue}>{fmtCurrency(total)}</Text>
                 </View>
+
                 <View style={{ height: 40 }} />
             </ScrollView>
         </View>
@@ -431,7 +554,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
 }
 
 const DP = StyleSheet.create({
-    root: { width: 360, backgroundColor: 'transparent', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', borderRadius: isWeb ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
+    root: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', borderRadius: isWeb ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
     header: { padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 6 },
     headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     date: { fontSize: 11, color: '#94A3B8' },

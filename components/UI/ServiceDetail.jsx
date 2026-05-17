@@ -1,9 +1,10 @@
 // components/UI/ServiceDetail.jsx — style giống order panel
 
 import { showAlert } from '@/components/Main/showAlert';
-import { syncOrderStatusFromService, isServiceStatusLocked } from '@/components/Utils/syncOrderStatus';
+import { createNotification } from '@/components/Utils/chatService';
 import { fmtCurrency, fmtDate, fmtPhone } from '@/components/Utils/formatters';
 import { getRole } from '@/components/Utils/roleHelper';
+import { isServiceStatusLocked, syncOrderStatusFromService } from '@/components/Utils/syncOrderStatus';
 import { db } from '@/config/firebaseConfig';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,10 +20,10 @@ const PARSE = v => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 const isWeb = Platform.OS === 'web';
 
 const STATUS_CFG = {
-    'Chờ xử lý':  { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
+    'Chờ xử lý': { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
     'Đang xử lý': { c: '#2563EB', bg: '#EFF6FF', bd: '#BFDBFE' },
     'Hoàn thành': { c: '#16A34A', bg: '#DCFCE7', bd: '#86EFAC' },
-    'Đã hủy':     { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
+    'Đã hủy': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
 };
 const scfg = s => STATUS_CFG[s] || { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' };
 
@@ -126,7 +127,6 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
             try {
                 await updateDoc(doc(db, 'service', local.docId), { status: newStatus });
 
-                // Auto-sync linked order (fire-and-forget)
                 syncOrderStatusFromService(
                     { type: local.type, orderId: local.orderId, phone: local.phone },
                     newStatus
@@ -135,6 +135,23 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                         showAlert('Đã đồng bộ', `Đơn hàng #${local.orderId} tự động chuyển sang "${newOrderStatus}"`);
                     }
                 }).catch(() => { });
+
+                // ── Thông báo → dẫn tới chat (nếu có đơn liên kết) ──
+                const createdBy = local.createdBy;
+                if (createdBy && createdBy !== userDetail?.email) {
+                    const roomId = local.orderId ? `order_${local.orderId}` : null;
+                    await createNotification({
+                        userEmail: createdBy,
+                        type: 'service_status_changed',
+                        title: '🔧 Trạng thái dịch vụ thay đổi',
+                        body: `Dịch vụ #${local.id || local.docId?.slice(-6)} (KH: ${local.customer || '—'}) chuyển sang "${newStatus}"`,
+                        orderId: local.orderId || null,
+                        roomId,
+                        path: roomId
+                            ? `/chat/${roomId}?orderId=${local.orderId}`    // ← có đơn → chat
+                            : '/(tabs)/service',                            // ← không có đơn → service
+                    });
+                }
 
                 const next = { ...local, status: newStatus };
                 setLocal(next);

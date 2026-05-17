@@ -382,6 +382,7 @@ export default function CommissionScreen() {
                             body: `Hoa hồng ${fmt(r.commission)} cho đơn #${r.id} (KH: ${r.customer || '—'}) đã được trả.`,
                             orderId: r.id,
                             roomId: `order_${r.id}`,
+                            path: '/(tabs)/commission',        // ← màn commission
                         });
                     }
                 } catch (e) {

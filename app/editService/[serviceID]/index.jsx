@@ -1,4 +1,5 @@
 import BgWatermark from '@/components/Main/BgWatermark';
+import { createNotification } from '@/components/Utils/chatService';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -112,8 +113,50 @@ export default function EditService() {
                 updatedAt: new Date().toISOString(),
             };
             await updateDoc(doc(db, 'service', serviceId), updated);
-            showSuccess('Đã cập nhật dịch vụ!', `Mã dịch vụ: ${serviceId}`,
-                () => router.back());
+
+            // ── Thông báo sau khi cập nhật ──
+            const orderId = selectedOrder?.id || existingService.orderId;
+            const roomId = orderId ? `order_${orderId}` : null;
+
+            // Luôn thông báo admin (người không phải user hiện tại)
+            try {
+                const { getDocs, collection, query, where } = await import('firebase/firestore');
+                const adminSnap = await getDocs(
+                    query(collection(db, 'users'), where('role', '==', 'admin'))
+                );
+
+                // Thông báo admin
+                await Promise.all(
+                    adminSnap.docs.map(d => {
+                        const adminEmail = d.data().email;
+                        if (!adminEmail || adminEmail === userDetail?.email) return Promise.resolve();
+                        return createNotification({
+                            userEmail: adminEmail,
+                            type: 'service_updated',
+                            title: '🔧 Dịch vụ vừa được cập nhật',
+                            body: `${userDetail?.name || userDetail?.email} đã sửa dịch vụ #${serviceId} (KH: ${customerName.trim()})`,
+                            orderId: orderId || null,
+                            roomId,
+                            path: '/(tabs)/service',
+                        });
+                    })
+                );
+
+                // Thông báo người tạo đơn (nếu có)
+                if (orderId && existingService.createdBy && existingService.createdBy !== userDetail?.email) {
+                    await createNotification({
+                        userEmail: existingService.createdBy,
+                        type: 'service_updated',
+                        title: '🔧 Dịch vụ liên quan được cập nhật',
+                        body: `Dịch vụ #${serviceId} liên kết với đơn #${orderId} vừa được cập nhật`,
+                        orderId: orderId || null,
+                        roomId,
+                        path: '/(tabs)/service',
+                    });
+                }
+            } catch (_) { }
+
+            showSuccess('Đã cập nhật dịch vụ!', `Mã dịch vụ: ${serviceId}`, () => router.back());
         } catch (e) {
             showAlert('Lỗi', e.message);
         } finally {

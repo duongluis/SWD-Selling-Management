@@ -1,9 +1,10 @@
 import BgWatermark from '@/components/Main/BgWatermark';
+import { createNotification } from '@/components/Utils/chatService';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useContext, useState } from 'react';
 import {
     KeyboardAvoidingView, Modal, Platform, Pressable,
@@ -86,14 +87,22 @@ export default function EditOrder() {
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
     const { userDetail } = useContext(UserDetailContext);
-    const _role = (userDetail?.role || userDetail?.member || '').toLowerCase();
-    const isAdmin = _role === 'admin';
-    const isCTV = ['cộng tác viên', 'ctv', 'collaborator'].includes(_role);
-    const canEdit = !isCTV;
 
+    // ── 1. Parse params TRƯỚC ──
     const existing = params.orderParam ? JSON.parse(params.orderParam) : {};
     const phone = existing.customerPhone || existing._phone || '';
 
+    // ── 2. Role SAU khi đã có existing ──
+    const _role = (userDetail?.role || userDetail?.member || '').toLowerCase();
+    const isAdmin = _role === 'admin';
+    const isCTV = ['cộng tác viên', 'ctv', 'collaborator'].includes(_role);
+
+    // ── 3. isCreator dùng cả existing lẫn userDetail ──
+    // Không dùng existing.createdBy vì field đó không tồn tại trên order
+    // → xác định qua query khi cần, ở đây chỉ dùng để check canEdit
+    const canEdit = isAdmin || !isCTV;   // CTV không được sửa, còn lại đều được
+
+    // ── 4. Form state ──
     const [orderDate, setOrderDate] = useState(existing.createdAt || '');
     const [deliveryAddress, setDeliveryAddress] = useState(existing.address || '');
     const [notes, setNotes] = useState(existing.note || '');
@@ -109,15 +118,65 @@ export default function EditOrder() {
     const total = items.reduce((s, p) => s + (p.price * p.qty || 0), 0);
 
     const handleSubmit = async () => {
-        if (!phone) { showAlert('Lỗi', 'Không xác định được số điện thoại khách hàng'); return; }
+        if (!phone) { showAlert('Lỗi', 'Không xác định được số điện thoại'); return; }
         setSubmitting(true);
         try {
+            // ── 1. Update order ──
             const snap = await getDoc(doc(db, 'orders', phone));
             if (!snap.exists()) throw new Error('Không tìm thấy đơn hàng');
             const updated = (snap.data().orders || []).map(o =>
-                o.id === existing.id ? { ...o, createdAt: orderDate, address: deliveryAddress, note: notes, items } : o
+                o.id === existing.id
+                    ? { ...o, createdAt: orderDate, address: deliveryAddress, note: notes, items }
+                    : o
             );
             await updateDoc(doc(db, 'orders', phone), { orders: updated });
+
+            // ── 2. Tra createdBy từ customer ──
+            let createdBy = null;
+            try {
+                const custSnap = await getDocs(
+                    query(collection(db, 'customers'), where('phone', '==', phone))
+                );
+                if (!custSnap.empty) {
+                    createdBy = custSnap.docs[0].data().createdBy || null;
+                }
+            } catch (_) { }
+
+            const roomId = `order_${existing.id}`;
+
+            if (isAdmin) {
+                if (createdBy && createdBy !== userDetail?.email) {
+                    await createNotification({
+                        userEmail: createdBy,
+                        type: 'order_updated',
+                        title: '📝 Đơn hàng đã được cập nhật',
+                        body: `Admin đã cập nhật thông tin đơn #${existing.id} (KH: ${existing.customer || '—'})`,
+                        orderId: existing.id,
+                        roomId,
+                        path: '/(tabs)/order',     // ← màn order
+                    });
+                }
+            } else {
+                const adminSnap = await getDocs(
+                    query(collection(db, 'users'), where('role', '==', 'admin'))
+                );
+                await Promise.all(
+                    adminSnap.docs.map(d => {
+                        const adminEmail = d.data().email;
+                        if (!adminEmail || adminEmail === userDetail?.email) return Promise.resolve();
+                        return createNotification({
+                            userEmail: adminEmail,
+                            type: 'order_updated',
+                            title: '📝 Đơn hàng vừa được sửa',
+                            body: `${userDetail?.name || userDetail?.email} đã sửa thông tin đơn #${existing.id} (KH: ${existing.customer || '—'})`,
+                            orderId: existing.id,
+                            roomId,
+                            path: '/(tabs)/order', // ← màn order
+                        });
+                    })
+                );
+            }
+
             showSuccess('Đã cập nhật đơn hàng!', `Mã đơn: ${existing.id}`, () => router.back());
         } catch (e) {
             showAlert('Lỗi', e.message);

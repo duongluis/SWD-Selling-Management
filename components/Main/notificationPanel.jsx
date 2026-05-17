@@ -150,10 +150,18 @@ export default function NotificationPanel({ bellColor = '#0F172A', bellSize = 22
 
     const handleNotifPress = async (notif) => {
         setOpen(false);
-        if (!email) return; // ✅ Guard: không làm gì nếu đã logout
+        if (!email) return;                 // ✅ Guard
         if (!notif.read) {
             markNotificationRead(email, notif.id).catch(() => { });
         }
+
+        // 🆕 Sử dụng path nếu có
+        if (notif.path) {
+            router.push(notif.path);
+            return;
+        }
+
+        // ⏺ Giữ lại logic cũ để tương thích ngược
         if (notif.roomId && notif.orderId) {
             router.push({
                 pathname: '/chat/[roomID]',
