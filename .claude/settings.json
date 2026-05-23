@@ -14,12 +14,5 @@
       "Bash(node -e \"const p=require\\('./package-lock.json'\\); const entry = p.packages?.['node_modules/react-refresh']; console.log\\(JSON.stringify\\(entry\\)\\)\")",
       "Bash(Select-String \"react-refresh\")"
     ]
-  },
-  "env": {
-    "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
-    "ANTHROPIC_AUTH_TOKEN": "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",
-    "ANTHROPIC_API_KEY": "",
-    "ANTHROPIC_API_MODEL": "google/gemini-2.5-pro-exp-03-25:free",
-    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "4000"
   }
 }

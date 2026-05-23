@@ -42,6 +42,10 @@ app-example
 /ios
 /android
 
+<<<<<<< Updated upstream
 .env
 .env.local
 .env.production
+=======
+.env
+>>>>>>> Stashed changes
