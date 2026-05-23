@@ -1,6 +1,6 @@
 // app/(tabs)/_layout.jsx
 
-import NotificationPanel from '@/components/Main/NotificationPanel';
+import NotificationPanel from '@/components/Main/notificationPanel';
 import { showAlert } from '@/components/Main/showAlert';
 import { showInfo } from '@/components/Main/showInfo';
 import { getRole, getRoleLabel } from '@/components/Utils/roleHelper';

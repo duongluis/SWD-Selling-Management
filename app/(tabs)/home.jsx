@@ -1,7 +1,7 @@
 // app/(tabs)/home.jsx — refactored với TabScreenLayout
 
 import { useScreenData } from '@/components/Hooks/useScreenData';
-import NotificationPanel from '@/components/Main/NotificationPanel';
+import NotificationPanel from '@/components/Main/notificationPanel';
 import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import StatBar from '@/components/UI/StatBar';
 import { exportCSV, exportExcel, exportImagesZip, fetchExportData } from '@/components/Utils/exportData';

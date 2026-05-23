@@ -25,7 +25,7 @@
       "output": "static",
       "favicon": "./assets/images/logo-light.png",
       "bundler": "metro",
-      "publicPath": "/SWD-Selling-Management/"
+      "publicPath": ""
     },
     "plugins": [
       "expo-router",
