@@ -150,22 +150,23 @@ export default function NotificationPanel({ bellColor = '#0F172A', bellSize = 22
 
     const handleNotifPress = async (notif) => {
         setOpen(false);
-        if (!email) return;                 // ✅ Guard
+        if (!email) return;
         if (!notif.read) {
             markNotificationRead(email, notif.id).catch(() => { });
         }
 
-        // 🆕 Sử dụng path nếu có
+        // Ưu tiên dùng path nếu có
         if (notif.path) {
             router.push(notif.path);
             return;
         }
 
-        // ⏺ Giữ lại logic cũ để tương thích ngược
-        if (notif.roomId && notif.orderId) {
+        // Fallback cho thông báo cũ
+        if (notif.roomId) {
+            // Điều hướng đến phòng chat (có thể có orderId hoặc không)
             router.push({
                 pathname: '/chat/[roomID]',
-                params: { roomId: notif.roomId, orderId: notif.orderId },
+                params: { roomID: notif.roomId, orderId: notif.orderId || '' },
             });
         } else if (notif.orderId) {
             router.push('/(tabs)/order');

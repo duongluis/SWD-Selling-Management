@@ -182,10 +182,14 @@ export default function ChatScreen() {
                         <Ionicons name="receipt-outline" size={16} color="#2563EB" />
                     </View>
                     <View>
-                        <Text style={S.headerTitle}>Đơn hàng #{orderId}</Text>
+                        <Text style={S.headerTitle}>
+                            {roomId.startsWith('support_') ? 'Hỗ trợ khách hàng' : `Đơn hàng #${orderId}`}
+                        </Text>
                         <View style={S.onlineDot}>
                             <View style={S.dot} />
-                            <Text style={S.onlineText}>Chat với admin</Text>
+                            <Text style={S.onlineText}>
+                                {roomId.startsWith('support_') ? 'Phòng hỗ trợ chung' : 'Chat với admin'}
+                            </Text>
                         </View>
                     </View>
                 </View>
@@ -232,7 +236,12 @@ export default function ChatScreen() {
                             placeholderTextColor="#94A3B8"
                             multiline
                             maxLength={500}
-                            onSubmitEditing={isWeb ? handleSend : undefined}
+                            onKeyPress={isWeb ? (e) => {
+                                if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                                    e.preventDefault();
+                                    handleSend();
+                                }
+                            } : undefined}
                             blurOnSubmit={false}
                         />
                         <TouchableOpacity

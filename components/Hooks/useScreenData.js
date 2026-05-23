@@ -2,13 +2,15 @@ import { db } from '@/config/firebaseConfig';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { useFocusEffect } from 'expo-router';
 import {
-    collection, doc, getDoc, getDocs, query, where,
+    collection,
+    getDocs,
+    onSnapshot,
+    query, where
 } from 'firebase/firestore';
-import { useCallback, useContext, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { getRole } from '../Utils/roleHelper';
 
-// ── Fetchers theo từng loại màn ──────────────────────────────
-
+// ── Các fetcher không đổi (customers, services, users, consults) ──
 async function fetchCustomers(myEmail, role) {
     const all = [];
     if (role === 'admin') {
@@ -23,54 +25,12 @@ async function fetchCustomers(myEmail, role) {
     return all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
 
-async function fetchOrders(myEmail, role) {
-    // Lấy phones từ customers → fetch orders
-    let phones = [];
-    if (role === 'admin') {
-        const snap = await getDocs(collection(db, 'customers'));
-        phones = snap.docs.map(d => d.data().phone).filter(Boolean);
-    } else if (role === 'ctv') {
-        // CTV: lấy từ customers + phones từ consults đã tư vấn thành công
-        const [custSnap, consultSnap] = await Promise.all([
-            getDocs(query(collection(db, 'customers'), where('createdBy', '==', myEmail))),
-            getDocs(query(collection(db, 'consult'), where('createdBy', '==', myEmail))),
-        ]);
-        const custPhones = custSnap.docs.map(d => d.data().phone).filter(Boolean);
-        const consultPhones = consultSnap.docs.map(d => d.data().phone).filter(Boolean);
-        phones = [...new Set([...custPhones, ...consultPhones])];
-    } else {
-        const snap = await getDocs(
-            query(collection(db, 'customers'), where('createdBy', '==', myEmail))
-        );
-        phones = snap.docs.map(d => d.data().phone).filter(Boolean);
-    }
-    // docId của customer === phone (setDoc dùng phone làm key)
-    const myCustomerIds = new Set(phones);
-
-    const allOrders = [];
-    await Promise.all(phones.slice(0, 100).map(async (phone) => {
-        try {
-            const snap = await getDoc(doc(db, 'orders', phone));
-            if (!snap.exists()) return;
-            (snap.data().orders || []).forEach(o => {
-                // Admin: lấy tất cả
-                // Còn lại: chỉ lấy đơn không có customerId (đơn cũ) hoặc customerId khớp với khách của mình
-                if (role === 'admin' || !o.customerId || myCustomerIds.has(o.customerId)) {
-                    allOrders.push({ ...o, customerPhone: phone });
-                }
-            });
-        } catch (_) { }
-    }));
-    return allOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-}
-
 async function fetchServices(myEmail, role) {
     const all = [];
     if (role === 'admin') {
         const snap = await getDocs(collection(db, 'service'));
         snap.docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
     } else if (role === 'ctv') {
-        // CTV lấy từ consult → phones → service
         const consultSnap = await getDocs(
             query(collection(db, 'consult'),
                 where('createdBy', '==', myEmail),
@@ -112,7 +72,7 @@ async function fetchConsults(myEmail, role) {
         .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
 
-// ── Thống kê nhanh theo loại ─────────────────────────────────
+// ── Thống kê ── (giữ nguyên)
 function computeStats(type, data) {
     switch (type) {
         case 'orders': {
@@ -144,15 +104,7 @@ function computeStats(type, data) {
     }
 }
 
-// ── Main hook ─────────────────────────────────────────────────
-const FETCHERS = {
-    orders: fetchOrders,
-    customers: fetchCustomers,
-    services: fetchServices,
-    users: fetchUsers,
-    consults: fetchConsults,
-};
-
+// ── Hook chính ──
 export function useScreenData(type) {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
@@ -164,10 +116,52 @@ export function useScreenData(type) {
     const [stats, setStats] = useState({});
     const [error, setError] = useState(null);
 
-    const fetcher = FETCHERS[type];
+    // ── XỬ LÝ REAL-TIME CHO ĐƠN HÀNG (orders) ──
+    useEffect(() => {
+        if (type !== 'orders') return;
+        if (!myEmail) return;
+
+        setLoading(true);
+        let q;
+        if (role === 'admin') {
+            q = collection(db, 'orders');
+        } else {
+            q = query(collection(db, 'orders'), where('createdBy', '==', myEmail));
+        }
+
+        const unsubscribe = onSnapshot(
+            q,
+            (snapshot) => {
+                const orders = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+                // Sắp xếp theo ngày tạo mới nhất
+                orders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                setData(orders);
+                setStats(computeStats('orders', orders));
+                setLoading(false);
+                setRefreshing(false);
+                setError(null);
+            },
+            (err) => {
+                console.error('onSnapshot orders error:', err);
+                setError(err.message);
+                setLoading(false);
+                setRefreshing(false);
+            }
+        );
+
+        return () => unsubscribe();
+    }, [type, myEmail, role]);
+
+    // ── CÁC LOẠI KHÁC DÙNG getDocs + useFocusEffect ──
+    const fetcher = {
+        customers: fetchCustomers,
+        services: fetchServices,
+        users: fetchUsers,
+        consults: fetchConsults,
+    }[type];
 
     const load = useCallback(async (isRefresh = false) => {
-        if (!myEmail || !fetcher) return;
+        if (!fetcher || type === 'orders') return; // orders đã được xử lý riêng
         if (isRefresh) setRefreshing(true);
         else setLoading(true);
         setError(null);
@@ -182,11 +176,21 @@ export function useScreenData(type) {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [myEmail, role, type]);
+    }, [fetcher, myEmail, role, type]);
 
-    useFocusEffect(useCallback(() => { load(); }, [load]));
+    useFocusEffect(useCallback(() => {
+        if (type !== 'orders') load();
+    }, [load, type]));
 
-    const refresh = useCallback(() => load(true), [load]);
+    const refresh = useCallback(() => {
+        if (type === 'orders') {
+            // orders realtime: chỉ cần trigger re-fetch không cần, onSnapshot tự cập nhật
+            setRefreshing(true);
+            setTimeout(() => setRefreshing(false), 500);
+        } else {
+            load(true);
+        }
+    }, [load, type]);
 
     return { data, loading, refreshing, refresh, stats, error, role, myEmail };
 }

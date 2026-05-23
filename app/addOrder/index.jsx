@@ -1,10 +1,10 @@
 import BgWatermark from '@/components/Main/BgWatermark';
-import { createOrderChatRoom } from '@/components/Utils/chatService';
+import { createSupportRoom, sendSystemMessage } from '@/components/Utils/chatService';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { arrayUnion, collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView, Modal, Platform, Pressable,
@@ -202,7 +202,7 @@ export default function AddOrder() {
         setSelectedCustomer(found);
         setDeliveryAddress(found.address || '');
       }
-    } catch (_) {}
+    } catch (_) { }
   }, [params.customerParam, customerList, customerLoading]);
 
   // ── Catalog ───────────────────────────────────────────────
@@ -303,18 +303,39 @@ export default function AddOrder() {
         status: initialOrderStatus,
         createdBy: userDetail?.email || '',
       };
-      await setDoc(doc(db, 'orders', selectedCustomer.phone), { orders: arrayUnion(newOrder) }, { merge: true });
 
-      // ✅ Tạo room chat — chỉ khi KHÔNG phải admin
-      const myRole = (userDetail?.role || userDetail?.member || '').toLowerCase();
-      if (myRole !== 'admin') {
-        createOrderChatRoom({
-          orderId,
-          orderType,
-          createdBy: userDetail?.email || '',
-          createdByName: userDetail?.name || userDetail?.email || '',
-        }).catch(e => console.warn('Tạo room chat thất bại:', e));
+      const orderRef = doc(db, 'orders', orderId);
+      await setDoc(orderRef, newOrder);
+
+      // ── Gửi tin nhắn thông báo vào phòng chat chung với người tạo khách hàng ──
+      let customerCreator = null;
+      try {
+        const customerDoc = await getDoc(doc(db, 'customers', selectedCustomer.docId));
+        if (customerDoc.exists()) {
+          customerCreator = customerDoc.data().createdBy;
+        }
+      } catch (err) { console.warn('Lỗi lấy thông tin khách hàng:', err); }
+
+      if (customerCreator && customerCreator !== userDetail?.email) {
+        // Đảm bảo phòng support tồn tại (tạo nếu chưa có)
+        await createSupportRoom({ userEmail: customerCreator, userName: '' });
+        const roomId = `support_${customerCreator.replace(/[@.]/g, '_')}`;
+        await sendSystemMessage(
+          roomId,
+          `📦 Đơn hàng #${orderId} (${orderTypeCfg.label}) vừa được tạo cho khách hàng **${selectedCustomer.name}** bởi ${userDetail?.name || userDetail?.email}.`
+        );
       }
+
+      // // ✅ Tạo room chat — chỉ khi KHÔNG phải admin
+      // const myRole = (userDetail?.role || userDetail?.member || '').toLowerCase();
+      // if (myRole !== 'admin') {
+      //   createOrderChatRoom({
+      //     orderId,
+      //     orderType,
+      //     createdBy: userDetail?.email || '',
+      //     createdByName: userDetail?.name || userDetail?.email || '',
+      //   }).catch(e => console.warn('Tạo room chat thất bại:', e));
+      // }
 
       // ── Tự động tạo dịch vụ ──────────────────────────────
       if (autoService) {

@@ -4,7 +4,7 @@ import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useContext, useState } from 'react';
 import {
     KeyboardAvoidingView, Modal, Platform, Pressable,
@@ -122,14 +122,13 @@ export default function EditOrder() {
         setSubmitting(true);
         try {
             // ── 1. Update order ──
-            const snap = await getDoc(doc(db, 'orders', phone));
-            if (!snap.exists()) throw new Error('Không tìm thấy đơn hàng');
-            const updated = (snap.data().orders || []).map(o =>
-                o.id === existing.id
-                    ? { ...o, createdAt: orderDate, address: deliveryAddress, note: notes, items }
-                    : o
-            );
-            await updateDoc(doc(db, 'orders', phone), { orders: updated });
+            const orderRef = doc(db, 'orders', existing.id);
+            await updateDoc(orderRef, {
+                createdAt: orderDate,
+                address: deliveryAddress,
+                note: notes,
+                items: items,
+            });
 
             // ── 2. Tra createdBy từ customer ──
             let createdBy = null;

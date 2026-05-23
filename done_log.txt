@@ -231,3 +231,10 @@ Cập nhật lần cuối: 2026-05-15
     - Hiển thị 3 nút trạng thái (Đang tư vấn / Thành công / Thất bại) khi isConsult = true
     - handleConsultStatusChange: updateDoc vào collection 'consult'
     - Khi chọn 'success' → router.push('/addCustomer') với params name/phone/address/note pre-filled
+
+[17] Sửa đổi màn hình userInfo
+    File: app/auth/userInfo.jsx
+    - Bổ sung quyền lợi và điều kiện của từng vai trò
+    - Bổ sung mã giới thiệu cho mỗi người dùng
+    - Bổ sung trường nhập mã giới thiệu cho mỗi tài khoản khi đăng kí thông tin
+    - Sửa giao diện: hiển thị phần nhập thông tin ở phía trên phần thông tin 

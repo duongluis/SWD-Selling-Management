@@ -1,13 +1,16 @@
-import Colors from '@/constant/Colors';
 import BgWatermark from '@/components/Main/BgWatermark';
+import { showAlert } from '@/components/Main/showAlert';
+import { showSuccess } from '@/components/Main/showSuccess';
+import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, FlatList, Platform,
-    ScrollView, StyleSheet, Text, TouchableOpacity, View,
+    ActivityIndicator, FlatList, Modal, Platform,
+    ScrollView, StyleSheet, Text, TextInput,
+    TouchableOpacity, View,
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
@@ -38,18 +41,433 @@ const getPriceFields = (role) => ({
 }[role] || ['price']);
 
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
+const parseMoney = (s) => parseInt(String(s).replace(/\D/g, '')) || 0;
 
-// ── Service category color palette (cycles if more than 6 items) ──
 const CATEGORY_COLORS = [
-    { color: '#EC4899', bg: '#FDF2F8', icon: 'chatbubbles-outline' },   // Tư vấn
-    { color: '#8B5CF6', bg: '#F5F3FF', icon: 'build-outline' },          // Lắp đặt
-    { color: '#F59E0B', bg: '#FFFBEB', icon: 'construct-outline' },      // Bảo dưỡng
-    { color: '#3B82F6', bg: '#EFF6FF', icon: 'water-outline' },          // Đổ muối
-    { color: '#10B981', bg: '#ECFDF5', icon: 'car-outline' },            // Giao hàng
-    { color: '#EF4444', bg: '#FEF2F2', icon: 'flash-outline' },          // fallback
+    { color: '#EC4899', bg: '#FDF2F8', icon: 'chatbubbles-outline' },
+    { color: '#8B5CF6', bg: '#F5F3FF', icon: 'build-outline' },
+    { color: '#F59E0B', bg: '#FFFBEB', icon: 'construct-outline' },
+    { color: '#3B82F6', bg: '#EFF6FF', icon: 'water-outline' },
+    { color: '#10B981', bg: '#ECFDF5', icon: 'car-outline' },
+    { color: '#EF4444', bg: '#FEF2F2', icon: 'flash-outline' },
 ];
-
 const getCategoryStyle = (index) => CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+
+// ── Input Row helper ─────────────────────────────────────────
+function FormRow({ label, required, children }) {
+    return (
+        <View style={F.row}>
+            <Text style={F.label}>
+                {label}{required && <Text style={{ color: '#EF4444' }}> *</Text>}
+            </Text>
+            {children}
+        </View>
+    );
+}
+
+// ── Create Product Modal ──────────────────────────────────────
+function CreateProductModal({ visible, onClose, onCreated, existingCount }) {
+    const EMPTY = {
+        name: '', capacity: '', technology: '', made_in: 'Việt Nam',
+        price: '', price_a: '', price_p: '', price_c: '',
+        water_source: '', water_certificate: '',
+        electric_requirement: '220 Vac / 50-60Hz',
+        using_electric_capacity: '', electric_capacity: '',
+        sorting_tech: '', pipe_material: '', pipe_original: '',
+        pipe_diameter: '', drain_pipe_diameter: '', drain_water: '',
+        dimension: '', color: '', weight: '', life_style: '',
+        guarantee: '', recommend_location: '',
+    };
+    const [form, setForm] = useState(EMPTY);
+    const [saving, setSaving] = useState(false);
+
+    const set = (key, val) => setForm(p => ({ ...p, [key]: val }));
+
+    const handleSave = async () => {
+        if (!form.name.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên sản phẩm'); return; }
+        if (!form.price) { showAlert('Thông báo', 'Vui lòng nhập giá niêm yết'); return; }
+        setSaving(true);
+        try {
+            const newId = existingCount + 1;
+            const payload = {
+                id: newId,
+                name: form.name.trim(),
+                capacity: form.capacity.trim(),
+                technology: form.technology.trim(),
+                made_in: form.made_in.trim(),
+                price: parseMoney(form.price),
+                price_a: parseMoney(form.price_a),
+                price_p: parseMoney(form.price_p),
+                price_c: parseMoney(form.price_c),
+                water_source: form.water_source.trim(),
+                water_certificate: form.water_certificate.trim(),
+                electric_requirement: form.electric_requirement.trim(),
+                using_electric_capacity: form.using_electric_capacity.trim(),
+                electric_capacity: form.electric_capacity.trim(),
+                sorting_tech: form.sorting_tech.trim(),
+                pipe_material: form.pipe_material.trim(),
+                pipe_original: form.pipe_original.trim(),
+                pipe_diameter: form.pipe_diameter.trim(),
+                drain_pipe_diameter: form.drain_pipe_diameter.trim(),
+                drain_water: form.drain_water.trim(),
+                dimension: form.dimension.trim(),
+                color: form.color.trim(),
+                weight: form.weight.trim(),
+                life_style: form.life_style.trim(),
+                guarantee: form.guarantee.trim(),
+                recommend_location: form.recommend_location.trim(),
+            };
+            // Xóa field rỗng để giữ document gọn
+            Object.keys(payload).forEach(k => {
+                if (payload[k] === '' || payload[k] === 0) delete payload[k];
+            });
+            payload.id = newId; // luôn giữ id
+
+            await setDoc(doc(db, 'productPrice', form.name), payload);
+            showSuccess('Đã tạo sản phẩm!', `Mã: ${newId} · ${form.name.trim()}`, () => { });
+            setForm(EMPTY);
+            onCreated(payload);
+            onClose();
+        } catch (e) { showAlert('Lỗi', e.message); }
+        finally { setSaving(false); }
+    };
+
+    const InputBox = ({ fkey, placeholder, keyboardType = 'default', multiline = false }) => (
+        <View style={[F.input, multiline && { minHeight: 72, alignItems: 'flex-start' }]}>
+            <TextInput
+                style={[F.inputText, multiline && { textAlignVertical: 'top' }]}
+                placeholder={placeholder || ''}
+                placeholderTextColor="#94A3B8"
+                value={form[fkey]}
+                onChangeText={v => set(fkey, v)}
+                keyboardType={keyboardType}
+                multiline={multiline}
+            />
+        </View>
+    );
+
+    const MoneyInput = ({ fkey, label, color }) => (
+        <View style={[F.input, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+            <View style={[F.moneyDot, { backgroundColor: color }]} />
+            <TextInput
+                style={[F.inputText, { flex: 1 }]}
+                placeholder={label}
+                placeholderTextColor="#94A3B8"
+                value={form[fkey]}
+                onChangeText={v => set(fkey, v.replace(/\D/g, ''))}
+                keyboardType="numeric"
+            />
+            <Text style={{ fontSize: 11, color: '#94A3B8' }}>đ</Text>
+        </View>
+    );
+
+    const content = (
+        <View style={F.modalInner}>
+            {/* Header */}
+            <View style={F.modalHeader}>
+                <View style={F.modalHeaderIcon}>
+                    <Ionicons name="cube-outline" size={20} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={F.modalTitle}>Thêm sản phẩm mới</Text>
+                    <Text style={F.modalSub}>ID tự động: #{existingCount + 1}</Text>
+                </View>
+                <TouchableOpacity onPress={onClose} style={F.closeBtn}>
+                    <Ionicons name="close" size={18} color="#64748B" />
+                </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={F.scrollBody}>
+                {/* Thông tin cơ bản */}
+                <Text style={F.section}>Thông tin cơ bản</Text>
+
+                <FormRow label="Tên sản phẩm" required>
+                    <InputBox fkey="name" placeholder="VD: Máy F3000A" />
+                </FormRow>
+                <FormRow label="Công suất lọc">
+                    <InputBox fkey="capacity" placeholder="VD: 3000 lít/giờ" />
+                </FormRow>
+                <FormRow label="Công nghệ">
+                    <InputBox fkey="technology" placeholder="VD: Golden Panthera" />
+                </FormRow>
+                <FormRow label="Xuất xứ">
+                    <InputBox fkey="made_in" placeholder="VD: Việt Nam" />
+                </FormRow>
+                <FormRow label="Nguồn nước xử lý">
+                    <InputBox fkey="water_source" placeholder="VD: Nước từ thủy cục" multiline />
+                </FormRow>
+                <FormRow label="Tiêu chuẩn nước">
+                    <InputBox fkey="water_certificate" placeholder="VD: QCVN 01/2018/BYT" multiline />
+                </FormRow>
+
+                {/* Bảng giá */}
+                <Text style={F.section}>Bảng giá</Text>
+
+                <FormRow label="Giá niêm yết" required>
+                    <MoneyInput fkey="price" label="Giá niêm yết" color="#64748B" />
+                </FormRow>
+                <FormRow label="Giá đại lý">
+                    <MoneyInput fkey="price_a" label="Giá đại lý" color="#2563EB" />
+                </FormRow>
+                <FormRow label="Giá đối tác">
+                    <MoneyInput fkey="price_p" label="Giá đối tác" color="#7C3AED" />
+                </FormRow>
+                <FormRow label="Giá CTV">
+                    <MoneyInput fkey="price_c" label="Giá CTV" color="#059669" />
+                </FormRow>
+
+                {/* Thông số kỹ thuật */}
+                <Text style={F.section}>Thông số kỹ thuật</Text>
+
+                <FormRow label="Điện áp">
+                    <InputBox fkey="electric_requirement" placeholder="220 Vac / 50-60Hz" />
+                </FormRow>
+                <FormRow label="Công suất lọc">
+                    <InputBox fkey="using_electric_capacity" placeholder="VD: 1,2 W" />
+                </FormRow>
+                <FormRow label="Công suất nghỉ">
+                    <InputBox fkey="electric_capacity" placeholder="VD: 0 W" />
+                </FormRow>
+                <FormRow label="Công nghệ màng">
+                    <InputBox fkey="sorting_tech" placeholder="VD: Ultra Filtration" />
+                </FormRow>
+                <FormRow label="Vật liệu màng">
+                    <InputBox fkey="pipe_material" placeholder="VD: PVC" />
+                </FormRow>
+                <FormRow label="Xuất xứ màng">
+                    <InputBox fkey="pipe_original" placeholder="VD: Trung Quốc" />
+                </FormRow>
+                <FormRow label="Đường kính ống v/r">
+                    <InputBox fkey="pipe_diameter" placeholder="VD: ¾ inch" />
+                </FormRow>
+                <FormRow label="Đường kính ống thải">
+                    <InputBox fkey="drain_pipe_diameter" placeholder="VD: 10 mm" />
+                </FormRow>
+                <FormRow label="Lượng nước thải">
+                    <InputBox fkey="drain_water" placeholder="VD: 0,2%" />
+                </FormRow>
+
+                {/* Vật lý */}
+                <Text style={F.section}>Thông tin vật lý</Text>
+
+                <FormRow label="Kích thước">
+                    <InputBox fkey="dimension" placeholder="VD: 45 x 30 x 14 (cm)" />
+                </FormRow>
+                <FormRow label="Màu sắc">
+                    <InputBox fkey="color" placeholder="VD: Ghi xám" />
+                </FormRow>
+                <FormRow label="Trọng lượng">
+                    <InputBox fkey="weight" placeholder="VD: 14 Kg" />
+                </FormRow>
+                <FormRow label="Tuổi thọ">
+                    <InputBox fkey="life_style" placeholder="VD: > 3 năm" />
+                </FormRow>
+                <FormRow label="Bảo hành">
+                    <InputBox fkey="guarantee" placeholder="VD: 12 tháng linh kiện" multiline />
+                </FormRow>
+                <FormRow label="Vị trí lắp đặt">
+                    <InputBox fkey="recommend_location" placeholder="VD: Trong nhà, dưới mái che" multiline />
+                </FormRow>
+
+                <View style={{ height: 16 }} />
+            </ScrollView>
+
+            {/* Footer */}
+            <View style={F.modalFooter}>
+                <TouchableOpacity style={F.cancelBtn} onPress={onClose}>
+                    <Text style={F.cancelBtnText}>Huỷ</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[F.saveBtn, saving && { opacity: 0.7 }]}
+                    onPress={handleSave}
+                    disabled={saving}
+                >
+                    <Ionicons
+                        name={saving ? 'hourglass-outline' : 'checkmark-circle-outline'}
+                        size={16} color="#fff"
+                    />
+                    <Text style={F.saveBtnText}>{saving ? 'Đang lưu...' : 'Lưu sản phẩm'}</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+
+    if (isWeb) {
+        if (!visible) return null;
+        return (
+            <View style={F.webOverlay}>
+                <View style={F.webModal}>{content}</View>
+            </View>
+        );
+    }
+
+    return (
+        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+            {content}
+        </Modal>
+    );
+}
+
+// ── Create Service Modal ──────────────────────────────────────
+function CreateServiceModal({ visible, onClose, onCreated, existingCount }) {
+    const [name, setName] = useState('');
+    const [price, setPrice] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const handleSave = async () => {
+        if (!name.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên dịch vụ'); return; }
+        if (!price) { showAlert('Thông báo', 'Vui lòng nhập giá dịch vụ'); return; }
+        setSaving(true);
+        try {
+            const newId = existingCount + 1;
+            const payload = { id: newId, name: name.trim(), price: parseMoney(price) };
+            await setDoc(doc(db, 'servicePrice', name), payload);
+            showSuccess('Đã tạo dịch vụ!', `#${newId} · ${name.trim()}`, () => { });
+            setName('');
+            setPrice('');
+            onCreated(payload);
+            onClose();
+        } catch (e) { showAlert('Lỗi', e.message); }
+        finally { setSaving(false); }
+    };
+
+    const content = (
+        <View style={F.modalInner}>
+            <View style={F.modalHeader}>
+                <View style={[F.modalHeaderIcon, { backgroundColor: '#ECFDF5' }]}>
+                    <Ionicons name="construct-outline" size={20} color="#059669" />
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={F.modalTitle}>Thêm dịch vụ mới</Text>
+                    <Text style={F.modalSub}>ID tự động: #{existingCount + 1}</Text>
+                </View>
+                <TouchableOpacity onPress={onClose} style={F.closeBtn}>
+                    <Ionicons name="close" size={18} color="#64748B" />
+                </TouchableOpacity>
+            </View>
+
+            <View style={F.scrollBody}>
+                <Text style={F.section}>Thông tin dịch vụ</Text>
+
+                {/* ID (readonly) */}
+                <FormRow label="Mã dịch vụ">
+                    <View style={[F.input, { backgroundColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+                        <Text style={{ fontSize: 14, color: '#94A3B8', fontWeight: '600', flex: 1 }}>
+                            #{existingCount + 1}
+                        </Text>
+                        <Ionicons name="lock-closed-outline" size={13} color="#CBD5E1" />
+                    </View>
+                </FormRow>
+
+                <FormRow label="Tên dịch vụ" required>
+                    <View style={F.input}>
+                        <TextInput
+                            style={F.inputText}
+                            placeholder="VD: Bảo dưỡng định kỳ"
+                            placeholderTextColor="#94A3B8"
+                            value={name}
+                            onChangeText={setName}
+                        />
+                    </View>
+                </FormRow>
+
+                <FormRow label="Giá dịch vụ" required>
+                    <View style={[F.input, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                        <View style={[F.moneyDot, { backgroundColor: '#059669' }]} />
+                        <TextInput
+                            style={[F.inputText, { flex: 1 }]}
+                            placeholder="Nhập số tiền..."
+                            placeholderTextColor="#94A3B8"
+                            value={price}
+                            onChangeText={v => setPrice(v.replace(/\D/g, ''))}
+                            keyboardType="numeric"
+                        />
+                        <Text style={{ fontSize: 11, color: '#94A3B8' }}>đ</Text>
+                    </View>
+                </FormRow>
+
+                {/* Preview */}
+                {(name || price) && (
+                    <View style={F.previewBox}>
+                        <Text style={F.previewLabel}>Xem trước</Text>
+                        <View style={F.previewCard}>
+                            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center' }}>
+                                <Ionicons name="construct-outline" size={20} color="#059669" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>
+                                    {name || 'Tên dịch vụ...'}
+                                </Text>
+                                <Text style={{ fontSize: 13, color: '#059669', fontWeight: '700', marginTop: 2 }}>
+                                    {price ? fmt(parseMoney(price)) : 'Chưa có giá'}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                )}
+            </View>
+
+            <View style={F.modalFooter}>
+                <TouchableOpacity style={F.cancelBtn} onPress={onClose}>
+                    <Text style={F.cancelBtnText}>Huỷ</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[F.saveBtn, { backgroundColor: '#059669' }, saving && { opacity: 0.7 }]}
+                    onPress={handleSave}
+                    disabled={saving}
+                >
+                    <Ionicons
+                        name={saving ? 'hourglass-outline' : 'checkmark-circle-outline'}
+                        size={16} color="#fff"
+                    />
+                    <Text style={F.saveBtnText}>{saving ? 'Đang lưu...' : 'Lưu dịch vụ'}</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+
+    if (isWeb) {
+        if (!visible) return null;
+        return (
+            <View style={F.webOverlay}>
+                <View style={[F.webModal, { maxWidth: 480 }]}>{content}</View>
+            </View>
+        );
+    }
+
+    return (
+        <Modal visible={visible} animationType="slide" presentationStyle="formSheet" onRequestClose={onClose}>
+            {content}
+        </Modal>
+    );
+}
+
+// ── Form Styles ───────────────────────────────────────────────
+const F = StyleSheet.create({
+    webOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 9999, alignItems: 'center', justifyContent: 'center' },
+    webModal: { backgroundColor: '#fff', borderRadius: 20, width: '90%', maxWidth: 680, maxHeight: '90%', overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 40 },
+    modalInner: { flex: 1, backgroundColor: '#fff' },
+    modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    modalHeaderIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+    modalTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+    modalSub: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
+    closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+    scrollBody: { padding: 20 },
+    section: { fontSize: 10, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 12, marginTop: 8 },
+    row: { marginBottom: 12 },
+    label: { fontSize: 12, fontWeight: '600', color: '#64748B', marginBottom: 5 },
+    input: { backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+    inputText: { fontSize: 14, color: '#0F172A', fontWeight: '500' },
+    moneyDot: { width: 8, height: 8, borderRadius: 4 },
+    modalFooter: { flexDirection: 'row', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+    cancelBtn: { flex: 1, paddingVertical: 11, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', backgroundColor: '#fff' },
+    cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
+    saveBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 11, borderRadius: 10, backgroundColor: '#2563EB' },
+    saveBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+    previewBox: { marginTop: 16, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+    previewLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 10 },
+    previewCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+});
 
 // ── Product Detail Panel ──────────────────────────────────────
 function ProductDetail({ product, priceFields, onClose }) {
@@ -168,7 +586,9 @@ function ProductList({ products, priceFields, onSelect }) {
                         </View>
                         <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
                     </View>
-                    {item.technology && <View style={L.techBadge}><Text style={L.techBadgeText}>{item.technology}</Text></View>}
+                    {item.technology && (
+                        <View style={L.techBadge}><Text style={L.techBadgeText}>{item.technology}</Text></View>
+                    )}
                     <View style={L.priceRow}>
                         {priceFields.slice(0, 2).map(field => {
                             const cfg = PRICE_LABELS[field];
@@ -195,7 +615,12 @@ function ProductList({ products, priceFields, onSelect }) {
                     )}
                 </TouchableOpacity>
             )}
-            ListEmptyComponent={<View style={L.empty}><Ionicons name="cube-outline" size={40} color="#CBD5E1" /><Text style={L.emptyText}>Chưa có sản phẩm</Text></View>}
+            ListEmptyComponent={
+                <View style={L.empty}>
+                    <Ionicons name="cube-outline" size={40} color="#CBD5E1" />
+                    <Text style={L.emptyText}>Chưa có sản phẩm</Text>
+                </View>
+            }
         />
     );
 }
@@ -221,11 +646,11 @@ function ServiceCategoryGrid({ services }) {
             renderItem={({ item, index }) => {
                 const style = getCategoryStyle(index);
                 return (
-                    <View style={[SC.card, { flex: 1, borderTopColor: style.color, backgroundColor: '#FFFFFF' }]}>
+                    <View style={[SC.card, { flex: 1, borderTopColor: style.color }]}>
                         <View style={[SC.iconWrap, { backgroundColor: style.bg }]}>
                             <Ionicons name={style.icon} size={28} color={style.color} />
                         </View>
-                        <Text style={[SC.categoryName, { color: '#0F172A' }]}>{item.name}</Text>
+                        <Text style={SC.categoryName}>{item.name}</Text>
                         <View style={[SC.priceBadge, { backgroundColor: style.bg }]}>
                             <Text style={[SC.priceLabel, { color: style.color }]}>Giá dịch vụ</Text>
                             <Text style={[SC.priceValue, { color: style.color }]}>{fmt(item.price)}</Text>
@@ -242,6 +667,7 @@ export default function InformationScreen() {
     const router = useRouter();
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
+    const isAdmin = role === 'admin';
     const priceFields = getPriceFields(role);
 
     const [activeTab, setActiveTab] = useState('products');
@@ -250,39 +676,58 @@ export default function InformationScreen() {
     const [loadingProducts, setLoadingProducts] = useState(true);
     const [loadingServices, setLoadingServices] = useState(true);
     const [selectedProduct, setSelectedProduct] = useState(null);
+    const [showCreateProduct, setShowCreateProduct] = useState(false);
+    const [showCreateService, setShowCreateService] = useState(false);
 
-    // Fetch products
     useEffect(() => {
         getDocs(collection(db, 'productPrice'))
-            .then(snap => setProducts(snap.docs.map(d => ({ ...d.data(), docId: d.id })).sort((a, b) => (a.id || 0) - (b.id || 0))))
+            .then(snap => setProducts(
+                snap.docs.map(d => ({ ...d.data(), docId: d.id }))
+                    .sort((a, b) => (a.id || 0) - (b.id || 0))
+            ))
             .catch(console.error)
             .finally(() => setLoadingProducts(false));
     }, []);
 
-    // Fetch services (danh mục giá dịch vụ)
     useEffect(() => {
         getDocs(collection(db, 'servicePrice'))
-            .then(snap => setServices(snap.docs.map(d => ({ ...d.data(), docId: d.id })).sort((a, b) => (a.id || 0) - (b.id || 0))))
+            .then(snap => setServices(
+                snap.docs.map(d => ({ ...d.data(), docId: d.id }))
+                    .sort((a, b) => (a.id || 0) - (b.id || 0))
+            ))
             .catch(console.error)
             .finally(() => setLoadingServices(false));
     }, []);
 
-    const handleTabChange = (key) => {
-        setActiveTab(key);
-        setSelectedProduct(null);
-    };
+    const handleTabChange = (key) => { setActiveTab(key); setSelectedProduct(null); };
+
+    const handleProductCreated = (p) => setProducts(prev => [...prev, p].sort((a, b) => (a.id || 0) - (b.id || 0)));
+    const handleServiceCreated = (s) => setServices(prev => [...prev, s].sort((a, b) => (a.id || 0) - (b.id || 0)));
 
     return (
         <View style={S.root}>
             <BgWatermark />
+
+            {/* Modals */}
+            <CreateProductModal
+                visible={showCreateProduct}
+                onClose={() => setShowCreateProduct(false)}
+                onCreated={handleProductCreated}
+                existingCount={products.length}
+            />
+            <CreateServiceModal
+                visible={showCreateService}
+                onClose={() => setShowCreateService(false)}
+                onCreated={handleServiceCreated}
+                existingCount={services.length}
+            />
+
             <View style={S.container}>
                 {/* Header */}
                 <View style={S.header}>
-
                     <TouchableOpacity onPress={() => router.replace('/(tabs)/home')} style={S.backBtn}>
                         <Ionicons name="arrow-back" size={20} color={Colors.TextPrimary} />
                     </TouchableOpacity>
-
                     <View style={{ flex: 1 }}>
                         <Text style={S.headerTitle}>Thông tin</Text>
                         <View style={S.roleBadge}>
@@ -291,19 +736,45 @@ export default function InformationScreen() {
                             </Text>
                         </View>
                     </View>
+
+                    {/* ── Nút tạo mới (chỉ admin) ── */}
+                    {isAdmin && activeTab === 'products' && !selectedProduct && (
+                        <TouchableOpacity
+                            style={S.createBtn}
+                            onPress={() => setShowCreateProduct(true)}
+                        >
+                            <Ionicons name="add" size={16} color="#fff" />
+                            <Text style={S.createBtnText}>Thêm sản phẩm</Text>
+                        </TouchableOpacity>
+                    )}
+                    {isAdmin && activeTab === 'services' && (
+                        <TouchableOpacity
+                            style={[S.createBtn, { backgroundColor: '#059669' }]}
+                            onPress={() => setShowCreateService(true)}
+                        >
+                            <Ionicons name="add" size={16} color="#fff" />
+                            <Text style={S.createBtnText}>Thêm dịch vụ</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* Tabs */}
                 <View style={S.tabBar}>
                     {[
-                        { key: 'products', label: 'Sản phẩm', icon: 'cube-outline' },
-                        { key: 'services', label: 'Dịch vụ', icon: 'construct-outline' },
+                        { key: 'products', label: 'Sản phẩm', icon: 'cube-outline', count: products.length },
+                        { key: 'services', label: 'Dịch vụ', icon: 'construct-outline', count: services.length },
                     ].map(tab => (
-                        <TouchableOpacity key={tab.key} style={[S.tab, activeTab === tab.key && S.tabActive]} onPress={() => handleTabChange(tab.key)}>
+                        <TouchableOpacity
+                            key={tab.key}
+                            style={[S.tab, activeTab === tab.key && S.tabActive]}
+                            onPress={() => handleTabChange(tab.key)}
+                        >
                             <Ionicons name={tab.icon} size={16} color={activeTab === tab.key ? '#2563EB' : '#94A3B8'} />
                             <Text style={[S.tabText, activeTab === tab.key && S.tabTextActive]}>{tab.label}</Text>
-                            {tab.key === 'services' && services.length > 0 && (
-                                <View style={S.tabBadge}><Text style={S.tabBadgeText}>{services.length}</Text></View>
+                            {tab.count > 0 && (
+                                <View style={S.tabBadge}>
+                                    <Text style={S.tabBadgeText}>{tab.count}</Text>
+                                </View>
                             )}
                         </TouchableOpacity>
                     ))}
@@ -311,15 +782,20 @@ export default function InformationScreen() {
 
                 {/* Content */}
                 <View style={S.content}>
-
-                    {/* ── Products ── */}
                     {activeTab === 'products' && (
                         selectedProduct ? (
-                            <ProductDetail product={selectedProduct} priceFields={priceFields} onClose={() => setSelectedProduct(null)} />
+                            <ProductDetail
+                                product={selectedProduct}
+                                priceFields={priceFields}
+                                onClose={() => setSelectedProduct(null)}
+                            />
                         ) : (
                             <View style={S.listContainer}>
                                 {loadingProducts ? (
-                                    <View style={S.loadingWrap}><ActivityIndicator size="large" color="#2563EB" /><Text style={S.loadingText}>Đang tải sản phẩm...</Text></View>
+                                    <View style={S.loadingWrap}>
+                                        <ActivityIndicator size="large" color="#2563EB" />
+                                        <Text style={S.loadingText}>Đang tải sản phẩm...</Text>
+                                    </View>
                                 ) : (
                                     <>
                                         <View style={S.listHeader}>
@@ -332,11 +808,13 @@ export default function InformationScreen() {
                         )
                     )}
 
-                    {/* ── Services ── */}
                     {activeTab === 'services' && (
                         <View style={S.listContainer}>
                             {loadingServices ? (
-                                <View style={S.loadingWrap}><ActivityIndicator size="large" color="#2563EB" /><Text style={S.loadingText}>Đang tải dịch vụ...</Text></View>
+                                <View style={S.loadingWrap}>
+                                    <ActivityIndicator size="large" color="#2563EB" />
+                                    <Text style={S.loadingText}>Đang tải dịch vụ...</Text>
+                                </View>
                             ) : (
                                 <>
                                     <View style={S.listHeader}>
@@ -353,18 +831,17 @@ export default function InformationScreen() {
     );
 }
 
-// ── Styles ────────────────────────────────────────────────────
+// ── Main Styles ───────────────────────────────────────────────
 const S = StyleSheet.create({
-    root: {
-        flex: 1,
-        backgroundColor: "#F8FAFC",
-    },
+    root: { flex: 1, backgroundColor: '#F8FAFC' },
     container: { flex: 1, backgroundColor: 'transparent', paddingTop: isWeb ? 0 : 44 },
     header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: isWeb ? 32 : 16, paddingVertical: isWeb ? 20 : 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
     headerTitle: { fontSize: isWeb ? 22 : 18, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
     roleBadge: { marginTop: 2 },
     roleBadgeText: { fontSize: 12, color: '#64748B', fontWeight: '500' },
+    createBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563EB', paddingHorizontal: isWeb ? 14 : 10, paddingVertical: 8, borderRadius: 10 },
+    createBtnText: { fontSize: isWeb ? 13 : 12, fontWeight: '700', color: '#fff' },
     tabBar: { flexDirection: 'row', backgroundColor: '#FFFFFF', paddingHorizontal: isWeb ? 32 : 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 4 },
     tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
     tabActive: { borderBottomColor: '#2563EB' },
@@ -396,46 +873,13 @@ const L = StyleSheet.create({
     emptyText: { fontSize: 14, color: '#94A3B8' },
 });
 
-// ── Service Category Card Styles ──────────────────────────────
 const SC = StyleSheet.create({
-    card: {
-        borderRadius: 14,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderTopWidth: 3,
-        alignItems: 'center',
-        gap: 10,
-    },
-    iconWrap: {
-        width: 56,
-        height: 56,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    categoryName: {
-        fontSize: 14,
-        fontWeight: '700',
-        textAlign: 'center',
-    },
-    priceBadge: {
-        width: '100%',
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        borderRadius: 10,
-        alignItems: 'center',
-    },
-    priceLabel: {
-        fontSize: 10,
-        fontWeight: '600',
-        marginBottom: 2,
-    },
-    priceValue: {
-        fontSize: 14,
-        fontWeight: '800',
-        letterSpacing: -0.3,
-    },
+    card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', borderTopWidth: 3, alignItems: 'center', gap: 10 },
+    iconWrap: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    categoryName: { fontSize: 14, fontWeight: '700', color: '#0F172A', textAlign: 'center' },
+    priceBadge: { width: '100%', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
+    priceLabel: { fontSize: 10, fontWeight: '600', marginBottom: 2 },
+    priceValue: { fontSize: 14, fontWeight: '800', letterSpacing: -0.3 },
 });
 
 const D = StyleSheet.create({

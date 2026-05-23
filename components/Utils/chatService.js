@@ -1,3 +1,4 @@
+// chatService.js – Unified support room for every user
 import { db } from '@/config/firebaseConfig';
 import {
     addDoc, collection, doc, getDoc, getDocs,
@@ -5,75 +6,22 @@ import {
     setDoc, updateDoc, where,
 } from 'firebase/firestore';
 
-export const createOrderChatRoom = async ({ orderId, orderType, createdBy, createdByName, adminEmails = [] }) => {
-    const roomId = `order_${orderId}`;
-    const members = [createdBy, ...adminEmails];
+// ─────────────────────────────────────────────────────────────
+// 1. Helper: get support room id from email
+// ─────────────────────────────────────────────────────────────
+export const getSupportRoomId = (userEmail) =>
+    `support_${userEmail.replace(/[@.]/g, '_')}`;
 
-    // Lấy tất cả admin nếu không truyền vào
-    let resolvedAdmins = adminEmails;
-    if (resolvedAdmins.length === 0) {
-        try {
-            const snap = await getDocs(
-                query(collection(db, 'users'), where('role', '==', 'admin'))
-            );
-            resolvedAdmins = snap.docs.map(d => d.data().email).filter(Boolean);
-        } catch (_) { }
-    }
-
-    const allMembers = [...new Set([createdBy, ...resolvedAdmins])];
-    const unreadCount = {};
-    // Admin chưa đọc = 1 (tin nhắn tạo đơn)
-    resolvedAdmins.forEach(a => { unreadCount[a] = 1; });
-    unreadCount[createdBy] = 0;
-
-    await setDoc(doc(db, 'chatRooms', roomId), {
-        roomId,
-        orderId,
-        orderType,
-        createdBy,
-        createdByName: createdByName || createdBy,
-        members: allMembers,
-        lastMessage: `Đơn hàng #${orderId} vừa được tạo`,
-        lastAt: new Date().toISOString(),
-        unreadCount,
-        createdAt: new Date().toISOString(),
-    });
-
-    // Gửi tin nhắn hệ thống đầu tiên
-    await sendSystemMessage(roomId, `📦 Đơn hàng #${orderId} đã được tạo bởi ${createdByName || createdBy}.`);
-
-    // Thông báo cho admin
-    for (const adminEmail of resolvedAdmins) {
-        await createNotification({
-            userEmail: adminEmail,
-            type: 'new_order',
-            title: '📦 Đơn hàng mới',
-            body: `${createdByName || createdBy} vừa tạo đơn #${orderId}`,
-            orderId,
-            roomId,
-        });
-    }
-
-    // Thông báo cho user: đã được thêm vào room
-    await createNotification({
-        userEmail: createdBy,
-        type: 'added_to_room',
-        title: '💬 Phòng chat đã sẵn sàng',
-        body: `Đơn hàng #${orderId} của bạn đã có phòng chat với admin.`,
-        orderId,
-        roomId,
-    });
-
-    return roomId;
-};
-
-export const createWelcomeChatRoom = async ({ userEmail, userName }) => {
-    const roomId = `welcome_${userEmail.replace(/[@.]/g, '_')}`;
-
-    // Không tạo lại nếu đã tồn tại
-    const existing = await getDoc(doc(db, 'chatRooms', roomId));
+// ─────────────────────────────────────────────────────────────
+// 2. Create or get support room (single room per user)
+// ─────────────────────────────────────────────────────────────
+export const createSupportRoom = async ({ userEmail, userName }) => {
+    const roomId = getSupportRoomId(userEmail);
+    const roomRef = doc(db, 'chatRooms', roomId);
+    const existing = await getDoc(roomRef);
     if (existing.exists()) return roomId;
 
+    // Get all admin emails
     const adminSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
     const adminEmails = adminSnap.docs.map(d => d.data().email).filter(Boolean);
 
@@ -82,9 +30,9 @@ export const createWelcomeChatRoom = async ({ userEmail, userName }) => {
     adminEmails.forEach(a => { unreadCount[a] = 1; });
     unreadCount[userEmail] = 0;
 
-    await setDoc(doc(db, 'chatRooms', roomId), {
+    await setDoc(roomRef, {
         roomId,
-        type: 'welcome',
+        type: 'support',
         userEmail,
         members: allMembers,
         lastMessage: `Chào mừng ${userName || userEmail} đến với hệ thống!`,
@@ -93,27 +41,84 @@ export const createWelcomeChatRoom = async ({ userEmail, userName }) => {
         createdAt: new Date().toISOString(),
     });
 
-    await sendSystemMessage(roomId, `🎉 Tài khoản của ${userName || userEmail} đã được phê duyệt. Chào mừng bạn đến với hệ thống!`);
+    await sendSystemMessage(roomId, `🎉 Chào mừng ${userName || userEmail} đến với hệ thống. Mọi đơn hàng, dịch vụ sẽ được cập nhật tại đây.`);
 
-    // Thông báo cho user
     await createNotification({
         userEmail,
-        type: 'account_verified',
-        title: '✅ Tài khoản đã được phê duyệt',
-        body: 'Tài khoản của bạn đã được xác minh. Bắt đầu sử dụng hệ thống ngay!',
+        type: 'support_room_ready',
+        title: '💬 Phòng hỗ trợ đã sẵn sàng',
+        body: 'Bạn có thể chat với admin và theo dõi cập nhật đơn hàng tại đây.',
         roomId,
+        path: `/chat/${roomId}`,
     });
 
     return roomId;
 };
 
-export const getRoomIdByOrderId = (orderId) => `order_${orderId}`;
+// ─────────────────────────────────────────────────────────────
+// 3. Create order chat – now just sends message into support room
+// ─────────────────────────────────────────────────────────────
+export const createOrderChatRoom = async ({ orderId, orderType, createdBy, createdByName, adminEmails = [] }) => {
+    // Ensure support room exists
+    await createSupportRoom({ userEmail: createdBy, userName: createdByName });
+    const roomId = getSupportRoomId(createdBy);
 
+    // Send system message about new order
+    await sendSystemMessage(roomId, `📦 Đơn hàng #${orderId} (${orderType === 'buon' ? 'Đơn buôn' : 'Đơn lẻ'}) vừa được tạo bởi ${createdByName || createdBy}.`);
+
+    // Update lastMessage on room
+    const roomRef = doc(db, 'chatRooms', roomId);
+    const roomSnap = await getDoc(roomRef);
+    if (roomSnap.exists()) {
+        await updateDoc(roomRef, {
+            lastMessage: `Đơn hàng #${orderId} vừa được tạo`,
+            lastAt: new Date().toISOString(),
+        });
+    }
+
+    // Notify admins
+    let resolvedAdmins = adminEmails;
+    if (resolvedAdmins.length === 0) {
+        const snap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+        resolvedAdmins = snap.docs.map(d => d.data().email).filter(Boolean);
+    }
+    for (const adminEmail of resolvedAdmins) {
+        await createNotification({
+            userEmail: adminEmail,
+            type: 'new_order',
+            title: '📦 Đơn hàng mới',
+            body: `${createdByName || createdBy} vừa tạo đơn #${orderId}`,
+            orderId,
+            roomId,
+            path: `/chat/${roomId}?orderId=${orderId}`,
+        });
+    }
+
+    // Notify the user (optional)
+    await createNotification({
+        userEmail: createdBy,
+        type: 'order_created',
+        title: '📦 Đơn hàng đã tạo',
+        body: `Đơn #${orderId} đã được tạo. Theo dõi trạng thái tại phòng chat hỗ trợ.`,
+        orderId,
+        roomId,
+        path: `/chat/${roomId}?orderId=${orderId}`,
+    });
+
+    return roomId;
+};
+
+// ─────────────────────────────────────────────────────────────
+// 4. Check if room exists
+// ─────────────────────────────────────────────────────────────
 export const checkRoomExists = async (roomId) => {
     const snap = await getDoc(doc(db, 'chatRooms', roomId));
     return snap.exists();
 };
 
+// ─────────────────────────────────────────────────────────────
+// 5. Send normal message
+// ─────────────────────────────────────────────────────────────
 export const sendMessage = async ({ roomId, text, senderEmail, senderName }) => {
     if (!text.trim()) return;
 
@@ -126,13 +131,12 @@ export const sendMessage = async ({ roomId, text, senderEmail, senderName }) => 
         readBy: [senderEmail],
     });
 
-    // Cập nhật lastMessage trên room
+    // Update lastMessage on room
     const roomRef = doc(db, 'chatRooms', roomId);
     const roomSnap = await getDoc(roomRef);
     if (roomSnap.exists()) {
         const data = roomSnap.data();
         const unread = { ...(data.unreadCount || {}) };
-        // Tăng unread cho các thành viên khác
         (data.members || []).forEach(m => {
             if (m !== senderEmail) unread[m] = (unread[m] || 0) + 1;
         });
@@ -143,7 +147,7 @@ export const sendMessage = async ({ roomId, text, senderEmail, senderName }) => 
             unreadCount: unread,
         });
 
-        // Tạo notification cho thành viên khác
+        // Notify other members
         const others = (data.members || []).filter(m => m !== senderEmail);
         for (const memberEmail of others) {
             await createNotification({
@@ -153,6 +157,7 @@ export const sendMessage = async ({ roomId, text, senderEmail, senderName }) => 
                 body: text.trim().length > 60 ? text.trim().slice(0, 60) + '...' : text.trim(),
                 orderId: data.orderId,
                 roomId,
+                path: `/chat/${roomId}`,
             });
         }
     }
@@ -160,6 +165,9 @@ export const sendMessage = async ({ roomId, text, senderEmail, senderName }) => 
     return msgRef.id;
 };
 
+// ─────────────────────────────────────────────────────────────
+// 6. Send system message
+// ─────────────────────────────────────────────────────────────
 export const sendSystemMessage = async (roomId, text) => {
     await addDoc(collection(db, 'chatRooms', roomId, 'messages'), {
         text,
@@ -171,8 +179,26 @@ export const sendSystemMessage = async (roomId, text) => {
     });
 };
 
+// ─────────────────────────────────────────────────────────────
+// 7. Send status update message (into support room)
+// ─────────────────────────────────────────────────────────────
 export const sendStatusUpdateMessage = async ({ orderId, newStatus, changedBy, changedByName }) => {
-    const roomId = getRoomIdByOrderId(orderId);
+    // Find order creator email
+    let createdByEmail = null;
+    try {
+        const ordersSnap = await getDocs(collection(db, 'orders'));
+        for (const docSnap of ordersSnap.docs) {
+            const orders = docSnap.data().orders || [];
+            const found = orders.find(o => o.id === orderId);
+            if (found) {
+                createdByEmail = found.createdBy;
+                break;
+            }
+        }
+    } catch (e) { console.warn('Lỗi tìm order:', e); }
+    if (!createdByEmail) return;
+
+    const roomId = getSupportRoomId(createdByEmail);
     const exists = await checkRoomExists(roomId);
     if (!exists) return;
 
@@ -184,20 +210,21 @@ export const sendStatusUpdateMessage = async ({ orderId, newStatus, changedBy, c
         senderName: 'Hệ thống',
         type: 'status_update',
         newStatus,
+        orderId,
         createdAt: serverTimestamp(),
         readBy: [],
     });
 
-    // Cập nhật lastMessage
+    // Update lastMessage
     await updateDoc(doc(db, 'chatRooms', roomId), {
-        lastMessage: `Trạng thái → "${newStatus}"`,
+        lastMessage: `Trạng thái đơn #${orderId} → "${newStatus}"`,
         lastAt: new Date().toISOString(),
     });
 
-    // Notify tất cả thành viên trong room
+    // Notify all members
     const roomSnap = await getDoc(doc(db, 'chatRooms', roomId));
     if (roomSnap.exists()) {
-        const { members, createdBy } = roomSnap.data();
+        const { members } = roomSnap.data();
         for (const memberEmail of (members || [])) {
             await createNotification({
                 userEmail: memberEmail,
@@ -206,11 +233,15 @@ export const sendStatusUpdateMessage = async ({ orderId, newStatus, changedBy, c
                 body: `Đơn #${orderId} chuyển sang "${newStatus}"`,
                 orderId,
                 roomId,
+                path: `/chat/${roomId}?orderId=${orderId}`,
             });
         }
     }
 };
 
+// ─────────────────────────────────────────────────────────────
+// 8. Mark room as read
+// ─────────────────────────────────────────────────────────────
 export const markRoomAsRead = async (roomId, userEmail) => {
     const roomRef = doc(db, 'chatRooms', roomId);
     const snap = await getDoc(roomRef);
@@ -220,13 +251,15 @@ export const markRoomAsRead = async (roomId, userEmail) => {
     await updateDoc(roomRef, { unreadCount: unread });
 };
 
+// ─────────────────────────────────────────────────────────────
+// 9. Subscribe to messages in a room
+// ─────────────────────────────────────────────────────────────
 export const subscribeMessages = (roomId, callback) => {
     const q = collection(db, 'chatRooms', roomId, 'messages');
     return onSnapshot(q, (snap) => {
         const msgs = snap.docs
             .map(d => ({ ...d.data(), id: d.id }))
             .sort((a, b) => {
-                // serverTimestamp trả về Timestamp object hoặc null khi pending
                 const ta = a.createdAt?.toMillis?.() ?? new Date(a.createdAt || 0).getTime();
                 const tb = b.createdAt?.toMillis?.() ?? new Date(b.createdAt || 0).getTime();
                 return ta - tb;
@@ -234,27 +267,20 @@ export const subscribeMessages = (roomId, callback) => {
         callback(msgs);
     }, (error) => {
         console.error('subscribeMessages error:', error);
-        callback([]); // Trả về rỗng thay vì treo mãi
+        callback([]);
     });
 };
 
-// Thay toàn bộ hàm createNotification bằng đoạn code dưới đây
+// ─────────────────────────────────────────────────────────────
+// 10. Create notification with automatic path
+// ─────────────────────────────────────────────────────────────
 export const createNotification = async ({ userEmail, type, title, body, orderId, roomId, path }) => {
     let notificationPath = path;
     if (!notificationPath) {
-        // Tự động tạo path dựa trên loại thông báo và các ID có sẵn
         if (roomId) {
-            // Thông báo liên quan đến chat
-            if (orderId) {
-                notificationPath = `/chat/${roomId}?orderId=${orderId}`;
-            } else {
-                notificationPath = `/chat/${roomId}`;
-            }
+            notificationPath = `/chat/${roomId}${orderId ? `?orderId=${orderId}` : ''}`;
         } else if (orderId) {
-            // Thông báo liên quan đến đơn hàng nhưng chưa có room chat
             notificationPath = '/(tabs)/order';
-        } else if (type === 'account_verified') {
-            notificationPath = '/';
         } else {
             notificationPath = '/';
         }
@@ -265,15 +291,15 @@ export const createNotification = async ({ userEmail, type, title, body, orderId
         body,
         orderId: orderId || null,
         roomId: roomId || null,
-        path: notificationPath,   // ← thêm trường path
+        path: notificationPath,
         read: false,
         createdAt: new Date().toISOString(),
     });
 };
 
-/**
- * Subscribe realtime notifications — không dùng orderBy để tránh index
- */
+// ─────────────────────────────────────────────────────────────
+// 11. Subscribe to notifications
+// ─────────────────────────────────────────────────────────────
 export const subscribeNotifications = (userEmail, callback) => {
     const q = collection(db, 'notifications', userEmail, 'items');
     return onSnapshot(q, (snap) => {
@@ -287,16 +313,16 @@ export const subscribeNotifications = (userEmail, callback) => {
     });
 };
 
-/**
- * Đánh dấu 1 notification đã đọc
- */
+// ─────────────────────────────────────────────────────────────
+// 12. Mark a single notification as read
+// ─────────────────────────────────────────────────────────────
 export const markNotificationRead = async (userEmail, notifId) => {
     await updateDoc(doc(db, 'notifications', userEmail, 'items', notifId), { read: true });
 };
 
-/**
- * Đánh dấu tất cả notification đã đọc
- */
+// ─────────────────────────────────────────────────────────────
+// 13. Mark all notifications as read
+// ─────────────────────────────────────────────────────────────
 export const markAllNotificationsRead = async (userEmail) => {
     const snap = await getDocs(
         query(collection(db, 'notifications', userEmail, 'items'), where('read', '==', false))

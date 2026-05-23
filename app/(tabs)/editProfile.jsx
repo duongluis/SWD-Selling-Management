@@ -100,8 +100,12 @@ export default function EditProfileScreen() {
         phone: userDetail?.phone || '',
         address: userDetail?.address || '',
         title: userDetail?.title || '',
+        contactName: userDetail?.contactName || '',
+        contactPhone: userDetail?.contactPhone || '',
     });
     const set = f => v => setForm(p => ({ ...p, [f]: v }));
+
+    const isCompany = userDetail?.bizModel === 'company';
 
     useEffect(() => {
         if (userDetail) setForm({
@@ -109,6 +113,8 @@ export default function EditProfileScreen() {
             phone: userDetail.phone || '',
             address: userDetail.address || '',
             title: userDetail.title || '',
+            contactName: userDetail.contactName || '',
+            contactPhone: userDetail.contactPhone || '',
         });
     }, [userDetail]);
 
@@ -116,7 +122,19 @@ export default function EditProfileScreen() {
         if (!form.name?.trim()) { showInfo('Thiếu thông tin', 'Vui lòng nhập họ tên'); return; }
         setSaving(true);
         try {
-            const payload = { name: form.name.trim(), phone: form.phone.trim(), address: form.address.trim(), title: form.title.trim(), notifyPush, notifyEmail, updatedAt: new Date().toISOString() };
+            const payload = {
+                name: form.name.trim(),
+                phone: form.phone.trim(),
+                address: form.address.trim(),
+                // title không thay đổi, giữ nguyên giá trị cũ
+                notifyPush,
+                notifyEmail,
+                updatedAt: new Date().toISOString(),
+            };
+            if (isCompany) {
+                payload.contactName = form.contactName.trim();
+                payload.contactPhone = form.contactPhone.trim();
+            }
             await updateDoc(doc(db, 'users', userDetail.email), payload);
             setUserDetail?.(prev => ({ ...prev, ...payload }));
             showInfo('✅ Đã lưu', 'Thông tin cá nhân đã được cập nhật');
@@ -142,11 +160,6 @@ export default function EditProfileScreen() {
                     <Ionicons name="arrow-back" size={20} color="#0F172A" />
                 </TouchableOpacity>
                 <Text style={S.headerTitle}>Hồ sơ cá nhân</Text>
-                {/* <TouchableOpacity style={S.editBtn} onPress={() => editing ? handleSave() : setEditing(true)}>
-                    {saving ? <ActivityIndicator size="small" color="#2563EB" /> :
-                        <><Ionicons name={editing ? 'checkmark' : 'create-outline'} size={15} color="#2563EB" />
-                            <Text style={S.editBtnText}>{editing ? 'Lưu' : 'Chỉnh sửa'}</Text></>}
-                </TouchableOpacity> */}
             </View>
 
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -163,7 +176,6 @@ export default function EditProfileScreen() {
                                 </View>
                                 <Text style={S.avatarName}>{userDetail?.name || '—'}</Text>
                                 <Text style={S.avatarTitle}>{form.title || roleLabel}</Text>
-                                {/* Badges */}
                                 <View style={S.badges}>
                                     <View style={S.badge}><Text style={S.badgeText}>{roleLabel.toUpperCase()}</Text></View>
                                     {userDetail?.verified && (
@@ -173,7 +185,6 @@ export default function EditProfileScreen() {
                                         </View>
                                     )}
                                 </View>
-                                {/* Contact mini */}
                                 <View style={S.miniContacts}>
                                     {userDetail?.email && (
                                         <View style={S.miniContact}>
@@ -207,9 +218,24 @@ export default function EditProfileScreen() {
                                 </View>
                                 {editing ? (<>
                                     <EditInput label="Họ và tên" value={form.name} onChange={set('name')} />
-                                    <EditInput label="Chức danh" value={form.title} onChange={set('title')} />
+                                    {/* Chức danh (title) - khóa không cho sửa */}
+                                    <View style={EI.wrap}>
+                                        <Text style={EI.label}>Chức danh</Text>
+                                        <View style={[EI.input, { backgroundColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center' }]}>
+                                            <Text style={{ flex: 1, fontSize: 14, color: '#64748B' }}>{form.title || roleLabel}</Text>
+                                            <Ionicons name="lock-closed-outline" size={14} color="#94A3B8" />
+                                        </View>
+                                    </View>
                                     <EditInput label="Số điện thoại" value={form.phone} onChange={set('phone')} keyboardType="phone-pad" />
                                     <EditInput label="Địa chỉ" value={form.address} onChange={set('address')} multiline />
+                                    {isCompany && (
+                                        <>
+                                            <View style={{ height: 8 }} />
+                                            <Text style={[EI.label, { color: '#2563EB', marginTop: 4 }]}>Người liên hệ</Text>
+                                            <EditInput label="Họ và tên người liên hệ" value={form.contactName} onChange={set('contactName')} />
+                                            <EditInput label="Số điện thoại người liên hệ" value={form.contactPhone} onChange={set('contactPhone')} keyboardType="phone-pad" />
+                                        </>
+                                    )}
                                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
                                         <TouchableOpacity style={S.cancelBtn} onPress={() => setEditing(false)}>
                                             <Text style={S.cancelBtnText}>Huỷ</Text>
@@ -233,13 +259,38 @@ export default function EditProfileScreen() {
                                                 <InfoField label="Địa chỉ" value={userDetail.address} />
                                             </View>
                                         )}
+                                        {isCompany && (userDetail?.contactName || userDetail?.contactPhone) && (
+                                            <View style={{ width: '100%', marginTop: 8 }}>
+                                                <InfoField label="Người liên hệ" value={`${userDetail.contactName || ''} ${userDetail.contactPhone ? `· ${userDetail.contactPhone}` : ''}`.trim()} />
+                                            </View>
+                                        )}
                                     </View>
                                 )}
                             </View>
 
+                            {/* 🆕 Mã giới thiệu - chỉ hiển thị nếu có referralCode hoặc advisor */}
+                            {(userDetail?.referralCode || userDetail?.advisor) && (
+                                <View style={S.card}>
+                                    <View style={S.cardHeader}>
+                                        <Text style={S.cardTitle}>Mã giới thiệu</Text>
+                                    </View>
+                                    <View style={S.infoGrid}>
+                                        {userDetail?.referralCode && (
+                                            <View style={S.infoCol}>
+                                                <InfoField label="Mã giới thiệu của bạn" value={userDetail.referralCode} />
+                                            </View>
+                                        )}
+                                        {userDetail?.advisor && (
+                                            <View style={S.infoCol}>
+                                                <InfoField label="Người giới thiệu" value={userDetail.advisor} />
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
+                            )}
+
                             {/* Bảo mật + Thông báo — 2 cột */}
                             <View style={S.twoCol}>
-                                {/* Bảo mật */}
                                 <View style={[S.card, { flex: 1 }]}>
                                     <View style={S.sectionIconHeader}>
                                         <View style={S.sectionIcon}><Ionicons name="shield-checkmark-outline" size={18} color="#2563EB" /></View>
@@ -252,19 +303,8 @@ export default function EditProfileScreen() {
                                         </View>
                                         <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
                                     </TouchableOpacity>
-
-                                    {/* Bảo mật 2 lớp- tính năng chưa phát triển */}
-                                    {/* <View style={S.secDivider} />
-                                    <TouchableOpacity style={S.secRow}>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={S.secRowTitle}>Xác thực 2 lớp (2FA)</Text>
-                                            <Text style={[S.secRowSub, { color: '#EF4444' }]}>Chưa kích hoạt</Text>
-                                        </View>
-                                        <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-                                    </TouchableOpacity> */}
                                 </View>
 
-                                {/* Thông báo */}
                                 <View style={[S.card, { flex: 1 }]}>
                                     <View style={S.sectionIconHeader}>
                                         <View style={S.sectionIcon}><Ionicons name="notifications-outline" size={18} color="#2563EB" /></View>
@@ -275,42 +315,6 @@ export default function EditProfileScreen() {
                                     <ToggleRow icon="mail-outline" label="Báo cáo qua Email" value={notifyEmail} onChange={v => handleToggleNotify('email', v)} />
                                 </View>
                             </View>
-
-                            {/* Tùy chọn hệ thống */}
-                            {/* <View style={S.card}>
-                                <View style={S.sectionIconHeader}>
-                                    <View style={S.sectionIcon}><Ionicons name="settings-outline" size={18} color="#2563EB" /></View>
-                                    <Text style={S.cardTitle}>Tùy chọn hệ thống</Text>
-                                </View>
-                                <View style={S.sysGrid}>
-                                    <View style={S.sysItem}>
-                                        <Text style={S.sysLabel}>NGÔN NGỮ</Text>
-                                        <View style={S.sysSelect}>
-                                            <Text style={S.sysSelectText}>Tiếng Việt</Text>
-                                            <Ionicons name="chevron-down" size={14} color="#64748B" />
-                                        </View>
-                                    </View>
-                                    <View style={S.sysItem}>
-                                        <Text style={S.sysLabel}>MÚI GIỜ</Text>
-                                        <Text style={S.sysTz}>(GMT+07:00) Bangkok, Hanoi</Text>
-                                    </View>
-                                </View>
-                            </View> */}
-
-                            {/* Vô hiệu hóa tài khoản */}
-                            {/* <View style={S.dangerCard}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={S.dangerTitle}>Vô hiệu hóa tài khoản</Text>
-                                    <Text style={S.dangerSub}>Hành động này sẽ tạm dừng mọi dịch vụ và quyền truy cập của bạn.</Text>
-                                </View>
-                                <TouchableOpacity style={S.dangerBtn}
-                                    onPress={() => showAlert('Vô hiệu hóa', 'Bạn chắc chắn muốn vô hiệu hóa tài khoản?', async () => {
-                                        try { await updateDoc(doc(db, 'users', userDetail.email), { verified: false }); router.replace('/auth/signIn'); }
-                                        catch (e) { showInfo('Lỗi', e.message); }
-                                    })}>
-                                    <Text style={S.dangerBtnText}>Vô hiệu hóa</Text>
-                                </TouchableOpacity>
-                            </View> */}
 
                         </View>
                     </View>
@@ -323,18 +327,15 @@ export default function EditProfileScreen() {
 
 const S = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },
-    // Header
     header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13, backgroundColor: '#fff', borderBottomWidth: 0.5, borderBottomColor: '#E2E8F0' },
     backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
     headerTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: '#0F172A' },
     editBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
     editBtnText: { fontSize: 13, fontWeight: '600', color: '#2563EB' },
-    // Scroll + body
     scroll: { padding: isWeb ? 32 : 16 },
     body: { flexDirection: isWeb ? 'row' : 'column', gap: 20, alignItems: 'flex-start' },
     leftCol: { width: isWeb ? 260 : '100%', flexShrink: 0 },
     rightCol: { flex: 1, minWidth: 0, gap: 14 },
-    // Avatar card
     avatarCard: { backgroundColor: '#fff', borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
     avatar: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
     avatarText: { fontSize: 34, fontWeight: '900', color: '#fff' },
@@ -346,37 +347,30 @@ const S = StyleSheet.create({
     miniContacts: { width: '100%', gap: 8, borderTopWidth: 0.5, borderTopColor: '#F1F5F9', paddingTop: 14, marginTop: 4 },
     miniContact: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     miniContactText: { fontSize: 12, color: '#64748B', flex: 1 },
-    // Cards
     card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
     cardTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
     inlineEditBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#EFF6FF' },
     inlineEditText: { fontSize: 12, fontWeight: '600', color: '#2563EB' },
-    // Info grid
     infoGrid: { flexDirection: isWeb ? 'row' : 'column', flexWrap: 'wrap', gap: 0 },
     infoCol: { flex: 1, minWidth: 180 },
-    // Edit form buttons
     cancelBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 10, backgroundColor: '#F1F5F9' },
     cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
     saveBtn: { flex: 2, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 10, backgroundColor: '#2563EB' },
     saveBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-    // Security
     sectionIconHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
     sectionIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
     secRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
     secRowTitle: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
     secRowSub: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
     secDivider: { height: 0.5, backgroundColor: '#F1F5F9' },
-    // Two col
     twoCol: { flexDirection: isWeb ? 'row' : 'column', gap: 14 },
-    // System
     sysGrid: { flexDirection: isWeb ? 'row' : 'column', gap: 16 },
     sysItem: { flex: 1 },
     sysLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.08, textTransform: 'uppercase', marginBottom: 10 },
     sysSelect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 11, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10 },
     sysSelectText: { fontSize: 14, color: '#0F172A', fontWeight: '500' },
     sysTz: { fontSize: 14, color: '#0F172A', fontWeight: '500', paddingVertical: 11 },
-    // Danger
     dangerCard: { flexDirection: isWeb ? 'row' : 'column', alignItems: isWeb ? 'center' : 'flex-start', gap: 16, backgroundColor: '#fff', borderRadius: 16, padding: 20, borderWidth: 1.5, borderColor: '#FCA5A5' },
     dangerTitle: { fontSize: 15, fontWeight: '700', color: '#DC2626' },
     dangerSub: { fontSize: 12, color: '#64748B', marginTop: 4, lineHeight: 18 },

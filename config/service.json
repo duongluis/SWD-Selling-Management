@@ -1,7 +1,7 @@
 [
     {
         "id": 1,
-        "name": "Tư vấn",
+        "name": "Tư vấn và khảo sát",
         "price": 100000
     },
     {
@@ -11,16 +11,6 @@
     },
     {
         "id": 3,
-        "name": "Bảo dưỡng",
-        "price": 100000
-    },
-    {
-        "id": 4,
-        "name": "Đổ muối",
-        "price": 100000
-    },
-    {
-        "id": 5,
         "name": "Giao hàng",
         "price": 100000
     }

@@ -1,0 +1,29 @@
+# Task Implementation Checklist
+
+## Phase 1: Notification System Improvements
+- [ ] Task 1: Add links to notifications (e.g., chat notification → chat room, customer notification → customer details)
+- [ ] Task 2: Auto-hide read notifications after a new day
+- [ ] Task 13: Simplify notifications by removing old ones (remove old message notifications when new ones arrive, remove old order notifications when new ones arrive)
+- [ ] Task 14: Push notifications when order/service status changes
+- [ ] Task 15: Push notifications when order/service/customer info is modified
+
+## Phase 2: UI and Functionality Updates
+- [ ] Task 3: Hide status selection for CTV in consult creation (always set to "đang tư vấn")
+- [ ] Task 4: Fetch data updates and show badge counts on tabs when data changes
+- [ ] Task 5: Modify pricing based on payment method in order creation (customer payment → listed price, business payment → role price)
+- [ ] Task 6: Reorder userInfo UI - input section above info section
+- [ ] Task 7: Add service creation date for order services (use service creation date instead of order creation date)
+- [ ] Task 8: Minimum quantity of 6 for wholesale orders (at least 6 items)
+- [ ] Task 9: Add Product and Service creation in pricing table (admin only) - with name field for products, name/price/display fields for services
+- [ ] Task 10: Add completion date for orders and services (when status changes to completed, add completion date field and display in list)
+
+## Phase 3: Chat System Overhaul
+- [ ] Task 11: Merge order chats into one conversation per user (one chat with admin, all discussions in that chat)
+- [ ] Task 12: Create CTV-admin chat with order notifications (when CTV creates order, notify their chat with admin)
+
+## Phase 4: Testing and Verification
+- [ ] Verify all implemented features work correctly
+- [ ] Test notification system thoroughly
+- [ ] Test chat system functionality
+- [ ] Test UI updates and form validations
+- [ ] Update done_log.txt with completed tasks

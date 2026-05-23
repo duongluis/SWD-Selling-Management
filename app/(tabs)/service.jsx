@@ -1,4 +1,4 @@
-// app/(tabs)/service.jsx — table style
+// app/(tabs)/service.jsx — table style with type filter
 
 import { useScreenData } from '@/components/Hooks/useScreenData';
 import { useSearch } from '@/components/Hooks/useSearch';
@@ -11,11 +11,11 @@ import ServiceDetail from '@/components/UI/ServiceDetail';
 import StatBar from '@/components/UI/StatBar';
 import { fmtDate } from '@/components/Utils/formatters';
 import { isCTV } from '@/components/Utils/roleHelper';
-import { syncOrderStatusFromService, isServiceStatusLocked } from '@/components/Utils/syncOrderStatus';
+import { isServiceStatusLocked, syncOrderStatusFromService } from '@/components/Utils/syncOrderStatus';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { doc, updateDoc } from 'firebase/firestore';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Dimensions, FlatList, Modal, Platform, Pressable, RefreshControl,
   StyleSheet, Text, TouchableOpacity, View,
@@ -26,10 +26,10 @@ const isWeb = Platform.OS === 'web';
 const AVATAR_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4'];
 
 const STATUS_CFG = {
-  'Chờ xử lý':  { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
+  'Chờ xử lý': { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
   'Đang xử lý': { c: '#2563EB', bg: '#EFF6FF', bd: '#BFDBFE' },
   'Hoàn thành': { c: '#16A34A', bg: '#DCFCE7', bd: '#86EFAC' },
-  'Đã hủy':     { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
+  'Đã hủy': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
 };
 const scfg = s => STATUS_CFG[s] || { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' };
 const STATUS_OPTIONS = ['Chờ xử lý', 'Đang xử lý', 'Hoàn thành', 'Đã hủy'];
@@ -68,12 +68,19 @@ const TYPE_CFG = {
   MAINTENANCE: { icon: 'construct-outline', label: 'Bảo dưỡng', c: '#EA580C', bg: '#FFF7ED' },
 };
 
-const FILTERS = [
+// Filter options cho trạng thái
+const STATUS_FILTERS = [
   { key: 'all', label: 'Tất cả' },
   { key: 'Chờ xử lý', label: 'Chờ xử lý' },
   { key: 'Đang xử lý', label: 'Đang xử lý' },
   { key: 'Hoàn thành', label: 'Hoàn thành' },
   { key: 'Đã hủy', label: 'Đã hủy' },
+];
+
+// Filter options cho loại dịch vụ
+const TYPE_FILTERS = [
+  { key: 'all', label: 'Tất cả' },
+  ...Object.entries(TYPE_CFG).map(([key, cfg]) => ({ key, label: cfg.label })),
 ];
 
 function TableHead() {
@@ -178,10 +185,28 @@ const R = StyleSheet.create({
 export default function ServiceScreen() {
   const router = useRouter();
   const { data, loading, refreshing, refresh, stats, role } = useScreenData('services');
-  const { query, setQuery, filter, setFilter, result } = useSearch(data, ['id', 'customer'], 'status');
+  const { query, setQuery, result: searchResult } = useSearch(data, ['id', 'customer'], 'status'); // base search on status filter (default)
+
+  // Thêm bộ lọc loại dịch vụ
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [selected, setSelected] = useState(null);
-  const [quickMenu, setQuickMenu] = useState(null); // { item, pos: { top, right } }
+  const [quickMenu, setQuickMenu] = useState(null);
   const isAdmin = role === 'admin';
+
+  // Kết hợp lọc theo status và type
+  const filteredData = useMemo(() => {
+    let filtered = searchResult;
+    // Lọc theo status (nếu không phải 'all')
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(item => item.status === statusFilter);
+    }
+    // Lọc theo loại dịch vụ
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(item => item.type === typeFilter);
+    }
+    return filtered;
+  }, [searchResult, statusFilter, typeFilter]);
 
   const statCards = [
     { icon: 'build-outline', label: 'Tổng DV', value: String(stats.total || 0), color: '#8B5CF6', bg: '#F5F3FF' },
@@ -227,14 +252,18 @@ export default function ServiceScreen() {
         onAction={!isCTV(role) ? () => router.push('/addService') : undefined}
       />
       <StatBar stats={statCards} />
-      <FilterChips options={FILTERS} value={filter} onChange={f => { setFilter(f); setSelected(null); }} />
+
+      {/* Hàng filter: trạng thái */}
+      <FilterChips options={STATUS_FILTERS} value={statusFilter} onChange={f => { setStatusFilter(f); setSelected(null); }} />
+      {/* Hàng filter: loại dịch vụ */}
+      <FilterChips options={TYPE_FILTERS} value={typeFilter} onChange={f => { setTypeFilter(f); setSelected(null); }} />
 
       <View style={{ flex: 1, flexDirection: 'row', padding: isWeb ? 16 : 0, paddingTop: 0 }}>
         {/* List — left */}
         <View style={WRAP.card}>
           <TableHead />
           {loading && !refreshing ? <EmptyState loading /> :
-            result.length === 0 ? (
+            filteredData.length === 0 ? (
               <EmptyState empty icon="build-outline"
                 title={query ? 'Không tìm thấy' : 'Chưa có dịch vụ'}
                 actionLabel={!isCTV(role) ? 'Tạo dịch vụ' : undefined}
@@ -242,7 +271,7 @@ export default function ServiceScreen() {
               />
             ) : (
               <FlatList
-                data={result}
+                data={filteredData}
                 keyExtractor={(item, i) => item.docId || String(i)}
                 renderItem={({ item, index }) => (
                   <ServiceRow item={item} index={index}

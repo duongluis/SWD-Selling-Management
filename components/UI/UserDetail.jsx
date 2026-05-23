@@ -1,7 +1,7 @@
 // components/UI/UserDetail.jsx — style giống order panel
 
 import { showAlert } from '@/components/Main/showAlert';
-import { createWelcomeChatRoom } from '@/components/Utils/chatService';
+import { createSupportRoom } from '@/components/Utils/chatService';
 import { fmtCurrency, fmtDate, fmtPhone } from '@/components/Utils/formatters';
 import { db } from '@/config/firebaseConfig';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -73,8 +73,15 @@ export default function UserDetail({ user, onClose, onUpdated }) {
             setApproving(true);
             try {
                 await updateDoc(doc(db, 'users', local.email), { verified: true });
-                createWelcomeChatRoom({ userEmail: local.email, userName: local.name }).catch(() => {});
+                // createWelcomeChatRoom({ userEmail: local.email, userName: local.name }).catch(() => { });
                 const next = { ...local, verified: true };
+
+                // Tạo phòng hỗ trợ chung
+                createSupportRoom({
+                    userEmail: local.email,
+                    userName: local.name || local.email,
+                }).catch(err => console.warn('Lỗi tạo phòng support:', err));
+
                 setLocal(next);
                 onUpdated?.(next);
             } catch (e) { showAlert('Lỗi', e.message); }
@@ -136,6 +143,13 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                     <InfoRow icon="call-outline" label="Điện thoại" value={fmtPhone(local.phone)} />
                     <InfoRow icon="location-outline" label="Địa chỉ" value={local.address} />
                     <InfoRow icon="briefcase-outline" label="Vai trò" value={roleLabel} />
+                    {/* Thêm mã giới thiệu nếu có */}
+                    {local.referralCode && (
+                        <InfoRow icon="pricetag-outline" label="Mã giới thiệu" value={local.referralCode} />
+                    )}
+                    {local.advisor && (
+                        <InfoRow icon="person-add-outline" label="Người giới thiệu" value={local.advisor} />
+                    )}
                     <InfoRow icon="calendar-outline" label="Ngày tạo" value={fmtDate(local.createdAt)} />
                 </Section>
 

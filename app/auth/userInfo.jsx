@@ -1,10 +1,10 @@
 import BgWatermark from '@/components/Main/BgWatermark';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import bcrypt from 'bcryptjs';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
-import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
-import { useCallback, useState } from 'react';
+import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { useCallback, useMemo, useState } from 'react';
 import {
     KeyboardAvoidingView, Platform,
     ScrollView, StatusBar, StyleSheet, Text, TextInput,
@@ -19,10 +19,51 @@ const isWeb = Platform.OS === 'web';
 const COMMITTED_REVENUE_MIN = 100_000_000;
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
+// ── Cập nhật cấu trúc ROLES với bulletPoints ─────────────────
 const ROLES = [
-    { key: 'daily', label: 'Đại lý / NPP', icon: 'storefront-outline', color: '#2563EB', bg: '#EFF6FF', desc: 'Phân phối trực tiếp, cam kết doanh thu' },
-    { key: 'partner', label: 'Đối tác', icon: 'briefcase-outline', color: '#7C3AED', bg: '#F5F3FF', desc: 'Hợp tác kinh doanh theo hoa hồng' },
-    { key: 'ctv', label: 'Cộng tác viên', icon: 'people-outline', color: '#059669', bg: '#ECFDF5', desc: 'Giới thiệu và hỗ trợ bán hàng' },
+    {
+        key: 'daily',
+        label: 'Đại lý / NPP',
+        icon: 'storefront-outline',
+        color: '#2563EB',
+        bg: '#EFF6FF',
+        desc: 'Phân phối trực tiếp, cam kết doanh thu',
+        bulletPoints: [
+            '• Cam kết sản lượng theo quý',
+            '• Stoke hàng 50% số cam kết',
+            '• Chủ động chốt đơn & Phát triển thị trường',
+            '• Quảng cáo theo quy định hãng',
+            '• Giới hạn phạm vi thị trường',
+        ],
+    },
+    {
+        key: 'partner',
+        label: 'Đối tác',
+        icon: 'briefcase-outline',
+        color: '#7C3AED',
+        bg: '#F5F3FF',
+        desc: 'Hợp tác kinh doanh theo hoa hồng',
+        bulletPoints: [
+            '• Không cần cam kết doanh số',
+            '• Không cần stoke hàng',
+            '• Chủ động chốt đơn & Phát triển thị trường',
+            '• Quảng cáo theo quy định hãng',
+            '• Giới hạn phạm vi thị trường',
+        ],
+    },
+    {
+        key: 'ctv',
+        label: 'Cộng tác viên',
+        icon: 'people-outline',
+        color: '#059669',
+        bg: '#ECFDF5',
+        desc: 'Giới thiệu và hỗ trợ bán hàng',
+        bulletPoints: [
+            '• Không cần cam kết sản lượng',
+            '• Không chốt đơn (Chỉ giới thiệu khách)',
+            '• Giới hạn phạm vi thị trường',
+        ],
+    },
 ];
 const BIZ_MODELS = [
     { key: 'company', label: 'Công ty / Hộ kinh doanh', icon: 'business-outline', color: '#0F172A', bg: '#F1F5F9', desc: 'Có đăng ký kinh doanh' },
@@ -35,12 +76,21 @@ const DISTRIBUTION_TYPES = [
 
 const validateCCCD = (v) => /^(\d{9}|\d{12})$/.test(v.trim());
 
+// ✅ Hàm tạo mã giới thiệu ngẫu nhiên 12 ký tự
+const generateReferralCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 12; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+};
+
 // ✅ Chỉ chọn năm sinh
 function YearField({ value, onChange }) {
     const currentYear = new Date().getFullYear();
     const [showDrop, setShowDrop] = useState(false);
 
-    // Tạo danh sách năm từ 1940 đến năm hiện tại
     const years = Array.from(
         { length: currentYear - 1940 + 1 },
         (_, i) => String(currentYear - i)
@@ -120,8 +170,6 @@ export default function UserInfoView() {
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
 
-    // ✅ FIX: Dùng state + useFocusEffect để re-read params mỗi lần màn hình được focus
-    // Tránh lỗi invalid-email khi user quay lại từ userInfo → signUp → userInfo
     const [signUpEmail, setSignUpEmail] = useState('');
     const [signUpPassword, setSignUpPassword] = useState('');
 
@@ -130,31 +178,28 @@ export default function UserInfoView() {
         const p = (params.password || '').trim();
         setSignUpEmail(e);
         setSignUpPassword(p);
-        // Reset về step 0 khi quay lại màn này (tránh state cũ)
         setStep(0);
         setRole(''); setBizModel('');
+        setAgreed(false);
+        setReferralCodeInput('');
+        setReferralError('');
     }, [params.email, params.password]));
 
     const [step, setStep] = useState(0);
     const [role, setRole] = useState('');
     const [bizModel, setBizModel] = useState('');
-    // Thông tin chung
     const [phone, setPhone] = useState('');
     const [emailContact, setEmailContact] = useState('');
     const [address, setAddress] = useState('');
-    // ✅ Người liên hệ — gộp vào step thông tin chung (company only)
     const [contactName, setContactName] = useState('');
     const [contactPhone, setContactPhone] = useState('');
-    // Company fields
     const [companyName, setCompanyName] = useState('');
     const [taxCode, setTaxCode] = useState('');
     const [bizAddress, setBizAddress] = useState('');
-    // Individual fields — họ tên chuyển vào step bizInfo
     const [fullName, setFullName] = useState('');
     const [cccd, setCccd] = useState('');
     const [cccdError, setCccdError] = useState('');
     const [dob, setDob] = useState('');
-    // Commitment
     const [committedRevenue, setCommittedRevenue] = useState('');
     const [revenueError, setRevenueError] = useState('');
     const [revenueTouched, setRevenueTouched] = useState(false);
@@ -168,7 +213,6 @@ export default function UserInfoView() {
     const [showProvinceDrop, setShowProvinceDrop] = useState(false);
     const [provinceSearch, setProvinceSearch] = useState('');
     const [provinces, setProvinces] = useState([]);
-    // Bank
     const [selectedBank, setSelectedBank] = useState(null);
     const [bankSearch, setBankSearch] = useState('');
     const [showBankDrop, setShowBankDrop] = useState(false);
@@ -176,19 +220,28 @@ export default function UserInfoView() {
     const [accountNoErr, setAccountNoErr] = useState('');
     const [accountName, setAccountName] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [referralCodeInput, setReferralCodeInput] = useState('');
+    const [referralError, setReferralError] = useState('');
+    const [agreed, setAgreed] = useState(false);
 
     const isDaiLy = role === 'daily';
-    const needsBank = role === 'partner' || role === 'ctv';
+    const needsBank = (role === 'partner' || role === 'ctv') && !referralCodeInput.trim(); // Có mã giới thiệu thì không cần ngân hàng
     const rev = parseInt(committedRevenue) || 0;
+    const hasReferral = !!referralCodeInput.trim();
 
-    const STEP_LABELS = isDaiLy
-        ? ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD', 'Cam kết']
-        : needsBank
-            ? ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD', 'Ngân hàng']
-            : ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD'];
+    // Tạo danh sách step labels động
+    const STEP_LABELS = useMemo(() => {
+        if (isDaiLy) {
+            return ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD', 'Cam kết'];
+        } else if (needsBank) {
+            return ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD', 'Ngân hàng'];
+        } else {
+            return ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD'];
+        }
+    }, [isDaiLy, needsBank]);
+
     const TOTAL_STEPS = STEP_LABELS.length;
 
-    // ✅ Về signUp để user nhập lại (không về signIn)
     const handleSignOut = () => { router.replace('/auth/signUp'); };
 
     const fetchRegions = async () => {
@@ -219,12 +272,14 @@ export default function UserInfoView() {
 
     const validateStep = () => {
         switch (step) {
-            case 0: if (!role) { showAlert('Thông báo', 'Vui lòng chọn vai trò'); return false; } return true;
+            case 0:
+                if (!role) { showAlert('Thông báo', 'Vui lòng chọn vai trò'); return false; }
+                if (!agreed) { showAlert('Thông báo', 'Vui lòng đồng ý với các điều kiện và quyền lợi của vai trò'); return false; }
+                return true;
             case 1: if (!bizModel) { showAlert('Thông báo', 'Vui lòng chọn mô hình kinh doanh'); return false; } return true;
             case 2:
                 if (!phone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại'); return false; }
                 if (!address.trim()) { showAlert('Thông báo', 'Vui lòng nhập địa chỉ'); return false; }
-                // ✅ Company: validate người liên hệ ở step thông tin chung
                 if (bizModel === 'company') {
                     if (!contactName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên người liên hệ'); return false; }
                     if (!contactPhone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại người liên hệ'); return false; }
@@ -236,10 +291,15 @@ export default function UserInfoView() {
                     if (!taxCode.trim()) { showAlert('Thông báo', 'Vui lòng nhập mã số thuế'); return false; }
                     if (!bizAddress.trim()) { showAlert('Thông báo', 'Vui lòng nhập địa chỉ đăng ký KD'); return false; }
                 } else {
-                    // ✅ Individual: họ tên ở step 3
-                    if (!fullName.trim()) { showAlert('Thông báo', 'Vui lòng nhập họ và tên'); return false; }
-                    if (!cccd.trim()) { showAlert('Thông báo', 'Vui lòng nhập số CCCD/CMND'); return false; }
-                    if (!validateCCCD(cccd)) { showAlert('Thông báo', 'Số CCCD phải có 12 chữ số (hoặc CMND 9 chữ số)'); return false; }
+                    // Nếu có mã giới thiệu thì không cần CCCD
+                    if (!hasReferral) {
+                        if (!fullName.trim()) { showAlert('Thông báo', 'Vui lòng nhập họ và tên'); return false; }
+                        if (!cccd.trim()) { showAlert('Thông báo', 'Vui lòng nhập số CCCD/CMND'); return false; }
+                        if (!validateCCCD(cccd)) { showAlert('Thông báo', 'Số CCCD phải có 12 chữ số (hoặc CMND 9 chữ số)'); return false; }
+                    } else {
+                        // Có mã giới thiệu: chỉ cần họ tên
+                        if (!fullName.trim()) { showAlert('Thông báo', 'Vui lòng nhập họ và tên'); return false; }
+                    }
                 }
                 return true;
             case 4:
@@ -247,8 +307,20 @@ export default function UserInfoView() {
                     if (!rev) { showAlert('Thông báo', 'Vui lòng nhập doanh thu cam kết'); return false; }
                     if (rev < COMMITTED_REVENUE_MIN) { showAlert('Thông báo', `Doanh thu tối thiểu là ${fmt(COMMITTED_REVENUE_MIN)}`); return false; }
                     if (!distributionType) { showAlert('Thông báo', 'Vui lòng chọn hình thức phân phối'); return false; }
+                    // Nếu chọn độc quyền thì bắt buộc chọn khu vực
+                    if (distributionType === 'exclusive') {
+                        if (!selectedRegion) {
+                            showAlert('Thông báo', 'Vui lòng chọn vùng/miền khi chọn phân phối độc quyền');
+                            return false;
+                        }
+                        if (!selectedProvince) {
+                            showAlert('Thông báo', 'Vui lòng chọn tỉnh/thành phố khi chọn phân phối độc quyền');
+                            return false;
+                        }
+                    }
                     return true;
                 } else if (needsBank) {
+                    // Nếu có mã giới thiệu thì không cần bước ngân hàng (step này sẽ không tồn tại)
                     if (!selectedBank) { showAlert('Thông báo', 'Vui lòng chọn ngân hàng'); return false; }
                     if (accountNoErr) { showAlert('Thông báo', accountNoErr); return false; }
                     if (!accountNo.trim()) { showAlert('Thông báo', 'Vui lòng nhập số tài khoản'); return false; }
@@ -266,7 +338,6 @@ export default function UserInfoView() {
     const handleSubmit = async () => {
         if (!validateStep()) return;
 
-        // ✅ Validate email trước khi gọi Firebase — tránh lỗi invalid-email
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!signUpEmail || !emailRegex.test(signUpEmail)) {
             showAlert('Lỗi email', 'Email không hợp lệ. Vui lòng quay lại bước đăng ký và nhập lại.');
@@ -301,12 +372,13 @@ export default function UserInfoView() {
                 payload.taxCode = taxCode.trim();
                 payload.bizAddress = bizAddress.trim();
                 payload.name = companyName.trim();
-                // ✅ Người liên hệ (trước là người đại diện)
                 payload.contactName = contactName.trim();
                 payload.contactPhone = contactPhone.trim();
             } else {
                 payload.name = fullName.trim();
-                payload.cccd = cccd.trim();
+                if (!hasReferral) {
+                    payload.cccd = cccd.trim();
+                }
                 if (dob) payload.dob = dob;
             }
             if (isDaiLy) {
@@ -321,6 +393,23 @@ export default function UserInfoView() {
             if (needsBank) {
                 payload.bank = { id: selectedBank.id, name: selectedBank.name, accountNo: accountNo.trim(), accountName: accountName.trim() };
             }
+
+            // ── Xử lý mã giới thiệu ─────────────────────────────────────────
+            if (role !== 'ctv') {
+                payload.referralCode = generateReferralCode();
+            }
+            if (role !== 'daily' && referralCodeInput.trim()) {
+                const q = query(collection(db, 'users'), where('referralCode', '==', referralCodeInput.trim().toUpperCase()));
+                const snap = await getDocs(q);
+                if (snap.empty) {
+                    showAlert('Mã giới thiệu không hợp lệ', 'Vui lòng kiểm tra lại mã.');
+                    setSubmitting(false);
+                    return;
+                }
+                const referrerDoc = snap.docs[0];
+                payload.advisor = referrerDoc.data().email;
+            }
+
             await setDoc(doc(db, 'users', email), payload);
             router.replace('/auth/pendingVerification');
         } catch (e) {
@@ -332,24 +421,69 @@ export default function UserInfoView() {
     };
 
     // ── Step renderers ────────────────────────────────────────
-    const renderStepRole = () => (
-        <View style={S.stepContent}>
-            <Text style={S.stepTitle}>Bạn muốn tham gia với vai trò gì?</Text>
-            <Text style={S.stepSub}>Chọn vai trò phù hợp với mô hình kinh doanh của bạn</Text>
-            <View style={S.cardList}>
-                {ROLES.map(r => {
-                    const active = role === r.key;
-                    return (
-                        <TouchableOpacity key={r.key} style={[S.selCard, active && { borderColor: r.color, backgroundColor: r.bg }]} onPress={() => setRole(r.key)} activeOpacity={0.7}>
-                            <View style={[S.selIcon, { backgroundColor: active ? r.color + '22' : '#F1F5F9' }]}><Ionicons name={r.icon} size={24} color={active ? r.color : '#94A3B8'} /></View>
-                            <View style={{ flex: 1 }}><Text style={[S.selLabel, active && { color: r.color }]}>{r.label}</Text><Text style={S.selDesc}>{r.desc}</Text></View>
-                            <View style={[S.selCheck, active && { backgroundColor: r.color, borderColor: r.color }]}>{active && <Ionicons name="checkmark" size={12} color="#fff" />}</View>
-                        </TouchableOpacity>
-                    );
-                })}
+    const renderStepRole = () => {
+        const selectedRoleData = ROLES.find(r => r.key === role);
+        return (
+            <View style={S.stepContent}>
+                <Text style={S.stepTitle}>Bạn muốn tham gia với vai trò gì?</Text>
+                <Text style={S.stepSub}>Chọn vai trò phù hợp với mô hình kinh doanh của bạn</Text>
+                <View style={S.cardList}>
+                    {ROLES.map(r => {
+                        const active = role === r.key;
+                        return (
+                            <TouchableOpacity
+                                key={r.key}
+                                style={[S.selCard, active && { borderColor: r.color, backgroundColor: r.bg }]}
+                                onPress={() => {
+                                    setRole(r.key);
+                                    setAgreed(false);
+                                }}
+                                activeOpacity={0.7}
+                            >
+                                <View style={[S.selIcon, { backgroundColor: active ? r.color + '22' : '#F1F5F9' }]}>
+                                    <Ionicons name={r.icon} size={24} color={active ? r.color : '#94A3B8'} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[S.selLabel, active && { color: r.color }]}>{r.label}</Text>
+                                    <Text style={S.selDesc}>{r.desc}</Text>
+                                </View>
+                                <View style={[S.selCheck, active && { backgroundColor: r.color, borderColor: r.color }]}>
+                                    {active && <Ionicons name="checkmark" size={12} color="#fff" />}
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+
+                {selectedRoleData && (
+                    <View style={[S.detailBox, { backgroundColor: selectedRoleData.bg, borderLeftColor: selectedRoleData.color }]}>
+                        <Text style={[S.detailTitle, { color: selectedRoleData.color }]}>Điều kiện & Quyền lợi</Text>
+                        {selectedRoleData.bulletPoints.map((point, idx) => (
+                            <View key={idx} style={S.bulletRow}>
+                                <Ionicons name="checkmark-circle" size={14} color={selectedRoleData.color} />
+                                <Text style={[S.bulletText, { color: selectedRoleData.color }]}>{point}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {selectedRoleData && (
+                    <TouchableOpacity
+                        style={S.agreeRow}
+                        onPress={() => setAgreed(!agreed)}
+                        activeOpacity={0.8}
+                    >
+                        <View style={[S.checkbox, agreed && { backgroundColor: selectedRoleData.color, borderColor: selectedRoleData.color }]}>
+                            {agreed && <Ionicons name="checkmark" size={12} color="#fff" />}
+                        </View>
+                        <Text style={S.agreeText}>
+                            Tôi đã đọc và đồng ý với các <Text style={{ fontWeight: '700' }}>điều kiện và quyền lợi</Text> của vai trò {selectedRoleData.label}
+                        </Text>
+                    </TouchableOpacity>
+                )}
             </View>
-        </View>
-    );
+        );
+    };
 
     const renderStepBizModel = () => (
         <View style={S.stepContent}>
@@ -367,28 +501,32 @@ export default function UserInfoView() {
                     );
                 })}
             </View>
+
+            {/* Mã giới thiệu - chỉ hiển thị nếu role đã chọn và role !== daily */}
+            {role && role !== 'daily' && (
+                <View style={S.fg}>
+                    <Text style={S.label}>Mã giới thiệu (nếu có)</Text>
+                    <View style={[F.inputBox, referralError && { borderColor: '#EF4444' }]}>
+                        <Ionicons name="gift-outline" size={15} color={referralError ? '#EF4444' : '#94A3B8'} />
+                        <TextInput
+                            style={F.input}
+                            placeholder="Nhập mã giới thiệu"
+                            placeholderTextColor="#94A3B8"
+                            value={referralCodeInput}
+                            onChangeText={setReferralCodeInput}
+                            autoCapitalize="characters"
+                        />
+                    </View>
+                    {referralError ? <Text style={S.errText}>{referralError}</Text> : null}
+                    <Text style={S.hint}>Nếu có mã giới thiệu, nhập để được hỗ trợ (không cần CCCD và thông tin ngân hàng)</Text>
+                </View>
+            )}
         </View>
     );
 
-    // ✅ Step 2: Thông tin chung
-    // - Company:    SĐT + Email + Địa chỉ + Người liên hệ
-    // - Individual: SĐT + Email + Địa chỉ  (không có họ tên)
     const renderStepCommon = () => (
         <View style={S.stepContent}>
-            <Text style={S.stepTitle}>Thông tin liên hệ</Text>
-            <Text style={S.stepSub}>Điền thông tin để chúng tôi liên hệ với bạn</Text>
 
-            <View style={S.fg}><Text style={S.label}>Số điện thoại <Text style={S.req}>*</Text></Text>
-                <View style={F.inputBox}><Ionicons name="call-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={phone} onChangeText={setPhone} /></View>
-            </View>
-            <View style={S.fg}><Text style={S.label}>Email liên hệ <Text style={S.optional}>(tuỳ chọn)</Text></Text>
-                <View style={F.inputBox}><Ionicons name="mail-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="email@example.com" placeholderTextColor="#94A3B8" keyboardType="email-address" autoCapitalize="none" value={emailContact} onChangeText={setEmailContact} /></View>
-            </View>
-            <View style={S.fg}><Text style={S.label}>Địa chỉ <Text style={S.req}>*</Text></Text>
-                <View style={[F.inputBox, { alignItems: 'flex-start', minHeight: 80 }]}><Ionicons name="location-outline" size={15} color="#94A3B8" style={{ marginTop: 2 }} /><TextInput style={[F.input, { textAlignVertical: 'top' }]} placeholder="Số nhà, đường, quận/huyện, tỉnh/thành..." placeholderTextColor="#94A3B8" multiline value={address} onChangeText={setAddress} /></View>
-            </View>
-
-            {/* ✅ Người liên hệ — chỉ hiện với company */}
             {bizModel === 'company' && (
                 <View style={S.contactSection}>
                     <View style={S.contactHeader}>
@@ -411,12 +549,23 @@ export default function UserInfoView() {
                     </View>
                 </View>
             )}
+
+            <Text style={S.stepTitle}>Thông tin liên hệ</Text>
+            <Text style={S.stepSub}>Điền thông tin để chúng tôi liên hệ với bạn</Text>
+
+            <View style={S.fg}><Text style={S.label}>Số điện thoại <Text style={S.req}>*</Text></Text>
+                <View style={F.inputBox}><Ionicons name="call-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={phone} onChangeText={setPhone} /></View>
+            </View>
+            <View style={S.fg}><Text style={S.label}>Email liên hệ <Text style={S.optional}>(tuỳ chọn)</Text></Text>
+                <View style={F.inputBox}><Ionicons name="mail-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="email@example.com" placeholderTextColor="#94A3B8" keyboardType="email-address" autoCapitalize="none" value={emailContact} onChangeText={setEmailContact} /></View>
+            </View>
+            <View style={S.fg}><Text style={S.label}>Địa chỉ <Text style={S.req}>*</Text></Text>
+                <View style={[F.inputBox, { alignItems: 'flex-start', minHeight: 80 }]}><Ionicons name="location-outline" size={15} color="#94A3B8" style={{ marginTop: 2 }} /><TextInput style={[F.input, { textAlignVertical: 'top' }]} placeholder="Số nhà, đường, quận/huyện, tỉnh/thành..." placeholderTextColor="#94A3B8" multiline value={address} onChangeText={setAddress} /></View>
+            </View>
+
         </View>
     );
 
-    // ✅ Step 3:
-    // - Company:    Tên cty + MST + Địa chỉ ĐKKD  (không có người liên hệ nữa)
-    // - Individual: Họ tên + CCCD + Ngày sinh
     const renderStepBizInfo = () => bizModel === 'company' ? (
         <View style={S.stepContent}>
             <Text style={S.stepTitle}>Thông tin doanh nghiệp</Text>
@@ -432,25 +581,26 @@ export default function UserInfoView() {
             </View>
         </View>
     ) : (
-        // ✅ Individual: họ tên nằm ở đây, không có ở step thông tin chung
         <View style={S.stepContent}>
             <Text style={S.stepTitle}>Thông tin cá nhân</Text>
             <Text style={S.stepSub}>Theo giấy tờ tùy thân hợp lệ</Text>
             <View style={S.fg}><Text style={S.label}>Họ và tên <Text style={S.req}>*</Text></Text>
                 <View style={F.inputBox}><Ionicons name="person-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={fullName} onChangeText={setFullName} /></View>
             </View>
-            <View style={S.fg}>
-                <Text style={S.label}>Số CCCD / CMND <Text style={S.req}>*</Text></Text>
-                <Text style={S.hint}>12 chữ số (CCCD mới) hoặc 9 chữ số (CMND cũ)</Text>
-                <View style={[F.inputBox, cccdError && { borderColor: '#EF4444' }]}>
-                    <Ionicons name="card-outline" size={15} color={cccdError ? '#EF4444' : '#94A3B8'} />
-                    <TextInput style={F.input} placeholder="001234567890" placeholderTextColor="#94A3B8" keyboardType="numeric" maxLength={12} value={cccd}
-                        onChangeText={v => { setCccd(v.replace(/\D/g, '')); setCccdError(''); }}
-                        onBlur={() => { if (cccd && !validateCCCD(cccd)) setCccdError('Số CCCD không hợp lệ (12 hoặc 9 chữ số)'); }}
-                    />
+            {!hasReferral && (
+                <View style={S.fg}>
+                    <Text style={S.label}>Số CCCD / CMND <Text style={S.req}>*</Text></Text>
+                    <Text style={S.hint}>12 chữ số (CCCD mới) hoặc 9 chữ số (CMND cũ)</Text>
+                    <View style={[F.inputBox, cccdError && { borderColor: '#EF4444' }]}>
+                        <Ionicons name="card-outline" size={15} color={cccdError ? '#EF4444' : '#94A3B8'} />
+                        <TextInput style={F.input} placeholder="001234567890" placeholderTextColor="#94A3B8" keyboardType="numeric" maxLength={12} value={cccd}
+                            onChangeText={v => { setCccd(v.replace(/\D/g, '')); setCccdError(''); }}
+                            onBlur={() => { if (cccd && !validateCCCD(cccd)) setCccdError('Số CCCD không hợp lệ (12 hoặc 9 chữ số)'); }}
+                        />
+                    </View>
+                    {cccdError ? <Text style={S.errText}>{cccdError}</Text> : null}
                 </View>
-                {cccdError ? <Text style={S.errText}>{cccdError}</Text> : null}
-            </View>
+            )}
             <View style={S.fg}><Text style={S.label}>Năm sinh <Text style={S.optional}>(tuỳ chọn)</Text></Text>
                 <YearField value={dob} onChange={setDob} />
             </View>
@@ -491,7 +641,7 @@ export default function UserInfoView() {
             </View>
             <View style={S.fg}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <View><Text style={S.label}>Khu vực phụ trách</Text><Text style={S.hint}>Tuỳ chọn</Text></View>
+                    <View><Text style={S.label}>Khu vực phụ trách</Text><Text style={S.hint}>Tuỳ chọn, nhưng bắt buộc nếu chọn Độc quyền</Text></View>
                     <TouchableOpacity style={[S.toggle, showAreaPicker && S.toggleOn]} onPress={handleToggleArea} activeOpacity={0.8}>
                         <View style={[S.toggleThumb, showAreaPicker && S.toggleThumbOn]} />
                     </TouchableOpacity>
@@ -599,13 +749,14 @@ export default function UserInfoView() {
             case 1: return renderStepBizModel();
             case 2: return renderStepCommon();
             case 3: return renderStepBizInfo();
-            case 4: return isDaiLy ? renderStepCommitment() : renderStepBank();
+            case 4: return isDaiLy ? renderStepCommitment() : (needsBank ? renderStepBank() : null);
             default: return null;
         }
     };
 
     const isLastStep = step === TOTAL_STEPS - 1;
     const roleCfg = ROLES.find(r => r.key === role);
+    const isNextDisabled = (step === 0 && (!role || !agreed)) || submitting;
 
     return (
         <View style={[S.root, { paddingTop: insets.top }]}>
@@ -635,7 +786,12 @@ export default function UserInfoView() {
                 </ScrollView>
             </KeyboardAvoidingView>
             <View style={[S.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-                <TouchableOpacity style={[S.nextBtn, submitting && { opacity: 0.7 }]} onPress={goNext} disabled={submitting} activeOpacity={0.85}>
+                <TouchableOpacity
+                    style={[S.nextBtn, (isNextDisabled) && S.nextBtnDisabled]}
+                    onPress={goNext}
+                    disabled={isNextDisabled}
+                    activeOpacity={0.85}
+                >
                     <Ionicons name={isLastStep ? (submitting ? 'hourglass-outline' : 'send-outline') : 'arrow-forward'} size={20} color="#fff" />
                     <Text style={S.nextBtnText}>{isLastStep ? (submitting ? 'Đang gửi...' : 'Hoàn tất đăng ký') : 'Tiếp theo'}</Text>
                 </TouchableOpacity>
@@ -645,6 +801,8 @@ export default function UserInfoView() {
 }
 
 const S = StyleSheet.create({
+    // ... giữ nguyên toàn bộ style như cũ ...
+    // (các style đã được định nghĩa ở file gốc, chỉ cần giữ nguyên)
     root: { flex: 1, backgroundColor: '#F8FAFC' },
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     headerBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
@@ -668,13 +826,19 @@ const S = StyleSheet.create({
     selLabel: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 2 },
     selDesc: { fontSize: 12, color: '#94A3B8' },
     selCheck: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
+    detailBox: { marginTop: 20, padding: 16, borderRadius: 14, borderLeftWidth: 4, backgroundColor: '#F8FAFC' },
+    detailTitle: { fontSize: 14, fontWeight: '800', marginBottom: 12, letterSpacing: 0.3 },
+    bulletRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' },
+    bulletText: { fontSize: 13, fontWeight: '500', flexShrink: 1 },
+    agreeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20, paddingVertical: 8 },
+    checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF' },
+    agreeText: { flex: 1, fontSize: 13, color: '#334155', lineHeight: 18 },
     fg: { marginBottom: 16 },
     label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 4 },
     hint: { fontSize: 11, color: '#94A3B8', marginBottom: 6 },
     optional: { fontSize: 11, color: '#94A3B8', fontWeight: '400' },
     req: { color: '#EF4444' },
     errText: { fontSize: 11, color: '#EF4444', marginTop: 4, fontWeight: '500' },
-    // ✅ Người liên hệ section
     contactSection: { backgroundColor: '#EFF6FF', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#BFDBFE', marginTop: 4, marginBottom: 4 },
     contactHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#BFDBFE' },
     contactTitle: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
@@ -690,6 +854,7 @@ const S = StyleSheet.create({
     dropEmpty: { padding: 14, fontSize: 13, color: '#94A3B8', textAlign: 'center' },
     bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 4 },
     nextBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#2563EB', borderRadius: 16, paddingVertical: 16, shadowColor: '#2563EB', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+    nextBtnDisabled: { backgroundColor: '#CBD5E1', shadowOpacity: 0 },
     nextBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.2 },
 });
 const F = StyleSheet.create({

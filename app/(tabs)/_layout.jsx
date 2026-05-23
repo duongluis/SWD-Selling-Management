@@ -11,15 +11,14 @@ import { Tabs, useRouter, useSegments } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { useContext, useState } from 'react';
 import {
-  Dimensions, Image, Platform, Pressable, ScrollView,
+  Image, Platform, Pressable, ScrollView,
   StyleSheet, Text, TouchableOpacity,
-  useWindowDimensions, View,
+  useWindowDimensions, View
 } from 'react-native';
 import auth from '../../config/firebaseConfig';
 
 const DESKTOP_BREAKPOINT = 768;
 const BANNER_IMAGE = require('../../assets/images/layout-img.png');
-
 
 function getInitials(name) {
   if (!name) return 'U';
@@ -37,6 +36,7 @@ const NAV_SECTIONS = [
       { key: 'consult', link: '(tabs)/customerctv', label: 'Giới thiệu khách', icon: 'person-add-outline', activeIcon: 'person-add', visible: (r) => r === 'ctv' || r === 'admin' },
       { key: 'order', link: '(tabs)/order', label: 'Đơn hàng', icon: 'receipt-outline', activeIcon: 'receipt', visible: () => true },
       { key: 'service', link: '(tabs)/service', label: 'Dịch vụ', icon: 'build-outline', activeIcon: 'build', visible: (r) => r !== 'ctv' },
+      { key: 'team', link: '(tabs)/team', label: 'Đội ngũ', icon: 'people-outline', activeIcon: 'people', visible: () => true },
     ],
   },
   {
@@ -69,6 +69,7 @@ const MOBILE_TABS = [
   { key: 'service', link: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
   { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
   { key: 'information', link: 'information', label: 'BẢNG GIÁ', icon: 'cash-outline', activeIcon: 'cash' },
+  { key: 'team', link: '(tabs)/team', label: 'ĐỘI NGŨ', icon: 'people-outline', activeIcon: 'people' },
 ];
 
 // ── NavItem ───────────────────────────────────────────────────
@@ -259,6 +260,7 @@ export default function TabLayout() {
   const router = useRouter();
   const segments = useSegments();
   const [collapsed, setCollapsed] = useState(false);
+  const { width } = useWindowDimensions();
 
   const { width: winWidth } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === 'web' && winWidth >= DESKTOP_BREAKPOINT;
@@ -304,6 +306,7 @@ export default function TabLayout() {
     <Tabs.Screen key="chatList" name="chatList" />,
     <Tabs.Screen key="editProfile" name="editProfile" />,
     <Tabs.Screen key="calculator" name="calculator" />,
+    <Tabs.Screen key="team" name="team" />,
   ];
 
   // ── Desktop Web ──────────────────────────────────────────
@@ -321,7 +324,11 @@ export default function TabLayout() {
         <View style={S.mainArea}>
           {/* Topbar */}
           <View style={S.topBar}>
-            <Image source={BANNER_IMAGE} style={S.topBarBanner} resizeMode="cover" />
+            <Image
+              source={BANNER_IMAGE}
+              style={[S.topBarBanner, { width: width }]}
+              resizeMode="cover"
+            />
             <View style={S.breadcrumb}>
               <Text style={S.breadcrumbRoot}>   SWD Seller</Text>
               <Ionicons name="chevron-forward" size={12} color="#fff" />
@@ -409,8 +416,8 @@ const S = StyleSheet.create({
   logoutItemText: { color: '#F87171', fontSize: 13, fontWeight: '600' },
   // Main area
   mainArea: { flex: 1, flexDirection: 'column', backgroundColor: '#F8FAFC' },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)', overflow: 'hidden', paddingVertical: 14, paddingRight: 16 },
-  topBarBanner: { position: 'absolute', width: Dimensions.get('screen').width, height: 60, opacity: 1, backgroundColor: '#40668d' },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)', overflow: 'hidden', paddingVertical: 10, paddingRight: 16 },
+  topBarBanner: { position: 'absolute', height: 60, opacity: 1, backgroundColor: '#40668d' },
   breadcrumb: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   breadcrumbRoot: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '500' },
   breadcrumbCurrent: { color: '#fff', fontSize: 14, fontWeight: '700' },
