@@ -53,6 +53,49 @@ const CATEGORY_COLORS = [
 ];
 const getCategoryStyle = (index) => CATEGORY_COLORS[index % CATEGORY_COLORS.length];
 
+export const SERVICE_TYPES = [
+    {
+        key: 'CONSULTING',
+        label: 'Tư vấn',
+        icon: 'chatbubbles-outline',
+        color: '#EC4899',
+        bg: '#FDF2F8',
+        hasMachine: true,
+    },
+    {
+        key: 'MAINTENANCE',
+        label: 'Bảo dưỡng',
+        icon: 'construct-outline',
+        color: '#F59E0B',
+        bg: '#FFFBEB',
+        hasMachine: true,
+    },
+    {
+        key: 'INSTALLATION',
+        label: 'Lắp đặt',
+        icon: 'build-outline',
+        color: '#8B5CF6',
+        bg: '#F5F3FF',
+        hasMachine: true,
+    },
+    {
+        key: 'SALT',
+        label: 'Đổ muối',
+        icon: 'water-outline',
+        color: '#3B82F6',
+        bg: '#EFF6FF',
+        hasMachine: false,
+    },
+    {
+        key: 'DELIVERY',
+        label: 'Giao hàng',
+        icon: 'car-outline',
+        color: '#10B981',
+        bg: '#ECFDF5',
+        hasMachine: false,
+    },
+];
+
 // ── Input Row helper ─────────────────────────────────────────
 function FormRow({ label, required, children }) {
     return (
@@ -309,10 +352,35 @@ function CreateProductModal({ visible, onClose, onCreated, existingCount }) {
 }
 
 // ── Create Service Modal ──────────────────────────────────────
+
+const COLOR_OPTIONS = [
+    '#EC4899', // hồng
+    '#F59E0B', // cam vàng
+    '#8B5CF6', // tím
+    '#3B82F6', // xanh dương
+    '#10B981', // xanh lá
+    '#EF4444', // đỏ
+    '#64748B', // xám
+    '#0EA5E9', // xanh sky
+];
+
 function CreateServiceModal({ visible, onClose, onCreated, existingCount }) {
     const [name, setName] = useState('');
     const [price, setPrice] = useState('');
+    const [color, setColor] = useState(COLOR_OPTIONS[0]);
+    const [hasMachine, setHasMachine] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [canAddInOrder, setCanAddInOrder] = useState(true);
+
+    const resetForm = () => {
+        setName('');
+        setPrice('');
+        setColor(COLOR_OPTIONS[0]);
+        setHasMachine(false);
+        setCanAddInOrder(true);
+    };
+
+    const handleClose = () => { resetForm(); onClose(); };
 
     const handleSave = async () => {
         if (!name.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên dịch vụ'); return; }
@@ -320,11 +388,18 @@ function CreateServiceModal({ visible, onClose, onCreated, existingCount }) {
         setSaving(true);
         try {
             const newId = existingCount + 1;
-            const payload = { id: newId, name: name.trim(), price: parseMoney(price) };
-            await setDoc(doc(db, 'servicePrice', name), payload);
+            const payload = {
+                id: newId,
+                name: name.trim(),
+                price: parseMoney(price),
+                color,
+                hasMachine,
+                canAddInOrder,
+
+            };
+            await setDoc(doc(db, 'servicePrice', name.trim()), payload);
             showSuccess('Đã tạo dịch vụ!', `#${newId} · ${name.trim()}`, () => { });
-            setName('');
-            setPrice('');
+            resetForm();
             onCreated(payload);
             onClose();
         } catch (e) { showAlert('Lỗi', e.message); }
@@ -333,23 +408,26 @@ function CreateServiceModal({ visible, onClose, onCreated, existingCount }) {
 
     const content = (
         <View style={F.modalInner}>
+
+            {/* Header */}
             <View style={F.modalHeader}>
-                <View style={[F.modalHeaderIcon, { backgroundColor: '#ECFDF5' }]}>
-                    <Ionicons name="construct-outline" size={20} color="#059669" />
+                <View style={[F.modalHeaderIcon, { backgroundColor: color + '22' }]}>
+                    <Ionicons name="construct-outline" size={20} color={color} />
                 </View>
                 <View style={{ flex: 1 }}>
                     <Text style={F.modalTitle}>Thêm dịch vụ mới</Text>
                     <Text style={F.modalSub}>ID tự động: #{existingCount + 1}</Text>
                 </View>
-                <TouchableOpacity onPress={onClose} style={F.closeBtn}>
+                <TouchableOpacity onPress={handleClose} style={F.closeBtn}>
                     <Ionicons name="close" size={18} color="#64748B" />
                 </TouchableOpacity>
             </View>
 
-            <View style={F.scrollBody}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={F.scrollBody}>
+
                 <Text style={F.section}>Thông tin dịch vụ</Text>
 
-                {/* ID (readonly) */}
+                {/* Mã (readonly) */}
                 <FormRow label="Mã dịch vụ">
                     <View style={[F.input, { backgroundColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
                         <Text style={{ fontSize: 14, color: '#94A3B8', fontWeight: '600', flex: 1 }}>
@@ -359,6 +437,7 @@ function CreateServiceModal({ visible, onClose, onCreated, existingCount }) {
                     </View>
                 </FormRow>
 
+                {/* Tên */}
                 <FormRow label="Tên dịch vụ" required>
                     <View style={F.input}>
                         <TextInput
@@ -371,9 +450,10 @@ function CreateServiceModal({ visible, onClose, onCreated, existingCount }) {
                     </View>
                 </FormRow>
 
+                {/* Giá */}
                 <FormRow label="Giá dịch vụ" required>
                     <View style={[F.input, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                        <View style={[F.moneyDot, { backgroundColor: '#059669' }]} />
+                        <View style={[F.moneyDot, { backgroundColor: color }]} />
                         <TextInput
                             style={[F.inputText, { flex: 1 }]}
                             placeholder="Nhập số tiền..."
@@ -386,33 +466,130 @@ function CreateServiceModal({ visible, onClose, onCreated, existingCount }) {
                     </View>
                 </FormRow>
 
+                {/* Màu hiển thị */}
+                <FormRow label="Màu hiển thị">
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                        {COLOR_OPTIONS.map(c => (
+                            <TouchableOpacity
+                                key={c}
+                                onPress={() => setColor(c)}
+                                activeOpacity={0.8}
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    backgroundColor: c,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: color === c ? 2.5 : 0,
+                                    borderColor: '#0F172A',
+                                    shadowColor: c,
+                                    shadowOpacity: color === c ? 0.5 : 0,
+                                    shadowRadius: 6,
+                                    elevation: color === c ? 4 : 0,
+                                }}
+                            >
+                                {color === c && (
+                                    <Ionicons name="checkmark" size={14} color="#fff" />
+                                )}
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </FormRow>
+
+                {/* Yêu cầu máy */}
+                <FormRow label="Yêu cầu máy">
+                    <TouchableOpacity
+                        onPress={() => setHasMachine(v => !v)}
+                        activeOpacity={0.7}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 8,
+                            backgroundColor: hasMachine ? color + '18' : '#F1F5F9',
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: hasMachine ? color : '#E2E8F0',
+                        }}
+                    >
+                        <Ionicons
+                            name={hasMachine ? 'checkbox' : 'square-outline'}
+                            size={18}
+                            color={hasMachine ? color : '#CBD5E1'}
+                        />
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: hasMachine ? color : '#94A3B8' }}>
+                            {hasMachine ? 'Có — cần có máy' : 'Không cần máy'}
+                        </Text>
+                    </TouchableOpacity>
+                </FormRow>
+
+                <FormRow label="Thêm vào đơn hàng">
+                    <TouchableOpacity
+                        onPress={() => setCanAddInOrder(v => !v)}
+                        activeOpacity={0.7}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 8,
+                            backgroundColor: canAddInOrder ? color + '18' : '#F1F5F9',
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: canAddInOrder ? color : '#E2E8F0',
+                        }}
+                    >
+                        <Ionicons
+                            name={canAddInOrder ? 'checkbox' : 'square-outline'}
+                            size={18}
+                            color={canAddInOrder ? color : '#CBD5E1'}
+                        />
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: canAddInOrder ? color : '#94A3B8' }}>
+                            {canAddInOrder ? 'Có — hiển thị trong đơn hàng' : 'Không hiển thị trong đơn hàng'}
+                        </Text>
+                    </TouchableOpacity>
+                </FormRow>
+
                 {/* Preview */}
                 {(name || price) && (
                     <View style={F.previewBox}>
                         <Text style={F.previewLabel}>Xem trước</Text>
-                        <View style={F.previewCard}>
-                            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center' }}>
-                                <Ionicons name="construct-outline" size={20} color="#059669" />
+                        <View style={[F.previewCard, { borderTopWidth: 3, borderTopColor: color }]}>
+                            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: color + '22', alignItems: 'center', justifyContent: 'center' }}>
+                                <Ionicons name="construct-outline" size={20} color={color} />
                             </View>
-                            <View style={{ flex: 1 }}>
+                            <View style={{ flex: 1, gap: 3 }}>
                                 <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>
                                     {name || 'Tên dịch vụ...'}
                                 </Text>
-                                <Text style={{ fontSize: 13, color: '#059669', fontWeight: '700', marginTop: 2 }}>
-                                    {price ? fmt(parseMoney(price)) : 'Chưa có giá'}
-                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Text style={{ fontSize: 13, color: color, fontWeight: '700' }}>
+                                        {price ? fmt(parseMoney(price)) : 'Chưa có giá'}
+                                    </Text>
+                                    {hasMachine && (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: color + '18', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                            <Ionicons name="settings-outline" size={10} color={color} />
+                                            <Text style={{ fontSize: 10, fontWeight: '700', color }}>Cần máy</Text>
+                                        </View>
+                                    )}
+                                </View>
                             </View>
                         </View>
                     </View>
                 )}
-            </View>
 
+                <View style={{ height: 16 }} />
+            </ScrollView>
+
+            {/* Footer */}
             <View style={F.modalFooter}>
-                <TouchableOpacity style={F.cancelBtn} onPress={onClose}>
+                <TouchableOpacity style={F.cancelBtn} onPress={handleClose}>
                     <Text style={F.cancelBtnText}>Huỷ</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[F.saveBtn, { backgroundColor: '#059669' }, saving && { opacity: 0.7 }]}
+                    style={[F.saveBtn, { backgroundColor: color }, saving && { opacity: 0.7 }]}
                     onPress={handleSave}
                     disabled={saving}
                 >
@@ -423,6 +600,7 @@ function CreateServiceModal({ visible, onClose, onCreated, existingCount }) {
                     <Text style={F.saveBtnText}>{saving ? 'Đang lưu...' : 'Lưu dịch vụ'}</Text>
                 </TouchableOpacity>
             </View>
+
         </View>
     );
 
@@ -436,7 +614,7 @@ function CreateServiceModal({ visible, onClose, onCreated, existingCount }) {
     }
 
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="formSheet" onRequestClose={onClose}>
+        <Modal visible={visible} animationType="slide" presentationStyle="formSheet" onRequestClose={handleClose}>
             {content}
         </Modal>
     );
@@ -646,14 +824,14 @@ function ServiceCategoryGrid({ services }) {
             renderItem={({ item, index }) => {
                 const style = getCategoryStyle(index);
                 return (
-                    <View style={[SC.card, { flex: 1, borderTopColor: style.color }]}>
-                        <View style={[SC.iconWrap, { backgroundColor: style.bg }]}>
-                            <Ionicons name={style.icon} size={28} color={style.color} />
+                    <View style={[SC.card, { flex: 1, borderTopColor: item.color }]}>
+                        <View style={[SC.iconWrap, { backgroundColor: item.color + "22" }]}>
+                            <Ionicons name={style.icon} size={28} color={item.color} />
                         </View>
                         <Text style={SC.categoryName}>{item.name}</Text>
-                        <View style={[SC.priceBadge, { backgroundColor: style.bg }]}>
-                            <Text style={[SC.priceLabel, { color: style.color }]}>Giá dịch vụ</Text>
-                            <Text style={[SC.priceValue, { color: style.color }]}>{fmt(item.price)}</Text>
+                        <View style={[SC.priceBadge, { backgroundColor: item.color + "22" }]}>
+                            <Text style={[SC.priceLabel, { color: item.color }]}>Giá dịch vụ</Text>
+                            <Text style={[SC.priceValue, { color: item.color }]}>{fmt(item.price)}</Text>
                         </View>
                     </View>
                 );

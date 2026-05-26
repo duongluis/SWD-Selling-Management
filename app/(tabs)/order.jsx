@@ -10,7 +10,7 @@ import StatBar from '@/components/UI/StatBar';
 // ✅ Import từ component riêng — không định nghĩa inline nữa
 import OrderDetail from '@/components/UI/OrderDetail';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
-import { isCTV } from '@/components/Utils/roleHelper';
+import { getPriceField, isAdmin, isCTV } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -21,6 +21,8 @@ import {
 
 const isWeb = Platform.OS === 'web';
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
+
+
 
 // ── Status config (dùng cho row badges) ──────────────────────
 const S_CFG = {
@@ -45,7 +47,7 @@ const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#
 // ── Table Header ──────────────────────────────────────────────
 
 //code 1 
-function TableHeader() {
+function TableHeader({ showCost }) {
   if (!isWeb) return null;
   return (
     <View style={[WRAP_BASE, TH.row]}>
@@ -53,7 +55,12 @@ function TableHeader() {
       <View style={COL.order}><Text style={TH.cell}>Đơn hàng</Text></View>
       <View style={COL.date}><Text style={TH.cell}>Ngày</Text></View>
       <View style={COL.sub}><Text style={TH.cell}>Sản phẩm</Text></View>
-      <View style={COL.amount}><Text style={[TH.cell, TH.cellRight]}>Tổng tiền</Text></View>
+      {showCost && (
+        <View style={COL.cost}>
+          <Text style={[TH.cell, TH.cellRight]}>Tổng tiền nhập</Text>
+        </View>
+      )}
+      <View style={COL.amount}><Text style={[TH.cell, TH.cellRight]}>Tổng giá trị đơn</Text></View>
       <View style={COL.status}><Text style={[TH.cell, TH.cellCenter]}>Trạng thái</Text></View>
       <View style={COL.trail} />
     </View>
@@ -61,7 +68,7 @@ function TableHeader() {
 }
 
 // ── Order Row ─────────────────────────────────────────────────
-function OrderRow({ item, index, isActive, onPress }) {
+function OrderRow({ item, index, isActive, onPress, showCost, priceField }) {
   const cfg = scfg(item.status);
   const tcfg = TYPE_CFG[item.orderType];
   const total = (item.items || []).reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
@@ -72,6 +79,10 @@ function OrderRow({ item, index, isActive, onPress }) {
     ? new Date(item.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : '—';
 
+  const totalCostRow = (item.items || []).reduce((s, p) => {
+    const costPrice = PARSE(p.productPrice?.[priceField] ?? p[priceField] ?? 0);
+    return s + costPrice * PARSE(p.qty || 1);
+  }, 0);
 
   // ── 3. ROW ── (cùng số children, cùng COL với header)
   return (
@@ -122,6 +133,15 @@ function OrderRow({ item, index, isActive, onPress }) {
         <Text style={ROW.cellMuted} numberOfLines={1}>{pCount} sản phẩm</Text>
       </View>
 
+      {/* 4.5 Tổng tiền nhập */}
+      {showCost && (
+        <View style={COL.cost}>
+          <Text style={[ROW.cellAmount, isCancelled && ROW.textMuted]} numberOfLines={1}>
+            {fmtCurrency(totalCostRow)}
+          </Text>
+        </View>
+      )}
+
       {/* 5. amount */}
       <View style={COL.amount}>
         <Text
@@ -153,7 +173,10 @@ function OrderRow({ item, index, isActive, onPress }) {
 // ── Main Screen ───────────────────────────────────────────────
 export default function OrderScreen() {
   const router = useRouter();
-  const { data, loading, refreshing, refresh, stats, role } = useScreenData('orders');
+  const { data, loading, refreshing, refresh, stats, role, userDetail } = useScreenData('orders');
+  // Chỉ hiện với daily (npp) hoặc user không có advisor
+  const showCostField = role === 'daily' || userDetail?.advisor == null || isAdmin(role);
+  const priceField = getPriceField(role);
   const { query, setQuery } = useSearch(data, ['id', 'customer']);
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -184,12 +207,32 @@ export default function OrderScreen() {
       .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + PARSE(p.price) * PARSE(p.qty || 1), 0), 0)
     , [data]);
 
+  const totalCost = useMemo(() =>
+    data
+      .filter(o => !['Đã hủy', 'CANCELLED'].includes(o.status))
+      .reduce((sum, o) =>
+        sum + (o.items || []).reduce((s, p) => {
+          const costPrice = PARSE(p.productPrice?.[priceField] ?? p[priceField] ?? 0);
+          return s + costPrice * PARSE(p.qty || 1);
+        }, 0)
+        , 0)
+    , [data, priceField]);
+
   const statCards = [
     { icon: 'receipt-outline', label: 'Đơn hàng', value: String(stats.total || 0), color: '#2563EB', bg: '#EFF6FF' },
     { icon: 'cube-outline', label: 'Đơn buôn', value: String(data.filter(o => o.orderType === 'buon').length), color: '#059669', bg: '#ECFDF5' },
     { icon: 'home-outline', label: 'Đơn lẻ', value: String(data.filter(o => o.orderType === 'le').length), color: '#8B5CF6', bg: '#F5F3FF' },
     { icon: 'cash-outline', label: 'Doanh thu', value: fmtCurrency(totalRevenue), color: '#F59E0B', bg: '#FFFBEB' },
+    ...(showCostField ? [{
+      icon: 'pricetag-outline',
+      label: 'Tiền nhập',
+      value: fmtCurrency(totalCost),
+      color: '#0891B2',
+      bg: '#ECFEFF',
+    }] : []),
   ];
+
+  console.log('statCards length:', statCards.length);
 
   const handlePress = (item) => {
     if (isWeb) setSelected(p => p?.id === item.id ? null : item);
@@ -233,7 +276,8 @@ export default function OrderScreen() {
       <View style={{ flex: 1, flexDirection: 'row', padding: isWeb ? 16 : 0, paddingTop: 0 }}>
         {/* List */}
         <View style={WRAP.card}>
-          <TableHeader />
+          <TableHeader showCost={showCostField} />
+
           {loading && !refreshing ? <EmptyState loading /> :
             filtered.length === 0 ? (
               <EmptyState empty icon="receipt-outline"
@@ -246,9 +290,13 @@ export default function OrderScreen() {
                 data={filtered}
                 keyExtractor={(item, i) => item.id || String(i)}
                 renderItem={({ item, index }) => (
-                  <OrderRow item={item} index={index}
+                  <OrderRow
+                    item={item}
+                    index={index}
                     isActive={selected?.id === item.id}
                     onPress={handlePress}
+                    showCost={showCostField}      // ✅
+                    priceField={priceField}       // ✅
                   />
                 )}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -283,11 +331,12 @@ const WRAP = StyleSheet.create({
 
 // ── 1. SINGLE SOURCE OF TRUTH cho layout ──
 const COL = {
-  lead: { width: 36 },                         // ô avatar
-  order: { flex: 2, minWidth: 160 },            // ← minWidth giữ responsive
+  lead: { width: 36 },
+  order: { flex: 2, minWidth: 160 },
   date: { flex: 1, minWidth: 90 },
   sub: { flex: 1, minWidth: 90 },
   amount: { flex: 1, minWidth: 110 },
+  cost: { flex: 1, minWidth: 110 }, // ✅ thêm mới
   status: { width: 130 },
   trail: { width: 20 },
 };

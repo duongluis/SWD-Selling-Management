@@ -1,6 +1,5 @@
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
-import { createNotification } from './chatService';
 
 // ── Mapping: (serviceType, newServiceStatus) → orderStatus ──
 // Chỉ map những trạng thái cần auto-sync (changeable:false ở đơn hàng)
@@ -33,49 +32,34 @@ const SVC_STATUS_NAMES = {
  * @param {string} newSvcStatus  - key trạng thái mới (VD: 'PROCESSING', 'COMPLETED')
  * @returns {string|null}  - tên trạng thái đơn hàng mới nếu có sync, null nếu không
  */
+
 export async function syncOrderStatusFromService(service, newSvcStatus) {
-    const { type, orderId, phone } = service;
-
-    // Không có đơn hàng liên kết → bỏ qua
-    if (!orderId || !phone) return null;
-
-    // Lấy mapping cho loại dịch vụ này
-    const mapping = SERVICE_TO_ORDER_STATUS[type];
-    if (!mapping) return null;
-
-    // Lấy tên trạng thái đầy đủ từ key (PROCESSING → 'Đang xử lý')
-    const svcStatusName = SVC_STATUS_NAMES[newSvcStatus] || newSvcStatus;
-
-    // Tra mapping → trạng thái đơn hàng tương ứng
-    const newOrderStatus = mapping[svcStatusName];
-    if (!newOrderStatus) return null;
+    const { orderId, phone } = service;
+    if (!orderId || !phone || newSvcStatus !== 'Hoàn thành') return null;
 
     try {
-        // Đọc doc đơn hàng (lưu dạng array trong doc/{phone})
-        const orderDoc = await getDoc(doc(db, 'orders', phone));
-        if (!orderDoc.exists()) return null;
+        // 1. Lấy tất cả dịch vụ thuộc đơn hàng này
+        const q = query(collection(db, 'service'), where('orderId', '==', orderId));
+        const snap = await getDocs(q);
 
-        const orders = orderDoc.data().orders || [];
-        const targetOrder = orders.find(o => o.id === orderId);
-        const updated = orders.map(o =>
-            o.id === orderId ? { ...o, status: newOrderStatus } : o
-        );
+        // 2. Kiểm tra xem có dịch vụ nào chưa "Hoàn thành" không
+        // Lưu ý: snap bao gồm cả dịch vụ vừa cập nhật (vì hàm này chạy sau khi update thành công)
+        const allServices = snap.docs.map(d => d.data());
+        const isAllDone = allServices.every(s => s.status === 'Hoàn thành');
 
-        await updateDoc(doc(db, 'orders', phone), { orders: updated });
-        console.log(`[syncOrderStatus] Order #${orderId}: auto → "${newOrderStatus}"`);
+        if (isAllDone) {
+            const orderRef = doc(db, 'orders', orderId);
+            const orderSnap = await getDoc(orderRef);
+            if (!orderSnap.exists()) return null;
 
-        // Gửi thông báo thanh toán khi dịch vụ lắp đặt hoàn thành
-        if (newOrderStatus === 'Chờ thanh toán' && targetOrder?.createdBy) {
-            createNotification({
-                userEmail: targetOrder.createdBy,
-                type: 'order_update',
-                title: '💰 Yêu cầu thanh toán',
-                body: `Lắp đặt đơn hàng #${orderId} đã hoàn thành. Vui lòng thanh toán để hoàn tất.`,
-                orderId,
-            }).catch(() => { });
+            const currentStatus = orderSnap.data().status;
+            // Chỉ cập nhật nếu đơn hàng chưa ở các trạng thái cuối
+            if (!['Đã thanh toán', 'Đã hủy'].includes(currentStatus)) {
+                await updateDoc(orderRef, { status: 'Chờ thanh toán' });
+                return 'Chờ thanh toán';
+            }
         }
-
-        return newOrderStatus;
+        return null;
     } catch (e) {
         console.error('[syncOrderStatus] Lỗi:', e.message);
         return null;
@@ -107,15 +91,15 @@ export function isOrderStatusLocked(orderStatus) {
  * @returns {boolean}
  */
 export function isServiceStatusLocked(svcStatus) {
-    const LOCKED = new Set(['Đã hủy', 'CANCELLED']);
+    const LOCKED = new Set(['Đã hủy', 'CANCELLED', 'Hoàn thành']);
     return LOCKED.has(svcStatus);
 }
 
 // ── Order → Service sync mapping ─────────────────────────────
 const ORDER_TO_SERVICE_STATUS = {
-    'Chờ lắp đặt':  'Chờ xử lý',
+    'Chờ lắp đặt': 'Chờ xử lý',
     'Đang lắp đặt': 'Đang xử lý',
-    'Chờ giao hàng':  'Chờ xử lý',
+    'Chờ giao hàng': 'Chờ xử lý',
     'Đang giao hàng': 'Đang xử lý',
 };
 

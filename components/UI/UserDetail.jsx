@@ -129,11 +129,12 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                         <Ionicons name={locked ? 'lock-open-outline' : 'lock-closed-outline'} size={13} color={locked ? '#059669' : '#DC2626'} />
                         <Text style={[S.aBtnText, { color: locked ? '#059669' : '#DC2626' }]}>{locked ? 'Mở khóa' : 'Khóa TK'}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={S.aBtn}
+                    {userDetail.role == "admin" && (<TouchableOpacity style={S.aBtn}
                         onPress={() => router.push({ pathname: '/editUser/[userEmail]', params: { userEmail: local.email, userParam: JSON.stringify(local) } })}>
                         <Ionicons name="create-outline" size={13} color="#2563EB" />
                         <Text style={S.aBtnText}>Chỉnh sửa</Text>
                     </TouchableOpacity>
+                    )}
                 </View>
             </View>
 

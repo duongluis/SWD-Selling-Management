@@ -46,9 +46,15 @@ async function getBase64Logo() {
         const { Asset } = await import('expo-asset');
         const asset = Asset.fromModule(require('../../assets/images/logo-light.png'));
         await asset.downloadAsync();
-        console.log('asset.uri:', asset.uri); // URL thật sau bundle
-        return asset.uri; // web: http://localhost:8081/assets/abc123.png
-        // mobile: data URI hoặc file:// path
+
+        // Nếu là web, dùng fetch để lấy base64
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+        });
     } catch (e) {
         console.warn('getBase64Logo failed:', e.message);
         return null;
@@ -126,7 +132,7 @@ tr:last-child td{border-bottom:none}
 .sig-name{font-size:13px;font-weight:700}
 @media print{body{padding:16px}}
 </style></head><body>
-${logoBase64 ? `<img class="watermark" src="${logoBase64}" alt="" />` : 'không có ảnh'}
+${logoBase64 ? `<img class="watermark" src="${logoBase64}" alt="" />` : ''}
 
 <div class="header">
   <h1>BÁO GIÁ HỆ THỐNG LỌC TỔNG SINH HOẠT</h1>
@@ -347,11 +353,9 @@ function TemplateForm({ form, setForm, catalog }) {
 }
 
 // ── Calculator ────────────────────────────────────────────────
-function Calculator({ items: itemsProp, setItems, orderType, disc, setDisc, catalog }) {
+function Calculator({ items: itemsProp, orderType, disc, setDisc }) {
     const items = Array.isArray(itemsProp) ? itemsProp : [];
-    const [openDropIdx, setOpenDropIdx] = useState(null);
 
-    // ✅ Parse string → number CHỈ khi tính toán, không parse khi lưu state
     const parseNum = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
     const subtotal = items.reduce((s, p) => s + parseNum(p.price) * parseNum(p.qty), 0);
     const discAmt = subtotal * (parseNum(disc) / 100);
@@ -359,29 +363,16 @@ function Calculator({ items: itemsProp, setItems, orderType, disc, setDisc, cata
     const commRate = COMM[orderType] || 0.03;
     const comm = total * commRate;
 
-    const update = (i, field, val) => {
-        setItems(prev => (prev || []).map((p, idx) =>
-            idx === i ? { ...p, [field]: val } : p  // ✅ lưu string thô
-        ));
-    };
-
-    const selectProduct = (i, prod) => {
-        setItems(prev => (prev || []).map((p, idx) =>
-            idx === i ? { ...p, name: prod.name, price: String(prod.price || prod.price_a || 0) } : p
-        ));
-        setOpenDropIdx(null);
-    };
-
     return (
         <View style={S.calcCard}>
             <View style={S.calcHeader}>
                 <View style={S.calcIcon}>
                     <Ionicons name="calculator-outline" size={16} color="#185FA5" />
                 </View>
-                <Text style={S.calcTitle}>Tính toán</Text>
-                <View style={S.editBadge}>
-                    <Ionicons name="create-outline" size={10} color="#185FA5" />
-                    <Text style={S.editBadgeText}>Có thể sửa</Text>
+                <Text style={S.calcTitle}>Tóm tắt thanh toán</Text>
+                <View style={[S.editBadge, { backgroundColor: '#F1F5F9' }]}>
+                    <Ionicons name="lock-closed-outline" size={10} color="#64748B" />
+                    <Text style={[S.editBadgeText, { color: '#64748B' }]}>Chốt số liệu</Text>
                 </View>
             </View>
             <HR />
@@ -392,61 +383,25 @@ function Calculator({ items: itemsProp, setItems, orderType, disc, setDisc, cata
                         <Ionicons name="water-outline" size={12} color="#185FA5" />
                     </View>
                     <View style={{ flex: 1 }}>
-                        {/* ✅ Dropdown chọn sản phẩm */}
-                        <TouchableOpacity
-                            style={[S.calcDropTrigger, openDropIdx === i && { borderColor: '#185FA5' }]}
-                            onPress={() => setOpenDropIdx(openDropIdx === i ? null : i)}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={p.name ? S.calcProdName : S.calcDropPlaceholder} numberOfLines={1}>
-                                {p.name || 'Chọn sản phẩm...'}
-                            </Text>
-                            <Ionicons name={openDropIdx === i ? 'chevron-up' : 'chevron-down'} size={13} color="#94A3B8" />
-                        </TouchableOpacity>
-                        {openDropIdx === i && catalog.length > 0 && (
-                            <ProductDropdown
-                                catalog={catalog}
-                                onSelect={(prod) => selectProduct(i, prod)}
-                                onClose={() => setOpenDropIdx(null)}
-                            />
-                        )}
-
+                        <Text style={S.calcProdName} numberOfLines={1}>{p.name || 'Sản phẩm chưa đặt tên'}</Text>
                         <View style={S.calcInputs}>
-                            <View style={S.calcField}>
-                                <Text style={S.calcFieldLabel}>SL</Text>
-                                <TInput
-                                    value={String(p.qty ?? '')}
-                                    onChange={v => update(i, 'qty', v)}
-                                    keyboardType="numeric"
-                                    style={{ width: 52 }}
-                                    placeholder="1"
-                                />
-                            </View>
-                            <View style={S.calcField}>
-                                <Text style={S.calcFieldLabel}>Đơn giá (đ)</Text>
-                                <TInput
-                                    value={String(p.price ?? '')}
-                                    onChange={v => update(i, 'price', v)}
-                                    keyboardType="numeric"
-                                    style={{ minWidth: 90 }}
-                                    placeholder="0"
-                                />
-                            </View>
-                            <View style={S.calcField}>
-                                <Text style={S.calcFieldLabel}>Thành tiền</Text>
-                                <Text style={S.lineTotal}>{fmt(parseNum(p.price) * parseNum(p.qty))}</Text>
-                            </View>
+                            <Text style={S.readOnlyLabel}>SL: <Text style={S.readOnlyVal}>{p.qty}</Text></Text>
+                            <Text style={S.readOnlyLabel}>Đơn giá: <Text style={S.readOnlyVal}>{fmt(p.price)}</Text></Text>
+                            <Text style={[S.readOnlyLabel, { marginLeft: 'auto' }]}>
+                                Tổng: <Text style={{ fontWeight: '700', color: '#185FA5' }}>{fmt(parseNum(p.price) * parseNum(p.qty))}</Text>
+                            </Text>
                         </View>
                     </View>
                 </View>
             ))}
 
             <HR />
+            {/* Chiết khấu nếu mode template có thể cho nhập, nhưng nếu bạn muốn khóa hết thì đổi TextInput thành Text */}
             <View style={S.discRow}>
-                <Text style={S.calcFieldLabel}>Chiết khấu (%)</Text>
+                <Text style={S.calcFieldLabel}>Chiết khấu áp dụng</Text>
                 <TInput
                     value={String(disc ?? '')}
-                    onChange={v => setDisc(v)}
+                    onChange={v => setDisc(v)} // <--- Dòng này cho phép thay đổi giá trị
                     keyboardType="numeric"
                     style={{ width: 64 }}
                     placeholder="0"
@@ -455,18 +410,19 @@ function Calculator({ items: itemsProp, setItems, orderType, disc, setDisc, cata
             <HR />
 
             <View style={S.statRow}><Text style={S.statLabel}>Tổng tiền hàng</Text><Text style={S.statVal}>{fmt(subtotal)}</Text></View>
-            <View style={S.statRow}><Text style={S.statLabel}>Chiết khấu</Text><Text style={[S.statVal, { color: '#A32D2D' }]}>- {fmt(discAmt)}</Text></View>
+            <View style={S.statRow}><Text style={S.statLabel}>Tiền chiết khấu</Text><Text style={[S.statVal, { color: '#A32D2D' }]}>- {fmt(discAmt)}</Text></View>
             <View style={S.totalRow}>
                 <Text style={S.totalLabel}>Tổng thanh toán</Text>
                 <Text style={S.totalVal}>{fmt(total)}</Text>
             </View>
+
             <View style={S.commBox}>
                 <View>
-                    <Text style={S.commLabel}>Hoa hồng nhận được</Text>
+                    <Text style={S.commLabel}>Hoa hồng dự kiến</Text>
                     <Text style={S.commVal}>{fmt(comm)}</Text>
-                    <Text style={S.commSub}>{(commRate * 100).toFixed(0)}% · {orderType === 'buon' ? 'đơn buôn' : 'đơn lẻ'}</Text>
+                    <Text style={S.commSub}>{(commRate * 100).toFixed(0)}% hoa hồng trên đơn</Text>
                 </View>
-                <Text style={S.commRate}>{(commRate * 100).toFixed(0)}%</Text>
+                <Ionicons name="gift-outline" size={24} color="rgba(255,255,255,0.3)" />
             </View>
         </View>
     );
@@ -554,11 +510,11 @@ function Contract({ order, seller, items: itemsProp, disc, total, discAmt }) {
 
             {/* Info */}
             <View style={S.infoBox}>
-                <View style={S.infoRow}>
+                {/* <View style={S.infoRow}>
                     <Ionicons name="card-outline" size={12} color="#64748B" />
                     <Text style={S.infoL}>Thanh toán:</Text>
                     <Text style={S.infoV}>{order.paymentMethod === 'company' ? 'Doanh nghiệp thanh toán' : 'Khách hàng thanh toán'}</Text>
-                </View>
+                </View> */}
                 {order.note ? (
                     <View style={S.infoRow}>
                         <Ionicons name="document-text-outline" size={12} color="#64748B" />
@@ -620,6 +576,7 @@ export default function OrderContractScreen() {
         : mode === 'order' ? [] : form.items;
 
     const [items, setItems] = useState(safeItems);
+    const currentItems = mode === 'order' ? (rawOrder.items || []) : form.items;
     const [disc, setDisc] = useState('0');
     const [exporting, setExporting] = useState(false);
 
@@ -697,20 +654,14 @@ export default function OrderContractScreen() {
             >
                 {isWeb ? (
                     <View style={S.grid}>
-                        {/* Left: Template form hoặc Calculator */}
+
                         <View style={{ width: 340, flexShrink: 0, gap: 14 }}>
                             {mode === 'template' && (
                                 <TemplateForm form={form} setForm={handleFormChange} catalog={catalog} />
                             )}
                             <Calculator
-                                items={safeCalc}
-                                setItems={mode === 'order' ? setItems : (next) => {
-                                    const safe = Array.isArray(next) ? next : [];
-                                    setItems(safe);
-                                    setForm(f => ({ ...f, items: safe }));
-                                }}
+                                items={safeCalc} // safeCalc đã tự động lấy từ Order hoặc Template Form
                                 orderType={order.orderType || 'le'}
-                                catalog={catalog}
                                 disc={disc}
                                 setDisc={setDisc}
                             />
@@ -733,14 +684,8 @@ export default function OrderContractScreen() {
                             <TemplateForm form={form} setForm={handleFormChange} catalog={catalog} />
                         )}
                         <Calculator
-                            items={safeCalc}
-                            setItems={mode === 'order' ? setItems : (next) => {
-                                const safe = Array.isArray(next) ? next : [];
-                                setItems(safe);
-                                setForm(f => ({ ...f, items: safe }));
-                            }}
+                            items={safeCalc} // safeCalc đã tự động lấy từ Order hoặc Template Form
                             orderType={order.orderType || 'le'}
-                            catalog={catalog}
                             disc={disc}
                             setDisc={setDisc}
                         />
@@ -875,4 +820,19 @@ const S = StyleSheet.create({
     sigLine: { height: 0.5, backgroundColor: '#CBD5E1', marginBottom: 7 },
     sigName: { fontSize: 12, fontWeight: '600', color: '#0F172A', marginBottom: 2 },
     sigHint: { fontSize: 10, color: '#94A3B8' },
+    readOnlyLabel: {
+        fontSize: 12,
+        color: '#64748B',
+        marginRight: 10,
+    },
+    readOnlyVal: {
+        fontWeight: '600',
+        color: '#0F172A',
+    },
+    // Chỉnh lại calcInputs để hiển thị text thay vì TextInput
+    calcInputs: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+    },
 });

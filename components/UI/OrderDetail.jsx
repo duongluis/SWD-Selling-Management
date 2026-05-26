@@ -2,7 +2,7 @@
 // Panel chi tiết đơn hàng — dùng ở order.jsx (web) và OrderView (mobile)
 
 import { showAlert } from '@/components/Main/showAlert';
-import { createNotification, getRoomIdByOrderId, sendStatusUpdateMessage } from '@/components/Utils/chatService';
+import { createNotification, getSupportRoomId, sendStatusUpdateMessage } from '@/components/Utils/chatService';
 import { fmtCurrency } from '@/components/Utils/formatters';
 import { isAdmin as checkAdmin } from '@/components/Utils/roleHelper';
 import { syncServiceStatusFromOrder } from '@/components/Utils/syncOrderStatus';
@@ -11,12 +11,19 @@ import statusConfig from '@/config/status.json';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator, Dimensions, Modal, Platform, ScrollView, StyleSheet,
     Text, TouchableOpacity, View,
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import banksData from '../../config/banks.json';
+import { generateVietQR } from '../Utils/vietQR';
+let QRCodeWeb = null;
+if (Platform.OS === 'web') {
+    QRCodeWeb = require('qrcode.react').QRCodeSVG;
+}
 
 const isWeb = Platform.OS === 'web';
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
@@ -45,72 +52,227 @@ async function _printHtml(html) {
     }
 }
 
-function _buildHandoverHtml({ order, seller, logoBase64 }) {
-    const fN = (n) => Math.round(n || 0).toLocaleString('vi-VN');
-    const fV = (n) => fN(n) + ' đ';
-    const hdNum = `BB-${new Date().getFullYear()}-${(order.id || '001').slice(-6).padStart(6, '0')}`;
-    const today = new Date().toLocaleDateString('vi-VN');
-    const items = order.items || [];
-    const subtotal = items.reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
-    const rows = items.map((p, i) => `<tr>
-      <td style="text-align:center;color:#94a3b8">${i + 1}</td>
-      <td>${p.name || ''}</td>
-      <td style="text-align:center">${fN(p.qty)}</td>
-      <td style="text-align:right">${fV(p.price)}</td>
-      <td style="text-align:right;font-weight:600">${fV(PARSE(p.price) * PARSE(p.qty || 1))}</td>
-      <td style="color:#64748b;font-style:italic">${p.note || '—'}</td>
-    </tr>`).join('');
-    return `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Biên bản ${hdNum}</title>
-<style>body{font-family:Arial,sans-serif;margin:0;padding:32px;color:#0f172a;font-size:13px;position:relative}
-.watermark{position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);width:80%;opacity:0.1;pointer-events:none;z-index:0;object-fit:contain}
-body>*:not(.watermark){position:relative;z-index:1}
-h1{font-size:20px;font-weight:700;margin:0 0 4px;text-align:center}
-.sub{color:#64748b;font-size:12px;text-align:center;margin-bottom:8px}
-.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0 20px}
-.party{border-radius:8px;padding:14px;border:1px solid #e2e8f0}
-.party-title{font-size:10px;font-weight:700;letter-spacing:.06em;color:#185fa5;text-transform:uppercase;margin-bottom:8px}
-.party-name{font-size:15px;font-weight:700;margin-bottom:4px}
-.party-detail{font-size:11px;color:#64748b;line-height:1.6}
-table{width:100%;border-collapse:collapse;margin:12px 0}
-th{font-size:10px;font-weight:700;text-transform:uppercase;color:#94a3b8;padding:10px 12px;text-align:left;border-bottom:1px solid #e2e8f0}
-td{padding:10px 12px;border-bottom:1px solid #f1f5f9}
-.tfoot td{font-weight:600;font-size:13px;border-top:1px solid #e2e8f0}
-.total-row td{font-size:15px;font-weight:700;color:#185fa5}
-.info-box{border-radius:8px;padding:12px;margin:16px 0;font-size:12px;color:#64748b}
-.terms{font-size:11px;color:#94a3b8;line-height:1.7;margin:12px 0}
-.sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px}
-.sig-col{border-top:1px solid #cbd5e1;padding-top:10px;text-align:center}
-.sig-label{font-size:11px;color:#64748b;margin-bottom:40px}
-.sig-name{font-size:13px;font-weight:700}
-@media print{body{padding:16px}}</style></head><body>
-${logoBase64 ? `<img class="watermark" src="${logoBase64}" alt=""/>` : ''}
-<h1>BIÊN BẢN BÀN GIAO HÀNG HỆ THỐNG LỌC TỔNG SINH HOẠT</h1>
-<div class="sub">Mã biên bản: ${hdNum} &nbsp;·&nbsp; Ngày ${today}</div>
-<div class="parties">
-  <div class="party"><div class="party-title">Bên nhận (A)</div><div class="party-name">${order.customer || '—'}</div>
-  <div class="party-detail">SĐT: ${order.phone || '—'}<br>Địa chỉ: ${order.address || '—'}</div></div>
-  <div class="party"><div class="party-title">Bên giao (B)</div><div class="party-name">${seller?.name || 'SWD Company'}</div>
-  <div class="party-detail">SĐT: ${seller?.phone || '—'}<br>Email: ${seller?.email || '—'}</div></div>
-</div>
-<table><thead><tr>
-  <th style="width:30px">#</th><th>Sản phẩm</th>
-  <th style="width:60px;text-align:center">SL</th>
-  <th style="width:110px;text-align:right">Đơn giá</th>
-  <th style="width:120px;text-align:right">Thành tiền</th>
-  <th style="width:120px">Ghi chú</th>
-</tr></thead><tbody>${rows}</tbody>
-<tfoot>
-  <tr class="total-row"><td colspan="4">Tổng thanh toán</td><td style="text-align:right">${fV(subtotal)}</td><td></td></tr>
-</tfoot></table>
-<div class="info-box">${order.note ? 'Ghi chú: ' + order.note : 'Ghi chú: Không có'}</div>
-<div class="terms">${order.orderType === 'buon'
-            ? 'Hàng hoá được kiểm tra tại thời điểm giao nhận. Mọi khiếu nại cần phản ánh trong vòng 24 giờ kể từ khi nhận hàng.'
-            : 'Lắp đặt miễn phí trong vòng 24 giờ kể từ khi giao hàng thành công.'}</div>
-<div class="sig">
-  <div class="sig-col"><div class="sig-label">Đại diện bên nhận</div><div class="sig-name">${order.customer || '—'}</div><div style="font-size:11px;color:#94a3b8">Ký và ghi rõ họ tên</div></div>
-  <div class="sig-col"><div class="sig-label">Đại diện bên giao</div><div class="sig-name">${seller?.name || 'SWD Company'}</div><div style="font-size:11px;color:#94a3b8">Ký và đóng dấu</div></div>
-</div></body></html>`;
+async function _getAdminInfo() {
+    try {
+        const q = query(collection(db, 'users'), where('email', '==', 'kinhdoanh@swd.vn'));
+        const snap = await getDocs(q);
+        if (!snap.empty) return snap.docs[0].data();
+        return { name: 'CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VÀ SẢN XUẤT GOLDEN PANTHERA', phone: '0108133982', email: 'kinhdoanh@swd.vn' };
+    } catch {
+        return { name: 'GOLDEN PANTHERA (Admin)', email: 'kinhdoanh@swd.vn' };
+    }
 }
+
+async function _getUserByEmail(email) {
+    if (!email) return null;
+    try {
+        const docRef = doc(db, 'users', email);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) return snap.data();
+        return null;
+    } catch (e) {
+        console.error("Lỗi lấy thông tin user:", e);
+        return null;
+    }
+}
+function _buildHandoverHtml({ order, seller, services, logoBase64 }) {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+
+    // Rows Sản phẩm
+    const productRows = (order.items || []).map((p, i) => `
+        <tr>
+            <td style="text-align:center">${i + 1}</td>
+            <td>${p.name}</td>
+            <td style="text-align:center">${p.qty.toString().padStart(2, '0')}</td>
+            <td style="text-align:center">Máy</td>
+        </tr>`).join('');
+
+    // Rows Dịch vụ
+    const serviceRows = (services || []).map((s, i) => `
+        <tr>
+            <td style="text-align:center">${i + 1}</td>
+            <td>${s.type === 'INSTALLATION' ? 'Thi công, vận chuyển, lắp đặt máy' : s.type === 'MAINTENANCE' ? 'Bảo dưỡng hệ thống' : s.type}</td>
+            <td style="text-align:center">01</td>
+            <td style="text-align:center">Đã bao gồm</td>
+        </tr>`).join('');
+
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+        body { font-family: "Times New Roman", Times, serif; font-size: 10pt; line-height: 1.5; color: #000; padding: 10px; }
+            .header-title { text-align: center; font-weight: bold; font-size: 13pt; text-transform: uppercase; margin-bottom: 5px; }
+            .sub-title { text-align: center; font-size: 10pt; margin-bottom: 25px; }
+            
+            .info-table { width: 100%; border: none; margin-bottom: 20px; }
+            .info-table td { border: none; padding: 2px 0; vertical-align: top; font-size: 10pt; }
+            .label { font-weight: bold; width: 180px; text-transform: uppercase; font-size:13pt }
+            .dots { flex: 1; border-bottom: 1px dotted #000; min-height: 1.2em; display: inline-block; width: 100%; }
+            
+            .section-title { font-weight: bold; margin-top: 20px; margin-bottom: 10px; text-transform: uppercase; font-size: 13pt; }
+            
+            table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            table.data-table th, table.data-table td { border: 1px solid #000; padding: 8px; font-size: 12pt; }
+            table.data-table th { background-color: #f2f2f2; text-transform: uppercase; }
+            
+            .notes-list { padding-left: 25px; margin-bottom: 20px; }
+            .notes-list li { margin-bottom: 10px; text-align: justify; }
+            
+            .confirmation-text { font-style: italic; margin-top: 15px; font-size: 10pt; }
+            
+            .footer-sig { display: flex; justify-content: space-between; margin-top: 30px; text-align: center; }
+            .sig-box { width: 48%; font-size: 10pt; }
+            .watermark { position: fixed; top: 25%; left: 10%; width: 80%; opacity: 0.04; z-index: -1; }
+        @media print {
+            .page-break {
+            display: block;
+            page-break-before: always; /* Nhảy sang trang mới trước khi bắt đầu thẻ này */
+            break-before: page; /* Thuộc tính hiện đại hơn cho các trình duyệt mới */
+            }
+        }
+        </style>
+    </head>
+    <body>
+        ${logoBase64 ? `<img src="${logoBase64}" class="watermark">` : ''}
+        
+        <div class="header-title">BIÊN BẢN NGHIỆM THU VÀ BÀN GIAO CHẤT LƯỢNG<br/>KHỐI LƯỢNG HẠNG MỤC THI CÔNG</div>
+        <div class="sub-title">Ngày bàn giao: ..../..../${currentYear}</div>
+
+        <p>Hạng mục cung cấp thiết bị và thi công: <strong>“Máy lọc nước tổng sinh hoạt ${order.items?.[0]?.name || ''}”</strong></p>
+
+        <!-- BÊN NHẬN -->
+        <table class="info-table">
+            <tr>
+                <td class="label">BÊN NHẬN BÀN GIAO:</td>
+                <td style="font-weight:bold">${order.customer}</td>
+            </tr>
+            <tr>
+                <td>Địa chỉ công trình:</td>
+                <td>${order.address || '...........................................................................................'}</td>
+            </tr>
+            <tr>
+                <td>Số điện thoại:</td>
+                <td>${order.phone || '...........................................................................................'}</td>
+            </tr>
+            <tr>
+                <td>Người nhận bàn giao:</td>
+                <td>...........................................................................................</td>
+            </tr>
+            <tr>
+                <td>Chức vụ:</td>
+                <td>...........................................................................................</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td style="font-style: italic">(Sau đây gọi tắt là <strong>“Bên A”</strong>)</td>
+            </tr>
+        </table>
+
+        <!-- BÊN GIAO -->
+        <table class="info-table">
+            <tr>
+                <td class="label">BÊN BÀN GIAO:</td>
+                <td style="font-weight:bold;">${seller.companyName || seller.name || 'CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VÀ SẢN XUẤT GOLDEN PANTHERA'}</td>
+            </tr>
+            <tr>
+                <td>Số điện thoại:</td>
+                <td>${seller.phone || '...........................................................................................'}</td>
+            </tr>
+            <tr>
+                <td>Địa chỉ email:</td>
+                <td>${seller.email || '...........................................................................................'}</td>
+            </tr>
+              ${seller.taxCode ? `
+                <td>Địa chỉ:</td>
+                <td>${seller.bizAddress || seller.address || 'Số 4C Đường Tăng Bạt Hổ, Phường Hai Bà Trưng, TP Hà Nội'}</td>
+            </tr>
+            <tr>
+                <td>Mã số thuế:</td>
+                <td>${seller.taxCode}</td>
+            </tr>
+           <tr>
+                <td>Người đại diện:</td>
+                <td>${seller.name}</td>
+            </tr>
+            <tr>
+                <td>Chức vụ:</td>
+                <td>${seller.title}</td>
+            </tr> `
+            : ''}
+            <tr>
+                <td></td>
+                <td style="font-style: italic">(Sau đây gọi tắt là <strong>“Bên B”</strong>)</td>
+            </tr>
+        </table>
+
+        <p>Hai bên đã thống nhất nghiệm thu và bàn giao các hạng mục như sau:</p>
+
+        <div class="section-title">I. DANH MỤC SẢN PHẨM DỊCH VỤ:</div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width: 8%">STT</th>
+                    <th style="width: 62%">HẠNG MỤC</th>
+                    <th style="width: 10%">SL</th>
+                    <th style="width: 20%">Đơn vị</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="4" style="font-weight:bold; background:#f9f9f9">HỆ THỐNG LỌC NƯỚC TỔNG SINH HOẠT</td></tr>
+                ${productRows}
+                <tr><td colspan="4" style="font-weight:bold; background:#f9f9f9">DỊCH VỤ</td></tr>
+                ${serviceRows}
+            </tbody>
+        </table>
+
+        <br/>
+
+       <div class="section-title page-break">II. CHECKLIST KIỂM TRA CHI TIẾT VẬN HÀNH, AN TOÀN:</div>
+       <table class="data-table">
+            <tr>
+                <th style="width: 8%">STT</th>
+                <th style="width: 32%">NỘI DUNG</th>
+                <th style="width: 30%">Tình trạng thực tế</th>
+                <th style="width: 30%">Ghi chú</th>
+            </tr>
+            <tr><td style="text-align:center">1</td><td>Nguồn điện</td><td>□ Có &nbsp;&nbsp; □ Chưa có</td><td></td></tr>
+            <tr><td style="text-align:center">2</td><td>Nguồn nước</td><td>□ Có &nbsp;&nbsp; □ Chưa có</td><td></td></tr>
+            <tr><td style="text-align:center">3</td><td>Kích hoạt máy</td><td>□ Đã kích hoạt &nbsp;&nbsp; □ Chưa kích hoạt</td><td></td></tr>
+            <tr><td style="text-align:center">4</td><td>Vị trí lắp đặt máy</td><td>□ Đã hoàn thành (đã treo máy) &nbsp;&nbsp; □ Chưa hoàn thành</td><td></td></tr>
+            <tr><td style="text-align:center">5</td><td>Vị trí lắp đặt thùng muối</td><td>□ Đã hoàn thành &nbsp;&nbsp; □ Chưa hoàn thành</td><td></td></tr>
+            <tr><td style="text-align:center">6</td><td>Test rò rỉ hệ thống</td><td>□ Đã kiểm tra, không rò rỉ &nbsp;&nbsp; □ Chưa kiểm tra</td><td></td></tr>
+        </table>
+
+        <div class="section-title">III. LƯU Ý:</div>
+        <ul class="notes-list">
+            <li><strong>Trường hợp thiếu nguồn điện:</strong> Nếu địa hình nhà khách chưa có nguồn điện, máy sẽ không được mở để sử dụng. Trường hợp Bên A yêu cầu mở máy để phục vụ mục đích riêng, mọi rủi ro về bảo quản, mất mát hoặc hư hỏng sẽ hoàn toàn thuộc về Bên A.</li>
+            <li><strong>Chuyển giao trách nhiệm:</strong> Ngay sau khi ký biên bản này, trách nhiệm bảo quản, quản lý thiết bị và mọi rủi ro liên quan đến mất mát, hư hỏng do tác động ngoại cảnh (không phải lỗi sản xuất của SWD) sẽ hoàn toàn thuộc về Bên A.</li>
+        </ul>
+
+        <div class="confirmation-text">
+            Khối lượng thi công và chất lượng đã hoàn thành theo biên bản trên<br/>
+            Nội dung biên bản trên đã được thống nhất xác nhận từ cả hai bên<br/>
+            vào Ngày .... Tháng .... Năm ${currentYear}
+        </div>
+
+        <div class="footer-sig">
+            <div class="sig-box">
+                <div style="font-weight:bold; text-transform: uppercase;">ĐẠI DIỆN BÊN NHẬN BÀN GIAO</div>
+                <div style="margin-top:80px; font-weight:bold">${order.customer}</div>
+            </div>
+            <div class="sig-box">
+                <div style="font-weight:bold; text-transform: uppercase;">ĐẠI DIỆN BÊN BÀN GIAO</div>
+                <div style="margin-top:80px; font-weight:bold">${seller.name}</div>
+            </div>
+        </div>
+    </body>
+    </html>`;
+}
+
+
 
 // ── Status config ─────────────────────────────────────────────
 const S_CFG = {
@@ -214,6 +376,30 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     const [updating, setUpdating] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [orderCreator, setOrderCreator] = useState(null);
+    const [qrString, setQrString] = useState('');
+    const [bankInfo, setBankInfo] = useState(null);
+
+    useEffect(() => {
+        if (localOrder && userDetail?.bank) {
+            const bank = banksData.find(b => b.id === userDetail.bank.id);
+            if (bank?.bin && userDetail.bank.accountNo) {
+                setBankInfo(bank);
+                // Tính tổng tiền ngay tại đây
+                const orderTotal = (localOrder.items || []).reduce(
+                    (s, p) => s + (Number(p.price) || 0) * (Number(p.qty) || 1), 0
+                );
+                const amount = Math.round(orderTotal);
+                const description = `TTDH ${localOrder.id}`;
+                const qr = generateVietQR({
+                    bankBin: bank.bin,
+                    bankNumber: userDetail.bank.accountNo,
+                    amount,
+                    description,
+                });
+                setQrString(qr);
+            }
+        }
+    }, [localOrder, userDetail]);
 
     // ── Fetch helpers — dùng useCallback để không phụ thuộc closure ──
     const fetchServices = useCallback(async (orderId) => {
@@ -267,8 +453,8 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
 
     // Quyền sửa: admin hoặc người tạo đơn, trừ các trạng thái đã khoá
     const isCreator = !!orderCreator && orderCreator === userDetail?.email;
-    const canEditOrder = (admin || isCreator)
-        && !LOCKED_STATUSES.includes(localOrder.status);
+    const canEditOrder = (admin || isCreator) && localOrder.status in ['Chờ xác nhận', 'PENDING']
+    // && !LOCKED_STATUSES.includes(localOrder.status);
 
     // Quyền đổi status: chỉ admin
     const canChangeStatus = admin
@@ -276,13 +462,46 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
 
     // ── Handlers ──
     const handleExport = async () => {
+        if (!localOrder) return;
         setExporting(true);
         try {
             const logo = await _getLogo();
-            const html = _buildHandoverHtml({ order: localOrder, seller: userDetail, logoBase64: logo });
+
+            // ── Logic xác định Bên giao (Seller) ──
+            let sellerInfo;
+
+            if (localOrder.paymentMethod === 'customer') {
+                // 1. Khách hàng thanh toán -> Lấy thông tin ADMIN
+                sellerInfo = await _getAdminInfo();
+            } else {
+                // 2. Doanh nghiệp thanh toán -> Lấy thông tin NGƯỜI CẤP 1 (Root Advisor)
+                // localOrder.rootAdvisor đã được lưu khi tạo đơn ở file addOrder
+                const rootEmail = localOrder.rootAdvisor || localOrder.createdBy;
+                const rootData = await _getUserByEmail(rootEmail);
+
+                // Nếu tìm thấy rootData thì dùng, không thì fallback về user hiện tại
+                sellerInfo = rootData || userDetail;
+            }
+
+            // 3. Lấy danh sách dịch vụ đính kèm
+            const svcSnap = await getDocs(query(collection(db, 'service'), where('orderId', '==', localOrder.id)));
+            const linkedServices = svcSnap.docs.map(d => d.data());
+
+            // 4. Build HTML và in
+            const html = _buildHandoverHtml({
+                order: localOrder,
+                seller: sellerInfo,
+                services: linkedServices,
+                logoBase64: logo
+            });
+
             await _printHtml(html);
-        } catch (e) { console.error(e); }
-        finally { setExporting(false); }
+        } catch (e) {
+            console.error(e);
+            showAlert('Lỗi', 'Không thể xuất hóa đơn: ' + e.message);
+        } finally {
+            setExporting(false);
+        }
     };
 
     const openMenu = () => {
@@ -299,20 +518,12 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
         showAlert('Cập nhật trạng thái', `Chuyển sang "${newStatus}"?`, async () => {
             setUpdating(true);
             try {
-                const phone = localOrder.phone || localOrder.customerPhone;
-                const ref = doc(db, 'orders', phone);
-                const snap = await getDoc(ref);
-                if (!snap.exists()) return;
-
-                const ordersChange = (snap.data().orders || []).map(o =>
-                    o.id === localOrder.id ? { ...o, status: newStatus } : o
-                );
-                await updateDoc(ref, { orders: ordersChange });
+                // ✅ Cập nhật trực tiếp vào document order (cấu trúc phẳng)
+                const orderRef = doc(db, 'orders', localOrder.id);
+                await updateDoc(orderRef, { status: newStatus });
 
                 // Sync service + gửi chat message (fire-and-forget)
-                Promise.resolve(
-                    syncServiceStatusFromOrder(localOrder.id, newStatus)
-                ).catch(() => { });
+                syncServiceStatusFromOrder(localOrder.id, newStatus).catch(() => { });
                 sendStatusUpdateMessage({
                     orderId: localOrder.id,
                     newStatus,
@@ -320,9 +531,12 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                     changedByName: userDetail?.name,
                 }).catch(() => { });
 
-                // Thông báo người tạo đơn → dẫn tới màn chat
-                const roomId = getRoomIdByOrderId(localOrder.id);
-                if (orderCreator && orderCreator !== userDetail?.email) {
+                // Thông báo người tạo đơn
+                let roomId = null;
+                if (orderCreator) {
+                    roomId = getSupportRoomId(orderCreator);
+                }
+                if (roomId && orderCreator && orderCreator !== userDetail?.email) {
                     await createNotification({
                         userEmail: orderCreator,
                         type: 'order_status_changed',
@@ -379,7 +593,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         onPress={() => router.push({
                             pathname: '/chat/[roomID]',
                             params: {
-                                roomID: getRoomIdByOrderId(localOrder.id),
+                                roomID: getSupportRoomId(localOrder.id),
                                 orderId: localOrder.id,
                             },
                         })}
@@ -499,7 +713,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                                 })
                         }
                         {services.length > 0 && (
-                            <TouchableOpacity style={{ marginTop: 6 }}>
+                            <TouchableOpacity style={{ marginTop: 6 }} onPress={() => router.replace("/(tabs)/service")}>
                                 <Text style={DP.svLink}>Xem tất cả dịch vụ →</Text>
                             </TouchableOpacity>
                         )}
@@ -540,6 +754,32 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         </View>
                     )}
                 </View>
+
+                {bankInfo && qrString && (
+                    <View style={DP.qrSection}>
+                        <View style={DP.qrHeader}>
+                            <Ionicons name="qr-code-outline" size={18} color="#2563EB" />
+                            <Text style={DP.qrTitle}>Thanh toán chuyển khoản</Text>
+                        </View>
+                        <View style={DP.qrBody}>
+                            <View style={DP.qrCode}>
+                                {Platform.OS === 'web' && QRCodeWeb ? (
+                                    <QRCodeWeb value={qrString} size={140} />
+                                ) : (
+                                    <QRCode value={qrString} size={140} />
+                                )}
+                            </View>
+                            <View style={DP.bankInfo}>
+                                <Text style={DP.bankName}>{bankInfo.name}</Text>
+                                <Text style={DP.accountNo}>STK: {userDetail.bank.accountNo}</Text>
+                                <Text style={DP.accountName}>Chủ TK: {userDetail.bank.accountName}</Text>
+                                <Text style={DP.amount}>Số tiền: {fmtCurrency(total)}</Text>
+                                <Text style={DP.description}>Nội dung: TTDH {localOrder.id}</Text>
+                            </View>
+                        </View>
+                        <Text style={DP.qrNote}>Quét mã QR bằng ứng dụng ngân hàng để thanh toán</Text>
+                    </View>
+                )}
 
                 {/* Total bar */}
                 <View style={DP.totalBar}>
@@ -598,4 +838,16 @@ const DP = StyleSheet.create({
     totalBar: { margin: 16, borderRadius: 12, backgroundColor: '#1E3A5F', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 18 },
     totalLabel: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.75)' },
     totalValue: { fontSize: 20, fontWeight: '900', color: '#fff', letterSpacing: -0.5 },
+    qrSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 8, backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+    qrHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+    qrTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+    qrBody: { flexDirection: isWeb ? 'row' : 'column', alignItems: 'center', gap: 16 },
+    qrCode: { backgroundColor: '#fff', padding: 8, borderRadius: 12, alignSelf: 'center' },
+    bankInfo: { flex: 1, gap: 4 },
+    bankName: { fontSize: 14, fontWeight: '700', color: '#1E3A5F' },
+    accountNo: { fontSize: 13, color: '#334155' },
+    accountName: { fontSize: 13, color: '#334155' },
+    amount: { fontSize: 14, fontWeight: '700', color: '#2563EB', marginTop: 4 },
+    description: { fontSize: 12, color: '#64748B' },
+    qrNote: { fontSize: 12, color: '#64748B', textAlign: 'center', marginTop: 12 },
 });

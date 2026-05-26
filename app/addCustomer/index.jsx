@@ -57,6 +57,31 @@ export default function AddCustomer() {
     }
   };
 
+  // Thêm hàm calculateHierarchy ngay sau các state, trước handleSave
+  const calculateHierarchy = async (userEmail, userDetail) => {
+    let rootAdvisor = userEmail;
+    let level = 1;
+    let currentEmail = userEmail;
+    let currentUser = userDetail;
+
+    while (currentUser?.advisor) {
+      level++;
+      rootAdvisor = currentUser.advisor;
+      try {
+        const userSnap = await getDoc(doc(db, 'users', currentUser.advisor));
+        if (userSnap.exists()) {
+          currentUser = userSnap.data();
+        } else {
+          break;
+        }
+      } catch (err) {
+        break;
+      }
+    }
+    return { rootAdvisor, level };
+  };
+
+  // Sửa handleSave:
   const handleSave = async () => {
     if (!form.name || !form.phone) {
       showAlert('THÔNG BÁO', 'VUI LÒNG NHẬP HỌ TÊN VÀ ĐIỆN THOẠI');
@@ -66,6 +91,9 @@ export default function AddCustomer() {
     if (await checkingDuplicate()) return;
 
     try {
+      // Tính rootAdvisor và level trước khi tạo object
+      const { rootAdvisor, level } = await calculateHierarchy(userDetail.email, userDetail);
+
       const newCustomer = {
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
@@ -74,22 +102,16 @@ export default function AddCustomer() {
         email: form.email?.trim() || '',
         address: form.address?.trim() || '',
         note: form.note?.trim() || '',
-      };
-      await setDoc(doc(db, 'customers', newCustomer.phone), {
-        id: Date.now().toString(),
-        name: form.name.trim(),
-        address: form.address?.trim() || '',
-        phone: form.phone.trim(),
-        email: form.email?.trim() || '',
-        note: form.note?.trim() || '',
+        rootAdvisor: rootAdvisor,
+        level: level,
         createdBy: consultCreatedBy || userDetail?.email,
-        createdAt: new Date().toISOString(),
-      },
-        { merge: true }
-      );
+      };
+
+      await setDoc(doc(db, 'customers', newCustomer.phone), newCustomer, { merge: true });
+
       setUserDetail(prev => ({ ...prev, customer: [...(prev.customer || []), newCustomer] }));
       showSuccess('Thành công', 'Đã lưu khách hàng!', async () => {
-        router.back()
+        router.back();
       });
     } catch (e) {
       console.error('Lỗi:', e.code, e.message);

@@ -12,6 +12,7 @@
     {
         "id": 3,
         "name": "Giao hàng",
-        "price": 100000
+        "price": 100000,
+        "hasMachine": true
     }
 ]

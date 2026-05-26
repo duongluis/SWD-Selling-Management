@@ -43,13 +43,13 @@ const NAV_SECTIONS = [
     label: 'TIỆN ÍCH',
     items: [
       { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'Bảng xếp hạng', icon: 'trophy-outline', activeIcon: 'trophy', visible: () => true },
-      { key: 'commission', link: '(tabs)/commission', label: 'Hoa hồng', icon: 'cash-outline', activeIcon: 'cash', visible: (r) => r !== 'daily' },
+      { key: 'commission', link: '(tabs)/commission', label: 'Hoa hồng', icon: 'cash-outline', activeIcon: 'cash' },
       { key: 'revenue', link: '(tabs)/analytics', label: 'Báo cáo doanh thu', icon: 'bar-chart-outline', activeIcon: 'bar-chart', visible: () => true },
       { key: 'region', link: '(tabs)/regionAnalytics', label: 'Báo cáo khu vực', icon: 'map-outline', activeIcon: 'map', visible: () => true },
       { key: 'news', link: '(tabs)/news', label: 'Tin tức', icon: 'newspaper-outline', activeIcon: 'newspaper', visible: () => true },
       { key: 'information', link: '(tabs)/information', label: 'Bảng giá', icon: 'pricetag-outline', activeIcon: 'pricetag', visible: () => true },
       { key: 'quotation', link: 'orderContract?mode=template', label: 'Form báo giá', icon: 'document-text-outline', activeIcon: 'document-text', visible: () => true },
-      { key: 'calculator', link: '(tabs)/calculator', label: 'Tính toán', icon: 'calculator-outline', activeIcon: 'calculator', visible: () => true },
+      { key: 'calculator', link: '(tabs)/calculator', label: 'Tính toán', icon: 'calculator-outline', activeIcon: 'calculator' },
     ],
   },
   {
@@ -96,6 +96,16 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
   const role = getRole(userDetail);
   const roleLabel = getRoleLabel(role);
 
+  const shouldShowItem = (item, role, userDetail) => {
+    if (item.visible) return item.visible(role);
+    if (item.key === 'commission' || item.key === 'calculator') {
+      if (role === 'admin' || role === 'daily') return true;
+      if ((role === 'phantan' || role === 'ctv') && !userDetail?.advisor) return true;
+      return false;
+    }
+    return true;
+  };
+
   const handleLogout = () => {
     showAlert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', async () => {
       try { await signOut(auth); router.replace('/auth/signIn'); }
@@ -124,15 +134,13 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
       </View>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-        {/* Nav sections */}
         {NAV_SECTIONS.map(section => {
-          const visibleItems = section.items.filter(item => item.visible(role));
+          const visibleItems = section.items.filter(item => shouldShowItem(item, role, userDetail));
           if (!visibleItems.length) return null;
           return (
             <View key={section.label} style={S.navSection}>
               {!collapsed && <Text style={S.navSectionLabel}>{section.label}</Text>}
               {visibleItems.map(item => {
-                // ✅ calculator và quotation cùng link nhưng key khác nhau
                 const isActive = activeTab === item.key;
                 const handlePress = () => {
                   if (item.link.startsWith('(tabs)/')) onNavigate(item.link);

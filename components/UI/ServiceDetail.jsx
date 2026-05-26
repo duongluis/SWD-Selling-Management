@@ -197,7 +197,7 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                     </View>
                 </View>
                 <View style={S.actions}>
-                    {admin && (
+                    {admin && (local.status == 'Chờ xử lý' || local.status == 'Đang xử lý') && (
                         <TouchableOpacity style={S.aBtn}
                             onPress={() => router.push({ pathname: '/editService/[serviceID]', params: { serviceID: local.docId, serviceParam: JSON.stringify(local) } })}>
                             <Ionicons name="create-outline" size={13} color="#2563EB" />

@@ -3,6 +3,7 @@
         "id": "VCB",
         "name": "Vietcombank",
         "shortName": "VCB",
+        "bin": "970436",
         "minLen": 4,
         "maxLen": 13
     },
@@ -10,6 +11,7 @@
         "id": "BIDV",
         "name": "BIDV",
         "shortName": "BIDV",
+        "bin": "970418",
         "minLen": 4,
         "maxLen": 14
     },
@@ -17,6 +19,7 @@
         "id": "VTB",
         "name": "VietinBank",
         "shortName": "CTG",
+        "bin": "970415",
         "minLen": 4,
         "maxLen": 14
     },
@@ -24,6 +27,7 @@
         "id": "AGR",
         "name": "Agribank",
         "shortName": "AGR",
+        "bin": "970405",
         "minLen": 4,
         "maxLen": 16
     },
@@ -31,6 +35,7 @@
         "id": "TCB",
         "name": "Techcombank",
         "shortName": "TCB",
+        "bin": "970407",
         "minLen": 4,
         "maxLen": 14
     },
@@ -38,6 +43,7 @@
         "id": "MB",
         "name": "MB Bank",
         "shortName": "MB",
+        "bin": "970422",
         "minLen": 4,
         "maxLen": 16
     },
@@ -45,6 +51,7 @@
         "id": "ACB",
         "name": "ACB",
         "shortName": "ACB",
+        "bin": "970416",
         "minLen": 4,
         "maxLen": 16
     },
@@ -52,6 +59,7 @@
         "id": "VPB",
         "name": "VPBank",
         "shortName": "VPB",
+        "bin": "970432",
         "minLen": 4,
         "maxLen": 16
     },
@@ -59,6 +67,7 @@
         "id": "TPB",
         "name": "TPBank",
         "shortName": "TPB",
+        "bin": "970423",
         "minLen": 4,
         "maxLen": 14
     },
@@ -66,6 +75,7 @@
         "id": "STB",
         "name": "Sacombank",
         "shortName": "STB",
+        "bin": "970403",
         "minLen": 4,
         "maxLen": 16
     },
@@ -73,6 +83,7 @@
         "id": "HDB",
         "name": "HDBank",
         "shortName": "HDB",
+        "bin": "970437",
         "minLen": 4,
         "maxLen": 16
     },
@@ -80,6 +91,7 @@
         "id": "OCB",
         "name": "OCB",
         "shortName": "OCB",
+        "bin": "970448",
         "minLen": 4,
         "maxLen": 16
     },
@@ -87,6 +99,7 @@
         "id": "MSB",
         "name": "MSB (Maritime Bank)",
         "shortName": "MSB",
+        "bin": "970426",
         "minLen": 4,
         "maxLen": 12
     },
@@ -94,6 +107,7 @@
         "id": "EIB",
         "name": "Eximbank",
         "shortName": "EIB",
+        "bin": "970431",
         "minLen": 4,
         "maxLen": 16
     },
@@ -101,6 +115,7 @@
         "id": "SHB",
         "name": "SHB",
         "shortName": "SHB",
+        "bin": "970443",
         "minLen": 4,
         "maxLen": 16
     },
@@ -108,6 +123,7 @@
         "id": "LPB",
         "name": "LienVietPostBank",
         "shortName": "LPB",
+        "bin": "970449",
         "minLen": 4,
         "maxLen": 16
     },
@@ -115,6 +131,7 @@
         "id": "BAB",
         "name": "BacA Bank",
         "shortName": "BAB",
+        "bin": "970409",
         "minLen": 4,
         "maxLen": 16
     },
@@ -122,6 +139,7 @@
         "id": "NAB",
         "name": "Nam A Bank",
         "shortName": "NAB",
+        "bin": "970428",
         "minLen": 4,
         "maxLen": 16
     },
@@ -129,6 +147,7 @@
         "id": "PGB",
         "name": "PGBank",
         "shortName": "PGB",
+        "bin": "970438",
         "minLen": 4,
         "maxLen": 16
     },
@@ -136,6 +155,7 @@
         "id": "VIB",
         "name": "VIB",
         "shortName": "VIB",
+        "bin": "970441",
         "minLen": 4,
         "maxLen": 16
     },
@@ -143,6 +163,7 @@
         "id": "ABB",
         "name": "ABBank",
         "shortName": "ABB",
+        "bin": "970425",
         "minLen": 4,
         "maxLen": 16
     },
@@ -150,6 +171,7 @@
         "id": "BVB",
         "name": "BaoViet Bank",
         "shortName": "BVB",
+        "bin": "970454",
         "minLen": 4,
         "maxLen": 16
     },
@@ -157,6 +179,7 @@
         "id": "KLB",
         "name": "KienLong Bank",
         "shortName": "KLB",
+        "bin": "970452",
         "minLen": 4,
         "maxLen": 16
     },
@@ -164,6 +187,7 @@
         "id": "IVB",
         "name": "IndoVinaBank",
         "shortName": "IVB",
+        "bin": "970434",
         "minLen": 4,
         "maxLen": 16
     },
@@ -171,6 +195,7 @@
         "id": "SEA",
         "name": "SeABank",
         "shortName": "SEA",
+        "bin": "970440",
         "minLen": 4,
         "maxLen": 16
     },
@@ -178,6 +203,7 @@
         "id": "WOO",
         "name": "Woori Bank Việt Nam",
         "shortName": "WOO",
+        "bin": "970457",
         "minLen": 4,
         "maxLen": 16
     },
@@ -185,6 +211,7 @@
         "id": "CAKE",
         "name": "CAKE by VPBank",
         "shortName": "CAKE",
+        "bin": "970432",
         "minLen": 4,
         "maxLen": 16
     },
@@ -192,6 +219,7 @@
         "id": "TIMO",
         "name": "Timo by Bản Việt",
         "shortName": "TIMO",
+        "bin": "970454",
         "minLen": 4,
         "maxLen": 16
     }

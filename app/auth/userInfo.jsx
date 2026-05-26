@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     KeyboardAvoidingView, Platform,
     ScrollView, StatusBar, StyleSheet, Text, TextInput,
@@ -229,6 +229,15 @@ export default function UserInfoView() {
     const rev = parseInt(committedRevenue) || 0;
     const hasReferral = !!referralCodeInput.trim();
 
+    useEffect(() => {
+        if (distributionType === 'exclusive' && !showAreaPicker) {
+            setShowAreaPicker(true);
+        }
+        if (showAreaPicker && regions.length === 0 && !regLoading) {
+            fetchRegions();
+        }
+    }, [distributionType, showAreaPicker]);
+
     // Tạo danh sách step labels động
     const STEP_LABELS = useMemo(() => {
         if (isDaiLy) {
@@ -280,16 +289,14 @@ export default function UserInfoView() {
             case 2:
                 if (!phone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại'); return false; }
                 if (!address.trim()) { showAlert('Thông báo', 'Vui lòng nhập địa chỉ'); return false; }
-                if (bizModel === 'company') {
-                    if (!contactName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên người liên hệ'); return false; }
-                    if (!contactPhone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại người liên hệ'); return false; }
-                }
                 return true;
             case 3:
                 if (bizModel === 'company') {
                     if (!companyName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên công ty/hộ KD'); return false; }
                     if (!taxCode.trim()) { showAlert('Thông báo', 'Vui lòng nhập mã số thuế'); return false; }
                     if (!bizAddress.trim()) { showAlert('Thông báo', 'Vui lòng nhập địa chỉ đăng ký KD'); return false; }
+                    if (!contactName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên người liên hệ'); return false; }
+                    if (!contactPhone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại người liên hệ'); return false; }
                 } else {
                     // Nếu có mã giới thiệu thì không cần CCCD
                     if (!hasReferral) {
@@ -527,29 +534,6 @@ export default function UserInfoView() {
     const renderStepCommon = () => (
         <View style={S.stepContent}>
 
-            {bizModel === 'company' && (
-                <View style={S.contactSection}>
-                    <View style={S.contactHeader}>
-                        <Ionicons name="person-circle-outline" size={15} color="#2563EB" />
-                        <Text style={S.contactTitle}>Người liên hệ</Text>
-                    </View>
-                    <View style={S.fg}>
-                        <Text style={S.label}>Họ và tên người liên hệ <Text style={S.req}>*</Text></Text>
-                        <View style={F.inputBox}>
-                            <Ionicons name="person-outline" size={15} color="#94A3B8" />
-                            <TextInput style={F.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={contactName} onChangeText={setContactName} />
-                        </View>
-                    </View>
-                    <View style={[S.fg, { marginBottom: 4 }]}>
-                        <Text style={S.label}>Số điện thoại người liên hệ <Text style={S.req}>*</Text></Text>
-                        <View style={F.inputBox}>
-                            <Ionicons name="call-outline" size={15} color="#94A3B8" />
-                            <TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={contactPhone} onChangeText={setContactPhone} />
-                        </View>
-                    </View>
-                </View>
-            )}
-
             <Text style={S.stepTitle}>Thông tin liên hệ</Text>
             <Text style={S.stepSub}>Điền thông tin để chúng tôi liên hệ với bạn</Text>
 
@@ -579,6 +563,30 @@ export default function UserInfoView() {
             <View style={S.fg}><Text style={S.label}>Địa chỉ đăng ký kinh doanh <Text style={S.req}>*</Text></Text>
                 <View style={[F.inputBox, { alignItems: 'flex-start', minHeight: 80 }]}><Ionicons name="location-outline" size={15} color="#94A3B8" style={{ marginTop: 2 }} /><TextInput style={[F.input, { textAlignVertical: 'top' }]} placeholder="Địa chỉ theo ĐKKD..." placeholderTextColor="#94A3B8" multiline value={bizAddress} onChangeText={setBizAddress} /></View>
             </View>
+
+            {bizModel === 'company' && (
+                <View style={S.contactSection}>
+                    <View style={S.contactHeader}>
+                        <Ionicons name="person-circle-outline" size={15} color="#2563EB" />
+                        <Text style={S.contactTitle}>Người đại diện</Text>
+                    </View>
+                    <View style={S.fg}>
+                        <Text style={S.label}>Họ và tên người đại diện <Text style={S.req}>*</Text></Text>
+                        <View style={F.inputBox}>
+                            <Ionicons name="person-outline" size={15} color="#94A3B8" />
+                            <TextInput style={F.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={contactName} onChangeText={setContactName} />
+                        </View>
+                    </View>
+                    <View style={[S.fg, { marginBottom: 4 }]}>
+                        <Text style={S.label}>Số điện thoại người đại diện <Text style={S.req}>*</Text></Text>
+                        <View style={F.inputBox}>
+                            <Ionicons name="call-outline" size={15} color="#94A3B8" />
+                            <TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={contactPhone} onChangeText={setContactPhone} />
+                        </View>
+                    </View>
+                </View>
+            )}
+
         </View>
     ) : (
         <View style={S.stepContent}>
@@ -601,8 +609,26 @@ export default function UserInfoView() {
                     {cccdError ? <Text style={S.errText}>{cccdError}</Text> : null}
                 </View>
             )}
-            <View style={S.fg}><Text style={S.label}>Năm sinh <Text style={S.optional}>(tuỳ chọn)</Text></Text>
-                <YearField value={dob} onChange={setDob} />
+            <View style={S.fg}>
+                <Text style={S.label}>Năm sinh <Text style={S.optional}>(tuỳ chọn)</Text></Text>
+                <View style={[F.inputBox, { flexDirection: 'row', alignItems: 'center' }]}>
+                    <Ionicons name="calendar-outline" size={15} color="#94A3B8" />
+                    <TextInput
+                        style={[F.input, { flex: 1 }]}
+                        placeholder="VD: 1990"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="numeric"
+                        maxLength={4}
+                        value={dob}
+                        onChangeText={(text) => {
+                            const cleaned = text.replace(/[^0-9]/g, '');
+                            setDob(cleaned);
+                        }}
+                    />
+                </View>
+                {dob && (parseInt(dob) < 1900 || parseInt(dob) > new Date().getFullYear()) && (
+                    <Text style={S.errText}>Năm sinh không hợp lệ (1900 - {new Date().getFullYear()})</Text>
+                )}
             </View>
         </View>
     );

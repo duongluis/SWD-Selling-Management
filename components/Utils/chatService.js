@@ -183,17 +183,12 @@ export const sendSystemMessage = async (roomId, text) => {
 // 7. Send status update message (into support room)
 // ─────────────────────────────────────────────────────────────
 export const sendStatusUpdateMessage = async ({ orderId, newStatus, changedBy, changedByName }) => {
-    // Find order creator email
+    // Lấy thông tin đơn hàng từ collection orders (cấu trúc phẳng)
     let createdByEmail = null;
     try {
-        const ordersSnap = await getDocs(collection(db, 'orders'));
-        for (const docSnap of ordersSnap.docs) {
-            const orders = docSnap.data().orders || [];
-            const found = orders.find(o => o.id === orderId);
-            if (found) {
-                createdByEmail = found.createdBy;
-                break;
-            }
+        const orderDoc = await getDoc(doc(db, 'orders', orderId));
+        if (orderDoc.exists()) {
+            createdByEmail = orderDoc.data().createdBy;
         }
     } catch (e) { console.warn('Lỗi tìm order:', e); }
     if (!createdByEmail) return;
@@ -202,7 +197,7 @@ export const sendStatusUpdateMessage = async ({ orderId, newStatus, changedBy, c
     const exists = await checkRoomExists(roomId);
     if (!exists) return;
 
-    const text = `🔄 Trạng thái đơn hàng #${orderId} đã cập nhật → "${newStatus}" bởi ${changedByName || changedBy}`;
+    const text = `🔄 Trạng thái đơn hàng #${orderId} đã cập nhật → "${newStatus}"`;
 
     await addDoc(collection(db, 'chatRooms', roomId, 'messages'), {
         text,
@@ -215,13 +210,12 @@ export const sendStatusUpdateMessage = async ({ orderId, newStatus, changedBy, c
         readBy: [],
     });
 
-    // Update lastMessage
     await updateDoc(doc(db, 'chatRooms', roomId), {
         lastMessage: `Trạng thái đơn #${orderId} → "${newStatus}"`,
         lastAt: new Date().toISOString(),
     });
 
-    // Notify all members
+    // Notify tất cả thành viên trong phòng support
     const roomSnap = await getDoc(doc(db, 'chatRooms', roomId));
     if (roomSnap.exists()) {
         const { members } = roomSnap.data();
