@@ -13,11 +13,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-    FlatList, Platform, RefreshControl,
-    StyleSheet, Text, TouchableOpacity, View,
+    FlatList,
+    RefreshControl,
+    StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 const AVATAR_COLORS = ['#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2'];
 
 const ROLE_CFG = {
@@ -35,7 +37,7 @@ const FILTERS = [
 ];
 
 function TableHead() {
-    if (!isWeb) return null;
+    if (!isDesktop) return null;
     return (
         <View style={T.head}>
             <View style={{ width: 46 }} />
@@ -73,7 +75,7 @@ function UserRow({ item, index, isActive, onPress }) {
                 <Text style={R.sub} numberOfLines={1}>{item.email}</Text>
             </View>
             {/* Vai trò */}
-            {isWeb && (
+            {isDesktop && (
                 <View style={[R.col, { flex: 1 }]}>
                     <View style={[R.rolePill, { backgroundColor: role.bg }]}>
                         <Text style={[R.roleText, { color: role.c }]}>{role.label}</Text>
@@ -81,9 +83,9 @@ function UserRow({ item, index, isActive, onPress }) {
                 </View>
             )}
             {/* Ngày tạo */}
-            {isWeb && <Text style={[R.col, R.colSub, { flex: 1 }]}>{fmtDate(item.createdAt)}</Text>}
+            {isDesktop && <Text style={[R.col, R.colSub, { flex: 1 }]}>{fmtDate(item.createdAt)}</Text>}
             {/* Status */}
-            <View style={[R.col, { flex: isWeb ? 1 : undefined }]}>
+            <View style={[R.col, { flex: isDesktop ? 1 : undefined }]}>
                 {item.locked ? (
                     <View style={[R.pill, { backgroundColor: '#FEF2F2' }]}>
                         <Ionicons name="lock-closed" size={13} color="#DC2626" />
@@ -179,11 +181,11 @@ export default function UsersScreen() {
                                 )}
                                 showsVerticalScrollIndicator={false}
                                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-                                contentContainerStyle={{ paddingBottom: isWeb ? 60 : 100 }}
+                                contentContainerStyle={{ paddingBottom: isDesktop ? 60 : 100 }}
                             />
                         )}
                 </View>
-                {isWeb && selected && (
+                {isDesktop && selected && (
                     <UserDetail
                         user={selected}
                         onClose={() => setSelected(null)}
@@ -198,8 +200,8 @@ export default function UsersScreen() {
 const WRAP = StyleSheet.create({
     card: {
         flex: 1, backgroundColor: '#fff',
-        borderRadius: isWeb ? 14 : 0, borderWidth: 1, borderColor: '#E2E8F0',
-        overflow: 'hidden', margin: isWeb ? 16 : 0, marginTop: 0,
+        borderRadius: isDesktop ? 14 : 0, borderWidth: 1, borderColor: '#E2E8F0',
+        overflow: 'hidden', margin: isDesktop ? 16 : 0, marginTop: 0,
         shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2,
     },
 });

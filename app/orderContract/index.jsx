@@ -12,12 +12,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, getDocs } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, Alert, Platform, ScrollView,
-    StyleSheet, Text, TextInput, TouchableOpacity, View,
+    ActivityIndicator, Alert,
+    ScrollView,
+    StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 const fmt = (n) => Math.round(n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtN = (n) => Math.round(n || 0).toLocaleString('vi-VN');
 const COMM = { buon: 0.03, le: 0.05 };
@@ -61,7 +63,7 @@ async function getBase64Logo() {
     }
 }
 async function exportPDF(htmlContent) {
-    if (isWeb) {
+    if (isDesktop) {
         const w = window.open('', '_blank');
         w.document.write(htmlContent);
         w.document.close();
@@ -454,8 +456,8 @@ function Contract({ order, seller, items: itemsProp, disc, total, discAmt }) {
             <HR />
 
             {/* Parties */}
-            <View style={[S.partiesRow, isWeb && { flexDirection: 'row', gap: 10 }]}>
-                <View style={[S.partyBox, !isWeb && { marginBottom: 10 }]}>
+            <View style={[S.partiesRow, isDesktop && { flexDirection: 'row', gap: 10 }]}>
+                <View style={[S.partyBox, !isDesktop && { marginBottom: 10 }]}>
                     <View style={S.partyTR}>
                         <Ionicons name="person-outline" size={11} color="#185FA5" />
                         <Text style={S.partyTitle}>Bên mua (A)</Text>
@@ -483,18 +485,18 @@ function Contract({ order, seller, items: itemsProp, disc, total, discAmt }) {
                     <Text style={[S.th, { width: 22 }]}>#</Text>
                     <Text style={[S.th, { flex: 1 }]}>Sản phẩm</Text>
                     <Text style={[S.th, S.thR, { width: 36 }]}>SL</Text>
-                    <Text style={[S.th, S.thR, { width: isWeb ? 100 : 82 }]}>Đơn giá</Text>
-                    <Text style={[S.th, S.thR, { width: isWeb ? 108 : 90 }]}>Thành tiền</Text>
-                    {isWeb && <Text style={[S.th, { width: 110 }]}>Ghi chú</Text>}
+                    <Text style={[S.th, S.thR, { width: isDesktop ? 100 : 82 }]}>Đơn giá</Text>
+                    <Text style={[S.th, S.thR, { width: isDesktop ? 108 : 90 }]}>Thành tiền</Text>
+                    {isDesktop && <Text style={[S.th, { width: 110 }]}>Ghi chú</Text>}
                 </View>
                 {items.map((p, i) => (
                     <View key={i} style={[S.tRow, i % 2 === 1 && S.tRowAlt]}>
                         <Text style={[S.td, { width: 22, color: '#94A3B8' }]}>{i + 1}</Text>
                         <Text style={[S.td, { flex: 1 }]} numberOfLines={2}>{p.name || '—'}</Text>
                         <Text style={[S.td, S.tdR, { width: 36 }]}>{fmtN(p.qty)}</Text>
-                        <Text style={[S.td, S.tdR, { width: isWeb ? 100 : 82 }]}>{fmt(p.price)}</Text>
-                        <Text style={[S.td, S.tdR, { width: isWeb ? 108 : 90 }]}>{fmt((p.price || 0) * (p.qty || 1))}</Text>
-                        {isWeb && <Text style={[S.td, { width: 110, color: '#64748B', fontStyle: 'italic', fontSize: 11 }]}>{p.note || '—'}</Text>}
+                        <Text style={[S.td, S.tdR, { width: isDesktop ? 100 : 82 }]}>{fmt(p.price)}</Text>
+                        <Text style={[S.td, S.tdR, { width: isDesktop ? 108 : 90 }]}>{fmt((p.price || 0) * (p.qty || 1))}</Text>
+                        {isDesktop && <Text style={[S.td, { width: 110, color: '#64748B', fontStyle: 'italic', fontSize: 11 }]}>{p.note || '—'}</Text>}
                     </View>
                 ))}
                 <View style={[S.tRow, S.tFoot]}>
@@ -535,8 +537,8 @@ function Contract({ order, seller, items: itemsProp, disc, total, discAmt }) {
             <HR />
 
             {/* Signatures */}
-            <View style={[S.sigRow, isWeb && { flexDirection: 'row', gap: 40 }]}>
-                <View style={[S.sigCol, !isWeb && { marginBottom: 14 }]}>
+            <View style={[S.sigRow, isDesktop && { flexDirection: 'row', gap: 40 }]}>
+                <View style={[S.sigCol, !isDesktop && { marginBottom: 14 }]}>
                     <Text style={S.sigLabel}>Đại diện bên mua</Text>
                     <View style={S.sigLine} />
                     <Text style={S.sigName}>{order.customer || '—'}</Text>
@@ -621,7 +623,7 @@ export default function OrderContractScreen() {
     };
 
     return (
-        <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+        <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
             <BgWatermark />
             {/* Header */}
             <View style={S.header}>
@@ -649,10 +651,10 @@ export default function OrderContractScreen() {
             {/* Body */}
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={[S.body, isWeb && S.bodyWeb]}
+                contentContainerStyle={[S.body, isDesktop && S.bodyWeb]}
                 keyboardShouldPersistTaps="handled"
             >
-                {isWeb ? (
+                {isDesktop ? (
                     <View style={S.grid}>
 
                         <View style={{ width: 340, flexShrink: 0, gap: 14 }}>

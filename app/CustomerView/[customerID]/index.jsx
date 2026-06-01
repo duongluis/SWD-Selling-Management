@@ -122,9 +122,9 @@ export default function customerView() {
               type: 'consult_success',
               title: 'Consult thành công',
               body: `${userDetail?.name || userDetail?.email} tư vấn thành công: ${name} (${phone})`,
-            }).catch(() => {});
+            }).catch(() => { });
           });
-        }).catch(() => {});
+        }).catch(() => { });
         router.push({
           pathname: '/addCustomer',
           params: { name: customer.name || '', phone: customer.phone || '', address: customer.address || '', note: customer.note || '', consultCreatedBy: customer.createdBy || '' },

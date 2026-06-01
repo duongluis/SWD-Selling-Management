@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, FlatList, Platform, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
-const isWeb = Platform.OS === "web";
+const isDesktop = Platform.OS === "web";
 
 function getInitials(name) {
     if (!name) return "?";
@@ -49,7 +49,7 @@ export function CTVDashboard({ customers, consultMap, loading, refreshing, onRef
                 <View style={[C.tableCell, { flex: 1.5 }]}>
                     <Text style={C.rowPhone}>{item.phone || "—"}</Text>
                 </View>
-                {isWeb && (
+                {isDesktop && (
                     <View style={[C.tableCell, { flex: 1.2 }]}>
                         <Text style={C.rowDate}>{createdAt}</Text>
                     </View>
@@ -123,7 +123,7 @@ export function CTVDashboard({ customers, consultMap, loading, refreshing, onRef
                 <View style={C.colHeader}>
                     <Text style={[C.colText, { flex: 2.5 }]}>TÊN KHÁCH HÀNG</Text>
                     <Text style={[C.colText, { flex: 1.5 }]}>SỐ ĐIỆN THOẠI</Text>
-                    {isWeb && <Text style={[C.colText, { flex: 1.2 }]}>NGÀY ĐĂNG KÝ</Text>}
+                    {isDesktop && <Text style={[C.colText, { flex: 1.2 }]}>NGÀY ĐĂNG KÝ</Text>}
                     <Text style={[C.colText, { flex: 1.5 }]}>TRẠNG THÁI TƯ VẤN</Text>
                     <Text style={[C.colText, { width: 90 }]}>HÀNH ĐỘNG</Text>
                 </View>
@@ -145,7 +145,7 @@ export function CTVDashboard({ customers, consultMap, loading, refreshing, onRef
                         renderItem={renderRow}
                         showsVerticalScrollIndicator={false}
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                        contentContainerStyle={{ paddingBottom: isWeb ? 16 : 80 }}
+                        contentContainerStyle={{ paddingBottom: isDesktop ? 16 : 80 }}
                     />
                 )}
 
@@ -161,20 +161,20 @@ export function CTVDashboard({ customers, consultMap, loading, refreshing, onRef
 
 const C = StyleSheet.create({
     headerWrap: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
-    pageTitle: { fontSize: isWeb ? 26 : 22, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5 },
+    pageTitle: { fontSize: isDesktop ? 26 : 22, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5 },
     pageDesc: { fontSize: 13, color: "#64748B", marginTop: 3 },
-    addBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#1E3A8A", paddingHorizontal: isWeb ? 16 : 12, paddingVertical: 10, borderRadius: 10 },
+    addBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#1E3A8A", paddingHorizontal: isDesktop ? 16 : 12, paddingVertical: 10, borderRadius: 10 },
     addBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
     statsRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
     statCard: { flex: 1, backgroundColor: "#fff", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#E2E8F0", minWidth: 0 },
     statTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 },
     statIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-    statLabel: { fontSize: isWeb ? 12 : 10, color: "#64748B", marginBottom: 4 },
-    statValue: { fontSize: isWeb ? 28 : 22, fontWeight: "900", letterSpacing: -0.5 },
+    statLabel: { fontSize: isDesktop ? 12 : 10, color: "#64748B", marginBottom: 4 },
+    statValue: { fontSize: isDesktop ? 28 : 22, fontWeight: "900", letterSpacing: -0.5 },
     tableCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden", marginBottom: 16 },
     tableTopBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
     tableTitle: { fontSize: 15, fontWeight: "700", color: "#0F172A" },
-    searchBox: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#F8FAFC", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: "#E2E8F0", minWidth: isWeb ? 180 : 130 },
+    searchBox: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#F8FAFC", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: "#E2E8F0", minWidth: isDesktop ? 180 : 130 },
     searchInput: { flex: 1, fontSize: 13, color: "#0F172A" },
     colHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "#F8FAFC", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
     colText: { fontSize: 10, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.5 },

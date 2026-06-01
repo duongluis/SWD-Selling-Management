@@ -1,4 +1,5 @@
 import BgWatermark from '@/components/Main/BgWatermark';
+import { useLayout } from '@/components/Main/TabScreenLayout';
 import { Ionicons } from '@expo/vector-icons';
 import bcrypt from 'bcryptjs';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,8 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../../components/Main/showAlert';
 import BANKS from '../../config/banks.json';
 import { db } from '../../config/firebaseConfig';
+const { isDesktop } = useLayout();
 
-const isWeb = Platform.OS === 'web';
 const COMMITTED_REVENUE_MIN = 100_000_000;
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 

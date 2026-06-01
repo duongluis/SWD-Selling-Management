@@ -5,8 +5,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useContext, useState } from 'react';
 import {
-    ActivityIndicator, Modal, Platform, Pressable, ScrollView,
-    StyleSheet, Text, TouchableOpacity, View,
+    ActivityIndicator, Modal,
+    Pressable, ScrollView,
+    StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -18,7 +19,8 @@ import { showAlert } from '../../../components/Main/showAlert';
 import { syncOrderStatusFromService } from '../../../components/Utils/syncOrderStatus';
 import { db } from '../../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 const SERVICE_TYPES = {
     MAINTENANCE: { label: 'Bảo dưỡng', icon: 'construct-outline', color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A' },
@@ -292,14 +294,14 @@ export default function ServiceDetailScreen() {
     };
 
     return (
-        <View style={[styles.container, !isWeb && { paddingTop: insets.top }]}>
+        <View style={[styles.container, !isDesktop && { paddingTop: insets.top }]}>
             <BgWatermark />
 
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={18} color="#64748B" />
-                    {isWeb && <Text style={styles.backText}>Quay lại</Text>}
+                    {isDesktop && <Text style={styles.backText}>Quay lại</Text>}
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Chi tiết dịch vụ</Text>
                 {/* ✅ Nút sửa dịch vụ */}
@@ -311,12 +313,12 @@ export default function ServiceDetailScreen() {
                     })}
                 >
                     <Ionicons name="create-outline" size={16} color="#2563EB" />
-                    {isWeb && <Text style={styles.editBtnText}>Sửa</Text>}
+                    {isDesktop && <Text style={styles.editBtnText}>Sửa</Text>}
                 </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, isWeb && styles.scrollWeb]}>
-                {isWeb ? (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, isDesktop && styles.scrollWeb]}>
+                {isDesktop ? (
                     <View style={styles.webGrid}>
                         {/* LEFT */}
                         <View style={styles.webCol}>
@@ -421,24 +423,24 @@ export default function ServiceDetailScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: isWeb ? 32 : 16, paddingVertical: 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-    backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: isWeb ? 12 : 0, paddingVertical: isWeb ? 6 : 0, borderRadius: 8, backgroundColor: isWeb ? '#F1F5F9' : 'transparent', borderWidth: isWeb ? 1 : 0, borderColor: '#E2E8F0' },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: isDesktop ? 32 : 16, paddingVertical: 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+    backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: isDesktop ? 12 : 0, paddingVertical: isDesktop ? 6 : 0, borderRadius: 8, backgroundColor: isDesktop ? '#F1F5F9' : 'transparent', borderWidth: isDesktop ? 1 : 0, borderColor: '#E2E8F0' },
     backText: { fontSize: 13, color: '#64748B', fontWeight: '500' },
-    headerTitle: { fontSize: isWeb ? 16 : 17, fontWeight: '800', color: '#0F172A' },
-    editBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: isWeb ? 12 : 8, paddingVertical: isWeb ? 7 : 6, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
+    headerTitle: { fontSize: isDesktop ? 16 : 17, fontWeight: '800', color: '#0F172A' },
+    editBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: isDesktop ? 12 : 8, paddingVertical: isDesktop ? 7 : 6, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
     editBtnText: { fontSize: 13, color: '#2563EB', fontWeight: '600' },
-    scroll: { padding: isWeb ? 0 : 16 },
+    scroll: { padding: isDesktop ? 0 : 16 },
     scrollWeb: { padding: 32 },
     webGrid: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },
     webCol: { flex: 3 },
     webColRight: { flex: 2, gap: 16 },
-    card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: isWeb ? 20 : 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14 },
+    card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: isDesktop ? 20 : 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     cardTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', flex: 1 },
     serviceTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
-    serviceTypeIcon: { width: isWeb ? 56 : 50, height: isWeb ? 56 : 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
+    serviceTypeIcon: { width: isDesktop ? 56 : 50, height: isDesktop ? 56 : 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
     serviceIdRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' },
-    serviceId: { fontSize: isWeb ? 20 : 16, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
+    serviceId: { fontSize: isDesktop ? 20 : 16, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
     pillsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 6 },
     typePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
     typePillText: { fontSize: 11, fontWeight: '700' },

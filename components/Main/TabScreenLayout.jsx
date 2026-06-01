@@ -1,19 +1,28 @@
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BgWatermark from './BgWatermark';
 
-const isWeb = Platform.OS === 'web';
+const DESKTOP_BREAKPOINT = 768;
+
+// ── Hook trung tâm — dùng ở mọi nơi ─────────────────────────
+export function useLayout() {
+    const { width } = useWindowDimensions();
+    const isDesktop = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
+    const isMobile = !isDesktop; // native hoặc web nhỏ
+    return { isDesktop, isMobile, width };
+}
 
 export default function TabScreenLayout({ children, style }) {
     const insets = useSafeAreaInsets();
-
+    const { isDesktop } = useLayout();
     return (
-        <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }, style]}>
+        <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }, style]}>
             <BgWatermark />
             {children}
         </View>
     );
 }
+
 
 const S = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },

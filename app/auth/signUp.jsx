@@ -1,4 +1,5 @@
 import BgWatermark from '@/components/Main/BgWatermark';
+import { useLayout } from '@/components/Main/TabScreenLayout';
 import Colors from '@/constant/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -21,8 +22,7 @@ export default function SignUp() {
   const [showPass, setShowPass] = useState(false);
   const [showRePass, setShowRePass] = useState(false);
 
-  const isWeb = Platform.OS === 'web';
-
+  const { isDesktop } = useLayout();
   const validate = () => {
     if (!gmail.trim()) { Alert.alert('Thông báo', 'Vui lòng nhập email'); return false; }
     if (!password) { Alert.alert('Thông báo', 'Vui lòng nhập mật khẩu'); return false; }

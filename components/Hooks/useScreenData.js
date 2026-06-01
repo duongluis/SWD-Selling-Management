@@ -131,74 +131,105 @@ export function useScreenData(type) {
 
     // ── ORDERS realtime ──
     useEffect(() => {
-        if (type !== 'orders') return;
         if (!myEmail) return;
 
         let unsub = null;
+
         const init = async () => {
             setLoading(true);
             try {
-                if (role === 'admin') {
-                    unsub = onSnapshot(collection(db, 'orders'), (snap) => {
-                        const orders = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
-                        orders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-                        setData(orders);
-                        setStats(computeStats('orders', orders));
-                        setLoading(false);
-                    }, (err) => { setError(err.message); setLoading(false); });
-                } else if (rootAdvisor && rootAdvisor !== myEmail) {
-                    // L1 (đại lý) hoặc user có rootAdvisor khác chính mình
-                    unsub = onSnapshot(
-                        query(collection(db, 'orders'), where('rootAdvisor', '==', rootAdvisor)),
-                        (snap) => {
-                            const orders = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
-                            orders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-                            setData(orders);
-                            setStats(computeStats('orders', orders));
-                            setLoading(false);
-                        },
-                        (err) => { setError(err.message); setLoading(false); }
-                    );
-                } else {
-                    const teamEmails = await getTeamEmails(myEmail, role);
-                    if (teamEmails.length === 0) {
-                        setData([]);
-                        setLoading(false);
-                        return;
-                    }
-                    if (teamEmails.length > 30) {
-                        console.warn('Team >30, không thể realtime, dùng fetch tĩnh');
-                        const allOrders = [];
-                        for (let i = 0; i < teamEmails.length; i += 30) {
-                            const chunk = teamEmails.slice(i, i + 30);
-                            const q = query(collection(db, 'orders'), where('createdBy', 'in', chunk));
-                            const snap = await getDocs(q);
-                            snap.docs.forEach(d => allOrders.push({ ...d.data(), docId: d.id }));
-                        }
-                        allOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-                        setData(allOrders);
-                        setStats(computeStats('orders', allOrders));
-                        setLoading(false);
+                let q = null;
+
+                // 1. Phân loại cấu trúc truy vấn Real-time theo "type"
+                if (type === 'orders') {
+                    if (role === 'admin') {
+                        q = collection(db, 'orders');
+                    } else if (rootAdvisor && rootAdvisor !== myEmail) {
+                        q = query(collection(db, 'orders'), where('rootAdvisor', '==', rootAdvisor));
                     } else {
-                        unsub = onSnapshot(
-                            query(collection(db, 'orders'), where('createdBy', 'in', teamEmails)),
-                            (snap) => {
-                                const orders = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
-                                orders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-                                setData(orders);
-                                setStats(computeStats('orders', orders));
-                                setLoading(false);
-                            },
-                            (err) => { setError(err.message); setLoading(false); }
-                        );
+                        const teamEmails = await getTeamEmails(myEmail, role);
+                        if (teamEmails.length === 0) { setData([]); setLoading(false); return; }
+                        if (teamEmails.length > 30) {
+                            // Giữ nguyên logic fallback tải tĩnh nếu danh sách email quá lớn (>30)
+                            fetchStaticOrders(teamEmails);
+                            return;
+                        }
+                        q = query(collection(db, 'orders'), where('createdBy', 'in', teamEmails));
                     }
+                }
+
+                else if (type === 'customers') {
+                    if (role === 'admin') {
+                        q = collection(db, 'customers');
+                    } else if (rootAdvisor && rootAdvisor !== myEmail) {
+                        q = query(collection(db, 'customers'), where('rootAdvisor', '==', rootAdvisor));
+                    } else {
+                        const teamEmails = await getTeamEmails(myEmail, role);
+                        if (teamEmails.length === 0) { setData([]); setLoading(false); return; }
+                        if (teamEmails.length > 30) {
+                            fetchStaticCustomers(teamEmails);
+                            return;
+                        }
+                        q = query(collection(db, 'customers'), where('createdBy', 'in', teamEmails));
+                    }
+                }
+
+                else if (type === 'services') {
+                    if (role === 'admin') {
+                        q = collection(db, 'service');
+                    } else {
+                        const teamEmails = await getTeamEmails(myEmail, role);
+                        if (teamEmails.length === 0) { setData([]); setLoading(false); return; }
+                        if (teamEmails.length > 30) {
+                            fetchStaticServices(teamEmails);
+                            return;
+                        }
+                        q = query(collection(db, 'service'), where('createdBy', 'in', teamEmails));
+                    }
+                }
+
+                else if (type === 'users') {
+                    if (role !== 'admin') { setData([]); setLoading(false); return; }
+                    q = collection(db, 'users');
+                }
+
+                else if (type === 'consults') {
+                    if (role === 'admin') {
+                        q = collection(db, 'consult');
+                    } else {
+                        q = query(collection(db, 'consult'), where('createdBy', '==', myEmail));
+                    }
+                }
+
+                // 2. Thiết lập lắng nghe Real-time nếu truy vấn hợp lệ
+                if (q) {
+                    unsub = onSnapshot(q, (snap) => {
+                        let list = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
+
+                        if (type === 'users') {
+                            list = list.filter(u => u.email !== myEmail);
+                        }
+
+                        // Sắp xếp dữ liệu mới nhất lên đầu
+                        list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+                        setData(list);
+                        setStats(computeStats(type, list));
+                        setLoading(false);
+                    }, (err) => {
+                        setError(err.message);
+                        setLoading(false);
+                    });
                 }
             } catch (err) {
                 setError(err.message);
                 setLoading(false);
             }
         };
+
         init();
+
+        // Tự động hủy lắng nghe khi unmount để tránh rò rỉ bộ nhớ
         return () => { if (unsub) unsub(); };
     }, [type, myEmail, role, rootAdvisor]);
 

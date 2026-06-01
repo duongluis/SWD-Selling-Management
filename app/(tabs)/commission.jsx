@@ -12,14 +12,16 @@ import { useFocusEffect } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
-    ActivityIndicator, Dimensions, Platform, RefreshControl,
+    ActivityIndicator, Dimensions,
+    RefreshControl,
     ScrollView, StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 const screenWidth = Dimensions.get('window').width;
-const isMobile = !isWeb && screenWidth < 768;
+const isMobile = !isDesktop && screenWidth < 768;
 
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtShort = n => {
@@ -572,7 +574,7 @@ export default function CommissionScreen() {
 
 const S = StyleSheet.create({
     // ScreenHeader đã có padding ngang → ScrollView dùng padding ngắn hơn
-    scroll: { padding: isWeb ? 32 : 16, paddingTop: isWeb ? 16 : 12 },
+    scroll: { padding: isDesktop ? 32 : 16, paddingTop: isDesktop ? 16 : 12 },
     statsRow: { flexDirection: 'row', gap: isMobile ? 8 : 12, marginBottom: 14 },
     card: { backgroundColor: '#fff', borderRadius: 16, padding: isMobile ? 16 : 20, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 },

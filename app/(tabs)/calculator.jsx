@@ -7,13 +7,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { collection, getDocs } from 'firebase/firestore';
 import { useContext, useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator, FlatList, Modal, Platform,
+    ActivityIndicator, FlatList, Modal,
     ScrollView, StyleSheet, Text, TextInput,
-    TouchableOpacity, View,
+    TouchableOpacity, View
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 const isAdmin = r => r === 'admin';
 
 const fmtVND = n => (n || 0).toLocaleString('vi-VN');
@@ -196,10 +197,10 @@ const R = StyleSheet.create({
     cell: { justifyContent: 'center' },
     productName: { fontSize: 13, fontWeight: '700', color: '#0F172A', lineHeight: 18 },
     productSub: { fontSize: 10, color: '#94A3B8', marginTop: 2 },
-    numInput: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, color: '#0F172A', textAlign: 'center', ...(isWeb ? { outlineStyle: 'none' } : {}) },
+    numInput: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, color: '#0F172A', textAlign: 'center', ...(isDesktop ? { outlineStyle: 'none' } : {}) },
     readOnly: { fontSize: 13, fontWeight: '700', textAlign: 'right' },
     discountWrap: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-end', backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, gap: 4, width: 80 },
-    discountInput: { width: 44, fontSize: 13, color: '#D97706', textAlign: 'right', ...(isWeb ? { outlineStyle: 'none' } : {}) },
+    discountInput: { width: 44, fontSize: 13, color: '#D97706', textAlign: 'right', ...(isDesktop ? { outlineStyle: 'none' } : {}) },
     discountPct: { fontSize: 12, color: '#D97706', fontWeight: '700', width: 14 },
     commValue: { fontSize: 13, fontWeight: '800', textAlign: 'right' },
     commSub: { fontSize: 9, color: '#94A3B8', textAlign: 'right', marginTop: 2 },
@@ -453,8 +454,8 @@ export default function CalculatorScreen() {
 const S = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC', flexDirection: 'column' },
     // Top bar
-    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: isWeb ? 32 : 16, paddingVertical: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', flexWrap: 'wrap', gap: 12 },
-    pageTitle: { fontSize: isWeb ? 24 : 20, fontWeight: '800', color: '#0F172A', letterSpacing: -0.4 },
+    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: isDesktop ? 32 : 16, paddingVertical: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', flexWrap: 'wrap', gap: 12 },
+    pageTitle: { fontSize: isDesktop ? 24 : 20, fontWeight: '800', color: '#0F172A', letterSpacing: -0.4 },
     pageSub: { fontSize: 12, color: '#64748B', marginTop: 3 },
     topActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
     clearBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FCA5A5' },
@@ -462,12 +463,12 @@ const S = StyleSheet.create({
     addBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, backgroundColor: '#2563EB' },
     addBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
     // Legend
-    legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, paddingHorizontal: isWeb ? 32 : 16, paddingVertical: 10, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+    legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, paddingHorizontal: isDesktop ? 32 : 16, paddingVertical: 10, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     legendDot: { width: 8, height: 8, borderRadius: 4 },
     legendText: { fontSize: 11, color: '#64748B', fontWeight: '500' },
     // Table
-    tableWrap: { flex: 1, backgroundColor: '#fff', margin: isWeb ? 16 : 0, marginBottom: 0, borderRadius: isWeb ? 14 : 0, borderWidth: isWeb ? 1 : 0, borderColor: '#E2E8F0', overflow: 'hidden' },
+    tableWrap: { flex: 1, backgroundColor: '#fff', margin: isDesktop ? 16 : 0, marginBottom: 0, borderRadius: isDesktop ? 14 : 0, borderWidth: isDesktop ? 1 : 0, borderColor: '#E2E8F0', overflow: 'hidden' },
     tableHead: { backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     thRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
     th: { fontSize: 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.04 },
@@ -483,8 +484,8 @@ const S = StyleSheet.create({
     emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', marginTop: 4 },
     emptyBtnText: { fontSize: 14, fontWeight: '600', color: '#2563EB' },
     // Summary bar
-    summaryBar: { flexDirection: isWeb ? 'row' : 'column', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingHorizontal: isWeb ? 32 : 20, paddingVertical: 16, gap: isWeb ? 0 : 12, shadowColor: '#0F172A', shadowOpacity: 0.06, shadowRadius: 12, elevation: 8 },
-    summaryItem: { flex: 1, alignItems: isWeb ? 'center' : 'flex-start' },
+    summaryBar: { flexDirection: isDesktop ? 'row' : 'column', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingHorizontal: isDesktop ? 32 : 20, paddingVertical: 16, gap: isDesktop ? 0 : 12, shadowColor: '#0F172A', shadowOpacity: 0.06, shadowRadius: 12, elevation: 8 },
+    summaryItem: { flex: 1, alignItems: isDesktop ? 'center' : 'flex-start' },
     summaryDivider: { width: 1, backgroundColor: '#F1F5F9', marginHorizontal: 16 },
     summaryLabel: { fontSize: 11, color: '#94A3B8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 4 },
     summaryValue: { fontSize: 18, fontWeight: '900', color: '#0F172A', letterSpacing: -0.4 },

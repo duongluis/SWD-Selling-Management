@@ -1,6 +1,7 @@
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 export default function FilterChips({ options = [], value, onChange }) {
     if (!options.length) return null;
@@ -10,7 +11,7 @@ export default function FilterChips({ options = [], value, onChange }) {
             horizontal
             showsHorizontalScrollIndicator={false}
             style={{ flexGrow: 0 }}
-            contentContainerStyle={[S.row, isWeb && S.rowWeb]}
+            contentContainerStyle={[S.row, isDesktop && S.rowWeb]}
         >
             {options.map(opt => {
                 const active = opt.key === value;

@@ -4,7 +4,7 @@ import { useScreenData } from '@/components/Hooks/useScreenData';
 import { useSearch } from '@/components/Hooks/useSearch';
 import EmptyState from '@/components/Main/EmptyState';
 import ScreenHeader from '@/components/Main/ScreenHeader';
-import TabScreenLayout from '@/components/Main/TabScreenLayout';
+import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import StatBar from '@/components/UI/StatBar';
 import { getInitials } from '@/components/Utils/formatters';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -12,11 +12,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useContext } from 'react';
 import {
-    FlatList, Platform, RefreshControl,
-    StyleSheet, Text, TouchableOpacity, View,
+    FlatList,
+    RefreshControl,
+    StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 
-const isWeb = Platform.OS === 'web';
+
+const { isDesktop } = useLayout();
 
 const CONSULT_STATUS_CFG = {
     success: { color: '#059669', bg: '#ECFDF5', label: 'Thành công' },
@@ -77,7 +79,7 @@ export default function CustomerCTVScreen() {
                 searchValue={query}
                 onSearchChange={setQuery}
                 searchPlaceholder="Tìm tên, SĐT..."
-                actionLabel={isWeb ? 'Thêm tư vấn' : undefined}
+                actionLabel={isDesktop ? 'Thêm tư vấn' : undefined}
                 actionIcon="add"
                 onAction={() => router.push('/addConsult')}
             />
@@ -106,7 +108,7 @@ export default function CustomerCTVScreen() {
                                 onPress={handlePress}
                             />
                         )}
-                        contentContainerStyle={{ paddingHorizontal: isWeb ? 32 : 16, paddingBottom: 100 }}
+                        contentContainerStyle={{ paddingHorizontal: isDesktop ? 32 : 16, paddingBottom: 100 }}
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
                         showsVerticalScrollIndicator={false}
                     />

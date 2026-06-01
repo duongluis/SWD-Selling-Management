@@ -11,12 +11,14 @@ import { useFocusEffect } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
-  FlatList, Platform, RefreshControl,
-  StyleSheet, Text, View,
+  FlatList,
+  RefreshControl,
+  StyleSheet, Text, View
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 const RANK_COLORS = ['#F59E0B', '#94A3B8', '#CD7F32'];
 const AVATAR_COLORS = ['#2563EB', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444'];
 const RANK_ICONS = ['🥇', '🥈', '🥉'];
@@ -90,7 +92,7 @@ function RoleSection({ title, data }) {
   if (!data.length) return (
     <View>
       <SectionHeader title={title} />
-      <View style={{ paddingHorizontal: isWeb ? 32 : 16, paddingBottom: 8 }}>
+      <View style={{ paddingHorizontal: isDesktop ? 32 : 16, paddingBottom: 8 }}>
         <Text style={{ color: '#94A3B8', fontSize: 13, fontStyle: 'italic' }}>Chưa có dữ liệu</Text>
       </View>
     </View>
@@ -99,7 +101,7 @@ function RoleSection({ title, data }) {
     <View>
       <SectionHeader title={title} />
       {data.map((item, index) => (
-        <View key={item.email || index} style={{ paddingHorizontal: isWeb ? 32 : 16 }}>
+        <View key={item.email || index} style={{ paddingHorizontal: isDesktop ? 32 : 16 }}>
           <LeaderCard item={item} rank={index} />
         </View>
       ))}
@@ -225,7 +227,7 @@ export default function LeaderboardScreen() {
             data={displayUsers}
             keyExtractor={(item, i) => item.email || String(i)}
             renderItem={({ item, index }) => (
-              <View style={{ paddingHorizontal: isWeb ? 32 : 16 }}>
+              <View style={{ paddingHorizontal: isDesktop ? 32 : 16 }}>
                 <LeaderCard item={item} rank={index} />
               </View>
             )}
@@ -240,7 +242,7 @@ export default function LeaderboardScreen() {
 }
 
 const L = StyleSheet.create({
-  sectionHeader: { paddingHorizontal: isWeb ? 32 : 16, paddingTop: 16, paddingBottom: 8 },
+  sectionHeader: { paddingHorizontal: isDesktop ? 32 : 16, paddingTop: 16, paddingBottom: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0', gap: 10 },
   rankBadge: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

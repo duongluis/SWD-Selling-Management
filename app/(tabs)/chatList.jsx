@@ -12,12 +12,14 @@ import { useRouter } from 'expo-router';
 import { query as _query, collection, getDocs, onSnapshot, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useState } from 'react';
 import {
-    FlatList, Platform, RefreshControl,
-    StyleSheet, Text, TouchableOpacity, View,
+    FlatList,
+    RefreshControl,
+    StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 const ORDER_TYPE_CFG = {
     buon: { label: 'Đơn buôn', color: '#2563EB', bg: '#EFF6FF' },
@@ -229,7 +231,7 @@ export default function ChatListScreen() {
                             }}
                         />
                     )}
-                    contentContainerStyle={{ paddingHorizontal: isWeb ? 32 : 16, paddingBottom: 100 }}
+                    contentContainerStyle={{ paddingHorizontal: isDesktop ? 32 : 16, paddingBottom: 100 }}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
                     showsVerticalScrollIndicator={false}
                 />

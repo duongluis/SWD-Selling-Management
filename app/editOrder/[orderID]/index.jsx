@@ -16,7 +16,8 @@ import { showAlert } from '../../../components/Main/showAlert';
 import { showSuccess } from '../../../components/Main/showSuccess';
 import { db } from '../../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 const toDateStr = (d) => {
     const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
@@ -45,7 +46,7 @@ function DateField({ value, onChange, webStyle }) {
         if (Platform.OS === 'android') setShow(false);
         if (date) { setSel(date); onChange(toDateStr(date)); }
     };
-    if (isWeb) return (
+    if (isDesktop) return (
         <View style={webStyle || S.inputBox}>
             <input
                 type="date"
@@ -191,7 +192,7 @@ export default function EditOrder() {
     // ─────────────────────────────────────────────────────────
     // WEB LAYOUT — 2 columns
     // ─────────────────────────────────────────────────────────
-    if (isWeb) return (
+    if (isDesktop) return (
         <View style={W.root}>
             <BgWatermark />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>

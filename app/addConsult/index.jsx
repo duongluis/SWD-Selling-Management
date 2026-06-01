@@ -18,7 +18,8 @@ import { showSuccess } from '../../components/Main/showSuccess';
 import { createNotification } from '../../components/Utils/chatService';
 import { db } from '../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 // ── Field component ───────────────────────────────────────────
 function Field({ label, value, onChange, multiline, keyboard, required, placeholder }) {
@@ -117,9 +118,9 @@ export default function AddConsultScreen() {
                         type: 'new_consult',
                         title: 'Tư vấn mới',
                         body: `${userDetail?.name || userDetail?.email} đã thêm khách tư vấn: ${name.trim()} (${phone.trim()})`,
-                    }).catch(() => {});
+                    }).catch(() => { });
                 });
-            }).catch(() => {});
+            }).catch(() => { });
         } catch (e) {
             showAlert('Lỗi', e.message);
         } finally {
@@ -128,7 +129,7 @@ export default function AddConsultScreen() {
     };
 
     return (
-        <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+        <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
             <BgWatermark />
             {/* Header */}
             <View style={S.header}>
@@ -147,10 +148,10 @@ export default function AddConsultScreen() {
                     keyboardShouldPersistTaps="handled"
                     contentContainerStyle={S.scroll}
                 >
-                    <View style={isWeb ? S.gridWeb : undefined}>
+                    <View style={isDesktop ? S.gridWeb : undefined}>
 
                         {/* LEFT */}
-                        <View style={isWeb ? S.colLeft : undefined}>
+                        <View style={isDesktop ? S.colLeft : undefined}>
                             <View style={S.section}>
                                 <View style={S.sectionHeader}>
                                     <Ionicons name="person-outline" size={15} color="#2563EB" />
@@ -166,7 +167,7 @@ export default function AddConsultScreen() {
                         </View>
 
                         {/* RIGHT */}
-                        <View style={isWeb ? S.colRight : undefined}>
+                        <View style={isDesktop ? S.colRight : undefined}>
 
                             <View style={S.section}>
                                 <View style={S.sectionHeader}>
@@ -290,7 +291,7 @@ const S = StyleSheet.create({
     backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
     headerTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
     headerSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-    scroll: { paddingHorizontal: isWeb ? 32 : 16, paddingTop: 16 },
+    scroll: { paddingHorizontal: isDesktop ? 32 : 16, paddingTop: 16 },
     gridWeb: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },
     colLeft: { flex: 1.3 },
     colRight: { flex: 1 },

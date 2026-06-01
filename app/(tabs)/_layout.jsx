@@ -3,6 +3,7 @@
 import NotificationPanel from '@/components/Main/notificationPanel';
 import { showAlert } from '@/components/Main/showAlert';
 import { showInfo } from '@/components/Main/showInfo';
+import { useLayout } from '@/components/Main/TabScreenLayout';
 import { getRole, getRoleLabel } from '@/components/Utils/roleHelper';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -13,20 +14,20 @@ import { useContext, useState } from 'react';
 import {
   Image, Platform, Pressable, ScrollView,
   StyleSheet, Text, TouchableOpacity,
-  useWindowDimensions, View
+  useWindowDimensions, View,
 } from 'react-native';
 import auth from '../../config/firebaseConfig';
 
-const DESKTOP_BREAKPOINT = 768;
+
 const BANNER_IMAGE = require('../../assets/images/layout-img.png');
+
 
 function getInitials(name) {
   if (!name) return 'U';
   return name.trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
-// ── Nav config theo section ───────────────────────────────────
-// visible: fn(role) => boolean
+// ── Nav config ────────────────────────────────────────────────
 const NAV_SECTIONS = [
   {
     label: 'CHÍNH',
@@ -61,18 +62,15 @@ const NAV_SECTIONS = [
   },
 ];
 
-// Mobile bottom tab items
-const MOBILE_TABS = [
+// Bottom tabs — 4 mục chính cho mobile
+const MOBILE_BOTTOM_TABS = [
   { key: 'home', link: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
   { key: 'order', link: '(tabs)/order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
-  { key: 'customer', link: '(tabs)/customer', label: 'KHÁCH HÀNG', icon: 'people-outline', activeIcon: 'people' },
+  { key: 'customer', link: '(tabs)/customer', label: 'KHÁCH', icon: 'people-outline', activeIcon: 'people' },
   { key: 'service', link: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
-  { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'BXH', icon: 'trophy-outline', activeIcon: 'trophy' },
-  { key: 'information', link: 'information', label: 'BẢNG GIÁ', icon: 'cash-outline', activeIcon: 'cash' },
-  { key: 'team', link: '(tabs)/team', label: 'ĐỘI NGŨ', icon: 'people-outline', activeIcon: 'people' },
 ];
 
-// ── NavItem ───────────────────────────────────────────────────
+// ── Shared NavItem ────────────────────────────────────────────
 function NavItem({ item, isActive, collapsed, onPress }) {
   return (
     <Pressable style={[S.navItem, isActive && S.navItemActive]} onPress={onPress}>
@@ -89,14 +87,12 @@ function NavItem({ item, isActive, collapsed, onPress }) {
   );
 }
 
-// ── Web Sidebar ───────────────────────────────────────────────
-function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, router }) {
+// ── Shared sidebar content ────────────────────────────────────
+function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, router, onClose }) {
   const [showLogout, setShowLogout] = useState(false);
-
-  const role = getRole(userDetail);
   const roleLabel = getRoleLabel(role);
 
-  const shouldShowItem = (item, role, userDetail) => {
+  const shouldShowItem = (item) => {
     if (item.visible) return item.visible(role);
     if (item.key === 'commission' || item.key === 'calculator') {
       if (role === 'admin' || role === 'daily') return true;
@@ -104,6 +100,13 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
       return false;
     }
     return true;
+  };
+
+  const handleNav = (item) => {
+    onClose?.();
+    if (item.link.startsWith('(tabs)/')) onNavigate(item.link);
+    else if (item.link.includes('?')) router.push(`/${item.link.split('?')[0]}?${item.link.split('?')[1]}`);
+    else router.push(`/${item.link}`);
   };
 
   const handleLogout = () => {
@@ -114,13 +117,9 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
     setShowLogout(false);
   };
 
-
-  const isUsersActive = activeTab === 'users' || activeTab === 'user';
-
   return (
-    <View style={[S.sidebar, collapsed && S.sidebarCollapsed]}>
-
-      {/* ── Logo + collapse btn ── */}
+    <>
+      {/* Logo */}
       <View style={S.workspaceRow}>
         {!collapsed && (
           <View style={S.workspaceName}>
@@ -128,35 +127,29 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
             <Text style={S.workspaceText}>SWD Seller Manager</Text>
           </View>
         )}
-        <Pressable onPress={onToggle} style={S.collapseBtn}>
-          <Ionicons name={collapsed ? 'chevron-forward-outline' : 'chevron-back-outline'} size={13} color="rgba(255,255,255,0.5)" />
-        </Pressable>
       </View>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         {NAV_SECTIONS.map(section => {
-          const visibleItems = section.items.filter(item => shouldShowItem(item, role, userDetail));
+          const visibleItems = section.items.filter(shouldShowItem);
           if (!visibleItems.length) return null;
           return (
             <View key={section.label} style={S.navSection}>
               {!collapsed && <Text style={S.navSectionLabel}>{section.label}</Text>}
-              {visibleItems.map(item => {
-                const isActive = activeTab === item.key;
-                const handlePress = () => {
-                  if (item.link.startsWith('(tabs)/')) onNavigate(item.link);
-                  else if (item.link.includes('?')) router.push(`/${item.link.split('?')[0]}?${item.link.split('?')[1]}`);
-                  else router.push(`/${item.link}`);
-                };
-                return (
-                  <NavItem key={item.key} item={item} isActive={isActive}
-                    collapsed={collapsed} onPress={handlePress} />
-                );
-              })}
+              {visibleItems.map(item => (
+                <NavItem
+                  key={item.key}
+                  item={item}
+                  isActive={activeTab === item.key}
+                  collapsed={collapsed}
+                  onPress={() => handleNav(item)}
+                />
+              ))}
             </View>
           );
         })}
 
-        {/* Admin section */}
+        {/* Admin */}
         {role === 'admin' && (
           <View style={S.navSection}>
             {!collapsed && (
@@ -165,14 +158,17 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
                 <View style={S.adminBadge}><Text style={S.adminBadgeText}>ADMIN</Text></View>
               </View>
             )}
-            <NavItem item={{ key: 'users', link: '(tabs)/users', label: 'Danh sách người dùng', icon: 'people-circle-outline', activeIcon: 'people-circle' }}
-              isActive={isUsersActive} collapsed={collapsed}
-              onPress={() => router.push('/(tabs)/user')} />
+            <NavItem
+              item={{ key: 'users', link: '(tabs)/users', label: 'Danh sách người dùng', icon: 'people-circle-outline', activeIcon: 'people-circle' }}
+              isActive={activeTab === 'users'}
+              collapsed={collapsed}
+              onPress={() => { onClose?.(); router.push('/(tabs)/user'); }}
+            />
           </View>
         )}
       </ScrollView>
 
-      {/* Bottom — User logout (giống profile card ở trên) */}
+      {/* User / Logout */}
       <View style={S.bottomSection}>
         {showLogout && (
           <View style={S.logoutPopup}>
@@ -193,74 +189,196 @@ function WebSidebar({ activeTab, onNavigate, userDetail, collapsed, onToggle, ro
             <>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={S.userName} numberOfLines={1}>{userDetail?.name || 'User'}</Text>
-                {/* ✅ Hiển thị role thay vì email */}
                 <Text style={S.userRoleText} numberOfLines={1}>{roleLabel}</Text>
               </View>
-              <Ionicons
-                name={showLogout ? 'chevron-up' : 'ellipsis-horizontal'}
-                size={14} color="rgba(255,255,255,0.5)"
-              />
+              <Ionicons name={showLogout ? 'chevron-up' : 'ellipsis-horizontal'} size={14} color="rgba(255,255,255,0.5)" />
             </>
           )}
         </Pressable>
       </View>
+    </>
+  );
+}
+
+// ── Desktop Sidebar ───────────────────────────────────────────
+function DesktopSidebar({ activeTab, role, userDetail, collapsed, onToggle, onNavigate, router }) {
+  return (
+    <View style={[S.sidebar, collapsed && S.sidebarCollapsed]}>
+      {/* Collapse button */}
+      <Pressable onPress={onToggle} style={S.collapseBtn}>
+        <Ionicons name={collapsed ? 'chevron-forward-outline' : 'chevron-back-outline'} size={13} color="rgba(255,255,255,0.5)" />
+      </Pressable>
+
+      <SidebarContent
+        activeTab={activeTab}
+        role={role}
+        userDetail={userDetail}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+        router={router}
+      />
     </View>
   );
 }
 
-// ── Mobile Tab Bar ────────────────────────────────────────────
-function CustomTabBar({ state, descriptors, navigation, isMobileWeb }) {
-  const router = useRouter();
-  const [showMenu, setShowMenu] = useState(false);
-
-  const handleLogout = () => {
-    showAlert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', async () => {
-      try { await signOut(auth); router.replace('/auth/signIn'); }
-      catch (e) { showInfo('Lỗi', e.message); }
-    });
-    setShowMenu(false);
-  };
-
+// ── Mobile Drawer Sidebar ─────────────────────────────────────
+function MobileDrawer({ visible, activeTab, role, userDetail, onNavigate, router, onClose }) {
+  if (!visible) return null;
   return (
-    <View style={[M.tabBarWrap, isMobileWeb && M.tabBarWrapWeb]}>
-      {showMenu && (
-        <View style={M.logoutPopup}>
-          <TouchableOpacity style={M.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
-            <Ionicons name="log-out-outline" size={18} color="#EF4444" />
-            <Text style={M.logoutBtnText}>Đăng xuất</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={M.logoutCancel} onPress={() => setShowMenu(false)}>
-            <Text style={M.logoutCancelText}>Huỷ</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      <View style={M.tabBar}>
-        {state.routes.map((route, index) => {
-          const tab = MOBILE_TABS[index];
-          const isFocused = state.index === index;
-          const onPress = () => {
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
-          };
-          if (!tab) return null;
-          return (
-            <TouchableOpacity key={route.key}
-              style={[M.tabItem, isFocused && M.activeTabItem]}
-              onPress={onPress} activeOpacity={0.8}>
-              <Ionicons name={isFocused ? tab.activeIcon : tab.icon} size={20}
-                color={isFocused ? Colors.LightBlue : Colors.LightGray} style={M.icon} />
-              <Text style={[M.tabLabel, isFocused && M.activeTabLabel]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-        <TouchableOpacity style={M.tabItem} onPress={() => setShowMenu(p => !p)} activeOpacity={0.8}>
-          <Ionicons name="ellipsis-horizontal" size={22} color={Colors.LightGray} style={M.icon} />
-          <Text style={M.tabLabel}>Menu</Text>
-        </TouchableOpacity>
+    <View style={[StyleSheet.absoluteFillObject, { zIndex: 100, flexDirection: 'row' }]}>
+      {/* Overlay */}
+      <Pressable style={MD.overlay} onPress={onClose} />
+
+      {/* Drawer */}
+      <View style={MD.drawer}>
+        <SidebarContent
+          activeTab={activeTab}
+          role={role}
+          userDetail={userDetail}
+          collapsed={false}
+          onNavigate={onNavigate}
+          router={router}
+          onClose={onClose}
+        />
       </View>
     </View>
   );
 }
+
+const MD = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  drawer: {
+    position: 'absolute', left: 0, top: 0, bottom: 0,
+    width: 240,
+    backgroundColor: '#2C5282',
+    paddingHorizontal: 12,
+    paddingTop: 0,
+    paddingBottom: 0,
+    flexDirection: 'column',
+    zIndex: 101,
+  },
+});
+
+// ── Mobile Top Bar ────────────────────────────────────────────
+function MobileTopBar({ pageLabel, userDetail, onMenuPress, router }) {
+  return (
+    <View style={MB.topBar}>
+      <Image
+        source={BANNER_IMAGE}
+        style={MB.topBarBanner}
+        resizeMode="cover"
+      />
+      <View style={MB.topBarLeft}>
+        <TouchableOpacity style={MB.menuBtn} onPress={onMenuPress}>
+          <Ionicons name="menu-outline" size={22} color="#fff" />
+        </TouchableOpacity>
+        <Text style={MB.topBarTitle} numberOfLines={1}>{pageLabel}</Text>
+      </View>
+      <View style={MB.topBarRight}>
+        <TouchableOpacity style={MB.topBarBtn} onPress={() => router.push('/(tabs)/chatList')}>
+          <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
+        </TouchableOpacity>
+        <NotificationPanel bellColor="#fff" bellSize={18} />
+        <View style={MB.topBarAvatar}>
+          <Text style={MB.topBarAvatarText}>{getInitials(userDetail?.name)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const MB = StyleSheet.create({
+  topBar: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10, paddingHorizontal: 12,
+    overflow: 'hidden', minHeight: 52,
+    backgroundColor: '#40668d',
+  },
+  topBarBanner: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, width: '100%', height: '100%', opacity: 1 },
+  topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  menuBtn: {
+    width: 32, height: 32, borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  topBarTitle: { color: '#fff', fontSize: 14, fontWeight: '700', flex: 1 },
+  topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  topBarBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)' },
+  topBarAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center' },
+  topBarAvatarText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+});
+
+// ── Mobile Bottom Tab Bar ─────────────────────────────────────
+function MobileTabBar({ state, navigation, activeKey }) {
+  return (
+    <View style={BT.wrap}>
+      <View style={BT.bar}>
+        {MOBILE_BOTTOM_TABS.map((tab, index) => {
+          const route = state.routes.find(r => r.name === tab.key || r.name === tab.link.replace('(tabs)/', ''));
+          const routeIndex = state.routes.findIndex(r => r.name === route?.name);
+          const isFocused = activeKey === tab.key || state.index === routeIndex;
+
+          const onPress = () => {
+            if (route) {
+              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+              if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
+            }
+          };
+
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[BT.item, isFocused && BT.itemActive]}
+              onPress={onPress}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={isFocused ? tab.activeIcon : tab.icon}
+                size={20}
+                color={isFocused ? Colors.LightBlue || '#fff' : Colors.LightGray || '#94A3B8'}
+                style={BT.icon}
+              />
+              <Text style={[BT.label, isFocused && BT.labelActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const BT = StyleSheet.create({
+  wrap: { backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: '#E2E8F0', paddingBottom: Platform.OS === 'ios' ? 16 : 0 },
+  bar: {
+    flexDirection: 'row', marginHorizontal: 10, marginVertical: 6,
+    backgroundColor: Colors.White || '#fff',
+    paddingVertical: 4, borderRadius: 50,
+    borderWidth: 8, borderColor: Colors.White || '#fff',
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 4,
+  },
+  item: { flex: 1, alignItems: 'center', paddingVertical: 5, borderRadius: 50 },
+  itemActive: { borderWidth: 2, borderColor: Colors.Black || '#0F172A', backgroundColor: Colors.Black || '#0F172A' },
+  icon: { marginBottom: 2 },
+  label: { color: Colors.LightGray || '#94A3B8', fontWeight: '600', textAlign: 'center', fontSize: 9, marginTop: 1, letterSpacing: 0.3 },
+  labelActive: { color: '#F8FAFC' },
+});
+
+// ── Tab Screens list ──────────────────────────────────────────
+const TAB_SCREENS = [
+  'home', 'order', 'customer', 'service', 'leaderboard',
+  'users', 'customerctv', 'analytics', 'commission',
+  'regionAnalytics', 'news', 'information', 'chatList',
+  'editProfile', 'calculator', 'team',
+];
+
+const SEGMENT_KEY_MAP = {
+  customerctv: 'consult', analytics: 'revenue', regionreport: 'region',
+  regionAnalytics: 'region', commission: 'commission', users: 'users',
+  chatlist: 'chatList', chatList: 'chatList', information: 'information',
+  news: 'news', editprofile: 'profile', editProfile: 'profile',
+  orderContract: 'quotation', ordercontract: 'quotation',
+};
 
 // ── Root Layout ───────────────────────────────────────────────
 export default function TabLayout() {
@@ -268,75 +386,40 @@ export default function TabLayout() {
   const router = useRouter();
   const segments = useSegments();
   const [collapsed, setCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const { width } = useWindowDimensions();
 
-  const { width: winWidth } = useWindowDimensions();
-  const isDesktopWeb = Platform.OS === 'web' && winWidth >= DESKTOP_BREAKPOINT;
-  const isMobileWeb = Platform.OS === 'web' && winWidth < DESKTOP_BREAKPOINT;
+  const role = getRole(userDetail);
+
+  const { isDesktop } = useLayout();
 
   const rawTab = segments[segments.length - 1] || 'home';
-
-  // ✅ Map segment → nav key (tất cả đều trong tabs nên segment = tên file)
-  const SEGMENT_KEY_MAP = {
-    'customerctv': 'consult',
-    'analytics': 'revenue',
-    'regionreport': 'region',
-    'regionAnalytics': 'region',
-    'commission': 'commission',
-    'users': 'users',
-    'chatlist': 'chatList',
-    'chatList': 'chatList',
-    'information': 'information',
-    'news': 'news',
-    'editprofile': 'profile',
-    'editProfile': 'profile',
-    'orderContract': 'quotation',
-    'ordercontract': 'quotation',
-  };
   const activeTab = SEGMENT_KEY_MAP[rawTab] || rawTab;
-
   const pageLabel = NAV_SECTIONS.flatMap(s => s.items).find(n => n.key === activeTab)?.label || 'Tổng quan';
+
   const handleNavigate = (link) => router.push(`/${link}`);
 
-  const tabScreens = [
-    <Tabs.Screen key="home" name="home" />,
-    <Tabs.Screen key="order" name="order" />,
-    <Tabs.Screen key="customer" name="customer" />,
-    <Tabs.Screen key="service" name="service" />,
-    <Tabs.Screen key="leaderboard" name="leaderboard" />,
-    <Tabs.Screen key="users" name="users" />,
-    <Tabs.Screen key="customerctv" name="customerctv" />,
-    <Tabs.Screen key="analytics" name="analytics" />,
-    <Tabs.Screen key="commission" name="commission" />,
-    <Tabs.Screen key="regionAnalytics" name="regionAnalytics" />,
-    <Tabs.Screen key="news" name="news" />,
-    <Tabs.Screen key="information" name="information" />,
-    <Tabs.Screen key="chatList" name="chatList" />,
-    <Tabs.Screen key="editProfile" name="editProfile" />,
-    <Tabs.Screen key="calculator" name="calculator" />,
-    <Tabs.Screen key="team" name="team" />,
-  ];
+  const tabScreens = TAB_SCREENS.map(name => (
+    <Tabs.Screen key={name} name={name} />
+  ));
 
-  // ── Desktop Web ──────────────────────────────────────────
-  if (isDesktopWeb) {
+  // ── Desktop Web ──────────────────────────────────────────────
+  if (isDesktop) {
     return (
       <View style={S.root}>
-        <WebSidebar
+        <DesktopSidebar
           activeTab={activeTab}
-          onNavigate={handleNavigate}
+          role={role}
           userDetail={userDetail}
           collapsed={collapsed}
           onToggle={() => setCollapsed(c => !c)}
+          onNavigate={handleNavigate}
           router={router}
         />
         <View style={S.mainArea}>
           {/* Topbar */}
           <View style={S.topBar}>
-            <Image
-              source={BANNER_IMAGE}
-              style={[S.topBarBanner, { width: width }]}
-              resizeMode="cover"
-            />
+            <Image source={BANNER_IMAGE} style={[S.topBarBanner, { width }]} resizeMode="cover" />
             <View style={S.breadcrumb}>
               <Text style={S.breadcrumbRoot}>   SWD Seller</Text>
               <Ionicons name="chevron-forward" size={12} color="#fff" />
@@ -356,7 +439,6 @@ export default function TabLayout() {
               </View>
             </View>
           </View>
-          {/* Content */}
           <View style={S.contentArea}>
             <Tabs tabBar={() => null} screenOptions={{ headerShown: false }}>
               {tabScreens}
@@ -367,51 +449,72 @@ export default function TabLayout() {
     );
   }
 
-  // ── Mobile ───────────────────────────────────────────────
+  // ── Mobile (native + web nhỏ) ────────────────────────────────
   return (
-    <Tabs
-      tabBar={(props) => <CustomTabBar {...props} isMobileWeb={isMobileWeb} />}
-      screenOptions={{ headerShown: false }}
-    >
-      {tabScreens}
-    </Tabs>
+    <View style={{ flex: 1 }}>
+      {/* Drawer overlay — render trên cùng */}
+      <MobileDrawer
+        visible={drawerOpen}
+        activeTab={activeTab}
+        role={role}
+        userDetail={userDetail}
+        onNavigate={handleNavigate}
+        router={router}
+        onClose={() => setDrawerOpen(false)}
+      />
+
+      <Tabs
+        tabBar={(props) => (
+          <MobileTabBar {...props} activeKey={activeTab} />
+        )}
+        screenOptions={{ headerShown: false }}
+      >
+        {tabScreens}
+      </Tabs>
+
+      {/* Topbar nổi trên cùng — dùng absolute để không chiếm layout */}
+      <View style={[S.mobileTopBarWrap, { pointerEvents: 'box-none' }]}>
+        <MobileTopBar
+          pageLabel={pageLabel}
+          userDetail={userDetail}
+          onMenuPress={() => setDrawerOpen(true)}
+          router={router}
+        />
+      </View>
+    </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────
+// ── Styles ─────────────────────────────────────────────────────
 const S = StyleSheet.create({
+  // Desktop root
   root: { flex: 1, flexDirection: 'row', backgroundColor: '#F8FAFC', height: '100vh' },
-  icon: {
-    width: 28,
-    height: 28,
-    marginRight: 8,
-  },
+  icon: { width: 28, height: 28, marginRight: 8 },
+
   // Sidebar
   sidebar: { width: 240, backgroundColor: '#2C5282', paddingTop: 0, paddingBottom: 0, paddingHorizontal: 12, flexDirection: 'column', borderRightWidth: 1, borderRightColor: 'rgba(0,0,0,0.15)' },
   sidebarCollapsed: { width: 64, paddingHorizontal: 8 },
-  // Workspace row
+  collapseBtn: { position: 'absolute', top: 14, right: -10, width: 20, height: 20, borderRadius: 10, backgroundColor: '#1E3A5F', alignItems: 'center', justifyContent: 'center', zIndex: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+
   workspaceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)', marginBottom: 10 },
   workspaceName: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   workspaceText: { color: '#fff', fontSize: 13, fontWeight: '700', letterSpacing: -0.2 },
-  collapseBtn: { width: 22, height: 22, borderRadius: 5, backgroundColor: 'rgba(0,0,0,0.2)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  // Profile (unused at top, kept for reference)
-  profileAvatar: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  profileAvatarText: { color: '#fff', fontSize: 13, fontWeight: '800' },
-  profileName: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  profileRole: { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 1 },
+
   // Nav
   navSection: { marginBottom: 8 },
   navSectionLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4, paddingHorizontal: 8, marginTop: 6 },
-  navItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8, marginBottom: 1, gap: 0 },
+  navItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8, marginBottom: 1 },
   navItemActive: { backgroundColor: 'rgba(255,255,255,0.15)' },
   navIconWrap: { width: 28, height: 28, borderRadius: 7, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
   navIconWrapActive: { backgroundColor: 'rgba(255,255,255,0.2)' },
   navLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '500', flex: 1 },
   navLabelActive: { color: '#fff', fontWeight: '700' },
+
   // Admin
   adminSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, marginBottom: 4, marginTop: 6 },
   adminBadge: { backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   adminBadgeText: { color: 'rgba(255,255,255,0.8)', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+
   // Bottom user
   bottomSection: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 8, paddingBottom: 12 },
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 8, paddingVertical: 10, borderRadius: 9, backgroundColor: 'rgba(0,0,0,0.2)' },
@@ -422,7 +525,8 @@ const S = StyleSheet.create({
   logoutPopup: { backgroundColor: '#1E293B', borderRadius: 9, marginBottom: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' },
   logoutItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
   logoutItemText: { color: '#F87171', fontSize: 13, fontWeight: '600' },
-  // Main area
+
+  // Desktop main area
   mainArea: { flex: 1, flexDirection: 'column', backgroundColor: '#F8FAFC' },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)', overflow: 'hidden', paddingVertical: 10, paddingRight: 16 },
   topBarBanner: { position: 'absolute', height: 60, opacity: 1, backgroundColor: '#40668d' },
@@ -435,20 +539,9 @@ const S = StyleSheet.create({
   topBarAvatar: { width: 30, height: 30, borderRadius: 9, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center' },
   topBarAvatarText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   contentArea: { flex: 1, overflow: 'hidden' },
-});
 
-const M = StyleSheet.create({
-  tabBarWrap: { backgroundColor: 'transparent' },
-  tabBarWrapWeb: { paddingBottom: 8, backgroundColor: '#F8FAFC' },
-  tabBar: { flexDirection: 'row', marginHorizontal: 10, marginBottom: 10, backgroundColor: Colors.White, paddingVertical: 6, borderRadius: 50, borderWidth: 10, borderColor: Colors.White, shadowColor: Colors.Black, shadowOpacity: 0.08, shadowRadius: 10, elevation: 4 },
-  tabItem: { flex: 1, alignItems: 'center', paddingVertical: 5, borderRadius: 50 },
-  activeTabItem: { borderWidth: 2, borderColor: Colors.Black, backgroundColor: Colors.Black },
-  tabLabel: { color: Colors.LightGray, fontWeight: '600', textAlign: 'center', fontSize: 9, marginTop: 2 },
-  activeTabLabel: { color: '#F8FAFC' },
-  icon: { marginBottom: 2 },
-  logoutPopup: { marginHorizontal: 16, marginBottom: 8, backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 8 },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  logoutBtnText: { fontSize: 15, fontWeight: '600', color: '#EF4444' },
-  logoutCancel: { paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' },
-  logoutCancelText: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+  // Mobile topbar wrapper (float trên Tabs)
+  mobileTopBarWrap: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50,
+  },
 });

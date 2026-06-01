@@ -4,7 +4,7 @@ import { useScreenData } from '@/components/Hooks/useScreenData';
 import { useSearch } from '@/components/Hooks/useSearch';
 import EmptyState from '@/components/Main/EmptyState';
 import ScreenHeader from '@/components/Main/ScreenHeader';
-import TabScreenLayout from '@/components/Main/TabScreenLayout';
+import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import FilterChips from '@/components/UI/FilterChips';
 import StatBar from '@/components/UI/StatBar';
 // ✅ Import từ component riêng — không định nghĩa inline nữa
@@ -15,11 +15,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  FlatList, Platform, RefreshControl,
-  StyleSheet, Text, TouchableOpacity, View,
+  FlatList,
+  RefreshControl,
+  StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 
-const isWeb = Platform.OS === 'web';
+const { isDesktop } = useLayout();
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 
 
@@ -48,7 +49,7 @@ const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#
 
 //code 1 
 function TableHeader({ showCost }) {
-  if (!isWeb) return null;
+  if (!isDesktop) return null;
   return (
     <View style={[WRAP_BASE, TH.row]}>
       <View style={COL.lead} />
@@ -220,22 +221,23 @@ export default function OrderScreen() {
 
   const statCards = [
     { icon: 'receipt-outline', label: 'Đơn hàng', value: String(stats.total || 0), color: '#2563EB', bg: '#EFF6FF' },
-    { icon: 'cube-outline', label: 'Đơn buôn', value: String(data.filter(o => o.orderType === 'buon').length), color: '#059669', bg: '#ECFDF5' },
-    { icon: 'home-outline', label: 'Đơn lẻ', value: String(data.filter(o => o.orderType === 'le').length), color: '#8B5CF6', bg: '#F5F3FF' },
-    { icon: 'cash-outline', label: 'Doanh thu', value: fmtCurrency(totalRevenue), color: '#F59E0B', bg: '#FFFBEB' },
+    // { icon: 'cube-outline', label: 'Đơn buôn', value: String(data.filter(o => o.orderType === 'buon').length), color: '#059669', bg: '#ECFDF5' },
+    // { icon: 'home-outline', label: 'Đơn lẻ', value: String(data.filter(o => o.orderType === 'le').length), color: '#8B5CF6', bg: '#F5F3FF' },
+
     ...(showCostField ? [{
       icon: 'pricetag-outline',
-      label: 'Tiền nhập',
+      label: isAdmin(role) ? 'Doanh thu' : 'Giá nhập',
       value: fmtCurrency(totalCost),
       color: '#0891B2',
       bg: '#ECFEFF',
     }] : []),
+    ...(isAdmin(role) ? [] : [{ icon: 'cash-outline', label: 'Doanh thu', value: fmtCurrency(totalRevenue), color: '#F59E0B', bg: '#FFFBEB' }]),
   ];
 
   console.log('statCards length:', statCards.length);
 
   const handlePress = (item) => {
-    if (isWeb) setSelected(p => p?.id === item.id ? null : item);
+    if (isDesktop) setSelected(p => p?.id === item.id ? null : item);
     else router.push({ pathname: '/OrderView/[orderID]', params: { orderID: item.id, orderParam: JSON.stringify(item) } });
   };
 
@@ -247,7 +249,7 @@ export default function OrderScreen() {
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Tìm kiếm đơn hàng..."
-        actionLabel={!isCTV(role) && isWeb ? ' Tạo đơn hàng' : undefined}
+        actionLabel={!isCTV(role) && isDesktop ? ' Tạo đơn hàng' : undefined}
         actionIcon="add"
         onAction={!isCTV(role) ? () => router.push('/addOrder') : undefined}
       />
@@ -273,7 +275,7 @@ export default function OrderScreen() {
         onChange={s => { setStatusFilter(s); setSelected(null); }}
       />
 
-      <View style={{ flex: 1, flexDirection: 'row', padding: isWeb ? 16 : 0, paddingTop: 0 }}>
+      <View style={{ flex: 1, flexDirection: 'row', padding: isDesktop ? 16 : 0, paddingTop: 0 }}>
         {/* List */}
         <View style={WRAP.card}>
           <TableHeader showCost={showCostField} />
@@ -301,13 +303,13 @@ export default function OrderScreen() {
                 )}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: isWeb ? 60 : 100 }}
+                contentContainerStyle={{ paddingBottom: isDesktop ? 60 : 100 }}
               />
             )}
         </View>
 
         {/* ✅ Detail panel — dùng component riêng */}
-        {isWeb && selected && (
+        {isDesktop && selected && (
           <OrderDetail
             order={selected}
             role={role}
@@ -323,8 +325,8 @@ export default function OrderScreen() {
 const WRAP = StyleSheet.create({
   card: {
     flex: 1, backgroundColor: '#fff',
-    borderRadius: isWeb ? 12 : 0, borderWidth: 1, borderColor: '#E2E8F0',
-    overflow: 'hidden', margin: isWeb ? 16 : 0, marginTop: 0,
+    borderRadius: isDesktop ? 12 : 0, borderWidth: 1, borderColor: '#E2E8F0',
+    overflow: 'hidden', margin: isDesktop ? 16 : 0, marginTop: 0,
     shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
 });
@@ -345,7 +347,7 @@ const WRAP_BASE = {
   flexDirection: 'row',
   alignItems: 'center',
   gap: 10,
-  paddingHorizontal: isWeb ? 20 : 14,
+  paddingHorizontal: isDesktop ? 20 : 14,
 };
 
 // ── 4. STYLES — bỏ hết flex/width trong style (đã ở COL) ──

@@ -1,5 +1,6 @@
 // app/(tabs)/team.jsx
 import BgWatermark from '@/components/Main/BgWatermark';
+import { useLayout } from '@/components/Main/TabScreenLayout';
 import UserDetail from '@/components/UI/UserDetail';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,14 +9,14 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useState } from 'react';
 import {
     ActivityIndicator,
-    Platform, RefreshControl,
+    RefreshControl,
     ScrollView, StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fmtPhone } from '../../components/Utils/formatters';
 import { db } from '../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+const { isDesktop } = useLayout();
 
 // Map role hiển thị
 const ROLE_DISPLAY = {
@@ -172,7 +173,7 @@ export default function TeamView() {
                 </View>
 
                 {/* Panel chi tiết (chỉ hiển thị trên web, mobile thì có thể dùng modal nhưng giữ đơn giản) */}
-                {isWeb && selectedMember && (
+                {isDesktop && selectedMember && (
                     <UserDetail
                         user={selectedMember}
                         onClose={() => setSelectedMember(null)}
@@ -186,7 +187,7 @@ export default function TeamView() {
             </View>
 
             {/* Trên mobile: khi chọn member, điều hướng sang màn chi tiết (có thể dùng modal nếu muốn) */}
-            {!isWeb && selectedMember && (
+            {!isDesktop && selectedMember && (
                 <UserDetail
                     user={selectedMember}
                     onClose={() => setSelectedMember(null)}
@@ -205,7 +206,7 @@ const styles = StyleSheet.create({
     header: { paddingHorizontal: 20, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     headerTitle: { fontSize: 24, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
     headerSub: { fontSize: 14, color: '#64748B', marginTop: 4 },
-    contentRow: { flex: 1, flexDirection: isWeb ? 'row' : 'column' },
+    contentRow: { flex: 1, flexDirection: isDesktop ? 'row' : 'column' },
     listContainer: { flex: 1, minWidth: 0 },
     scrollContent: { paddingHorizontal: 16, paddingTop: 12 },
     section: { marginBottom: 24 },

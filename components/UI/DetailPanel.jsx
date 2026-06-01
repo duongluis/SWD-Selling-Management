@@ -5,7 +5,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 export default function DetailPanel({
     visible,
@@ -25,7 +26,7 @@ export default function DetailPanel({
     if (!visible) return null;
 
     // Web: panel cố định bên phải
-    if (isWeb) return (
+    if (isDesktop) return (
         <>
             {/* Backdrop */}
             <Pressable style={W.backdrop} onPress={onClose} />

@@ -11,15 +11,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
-  FlatList, Platform, RefreshControl,
-  StyleSheet, Text, TouchableOpacity, View,
+  FlatList,
+  RefreshControl,
+  StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899'];
 
 function TableHead() {
-  if (!isWeb) return null;
+  if (!isDesktop) return null;
   return (
     <View style={T.head}>
       <View style={{ width: 46 }} />
@@ -51,14 +53,14 @@ function CustomerRow({ item, index, isActive, onPress }) {
       {/* Tên */}
       <View style={[R.col, { flex: 2 }]}>
         <Text style={R.name} numberOfLines={1}>{item.name || '—'}</Text>
-        {!isWeb && <Text style={R.sub}>{item.phone || '—'}</Text>}
+        {!isDesktop && <Text style={R.sub}>{item.phone || '—'}</Text>}
       </View>
       {/* Phone */}
-      {isWeb && <Text style={[R.col, R.txt, { flex: 1 }]}>{fmtPhone(item.phone)}</Text>}
+      {isDesktop && <Text style={[R.col, R.txt, { flex: 1 }]}>{fmtPhone(item.phone)}</Text>}
       {/* Ngày tạo */}
-      {isWeb && <Text style={[R.col, R.sub2, { flex: 1 }]}>{fmtDate(item.createdAt)}</Text>}
+      {isDesktop && <Text style={[R.col, R.sub2, { flex: 1 }]}>{fmtDate(item.createdAt)}</Text>}
       {/* Tạo bởi — thay thế group header */}
-      {isWeb && (
+      {isDesktop && (
         <View style={[R.col, { flex: 1.2 }]}>
           <Text style={R.createdBy} numberOfLines={1}>{item.createdBy || '—'}</Text>
         </View>
@@ -103,7 +105,7 @@ export default function CustomerScreen() {
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Tìm tên, SĐT..."
-        actionLabel={canAdd(role) && isWeb ? ' Thêm khách hàng' : undefined}
+        actionLabel={canAdd(role) && isDesktop ? ' Thêm khách hàng' : undefined}
         actionIcon="add"
         onAction={canAdd(role) ? () => router.push('/addCustomer') : undefined}
       />
@@ -131,11 +133,11 @@ export default function CustomerScreen() {
                 )}
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-                contentContainerStyle={{ paddingBottom: isWeb ? 60 : 100 }}
+                contentContainerStyle={{ paddingBottom: isDesktop ? 60 : 100 }}
               />
             )}
         </View>
-        {isWeb && selected && (
+        {isDesktop && selected && (
           <CustomerDetail
             customer={selected}
             onClose={() => setSelected(null)}
@@ -150,8 +152,8 @@ export default function CustomerScreen() {
 const WRAP = StyleSheet.create({
   card: {
     flex: 1, backgroundColor: '#fff',
-    borderRadius: isWeb ? 14 : 0, borderWidth: 1, borderColor: '#E2E8F0',
-    overflow: 'hidden', margin: isWeb ? 16 : 0, marginTop: 0,
+    borderRadius: isDesktop ? 14 : 0, borderWidth: 1, borderColor: '#E2E8F0',
+    overflow: 'hidden', margin: isDesktop ? 16 : 0, marginTop: 0,
     shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
 });

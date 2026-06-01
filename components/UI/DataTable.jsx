@@ -1,6 +1,7 @@
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 /**
  * @param columns - [{ key, label, flex, align }]
@@ -76,7 +77,7 @@ const T = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E2E8F0',
         overflow: 'hidden',
-        marginHorizontal: isWeb ? 32 : 16,
+        marginHorizontal: isDesktop ? 32 : 16,
         marginBottom: 12,
         // Shadow
         shadowColor: '#0F172A',

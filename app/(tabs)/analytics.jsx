@@ -1,6 +1,6 @@
 // app/(tabs)/analytics.jsx — Báo cáo doanh thu (redesign)
 
-import TabScreenLayout from '@/components/Main/TabScreenLayout';
+import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import { getRole } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,12 +8,13 @@ import { useFocusEffect } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
-    ActivityIndicator, Platform, RefreshControl,
-    ScrollView, StyleSheet, Text, TouchableOpacity, View,
+    ActivityIndicator,
+    RefreshControl,
+    ScrollView, StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+const { isDesktop } = useLayout();
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtShort = n => {
     if (!n) return '0';
@@ -272,12 +273,12 @@ export default function AnalyticsScreen() {
 }
 
 const A = StyleSheet.create({
-    scroll: { padding: isWeb ? 32 : 16, paddingTop: isWeb ? 24 : 16 },
+    scroll: { padding: isDesktop ? 32 : 16, paddingTop: isDesktop ? 24 : 16 },
     pageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-    pageTitle: { fontSize: isWeb ? 26 : 22, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
+    pageTitle: { fontSize: isDesktop ? 26 : 22, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
     userBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: '#BFDBFE' },
     userBadgeText: { fontSize: 12, fontWeight: '600', color: '#2563EB', maxWidth: 160 },
-    topCards: { flexDirection: isWeb ? 'row' : 'column', gap: 12, marginBottom: 16 },
+    topCards: { flexDirection: isDesktop ? 'row' : 'column', gap: 12, marginBottom: 16 },
     topCard: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 18, borderWidth: 1, borderColor: '#E2E8F0', gap: 4, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
     topCardIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
     topCardLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.06, textTransform: 'uppercase' },

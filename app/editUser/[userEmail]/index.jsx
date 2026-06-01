@@ -13,7 +13,8 @@ import { showAlert } from '../../../components/Main/showAlert';
 import { showSuccess } from '../../../components/Main/showSuccess';
 import { db } from '../../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 const ROLE_CONFIG = {
     'đại lý': { color: '#2563EB', bg: '#EFF6FF', label: 'Đại lý / NPP' },
@@ -139,7 +140,7 @@ export default function EditUserScreen() {
     };
 
     return (
-        <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+        <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
             <BgWatermark />
             {/* Header */}
             <View style={S.header}>
@@ -162,10 +163,10 @@ export default function EditUserScreen() {
                     keyboardShouldPersistTaps="handled"
                     contentContainerStyle={S.scroll}
                 >
-                    <View style={isWeb ? S.gridWeb : undefined}>
+                    <View style={isDesktop ? S.gridWeb : undefined}>
 
                         {/* ── LEFT col ── */}
-                        <View style={isWeb ? S.colLeft : undefined}>
+                        <View style={isDesktop ? S.colLeft : undefined}>
 
                             {/* Thông tin liên hệ */}
                             <Section icon="person-circle-outline" title="Thông tin liên hệ">
@@ -197,7 +198,7 @@ export default function EditUserScreen() {
                         </View>
 
                         {/* ── RIGHT col ── */}
-                        <View style={isWeb ? S.colRight : undefined}>
+                        <View style={isDesktop ? S.colRight : undefined}>
 
                             {/* Cam kết đại lý */}
                             {isDaiLy && (
@@ -284,7 +285,7 @@ const S = StyleSheet.create({
     headerSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
     roleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
     roleBadgeText: { fontSize: 11, fontWeight: '700' },
-    scroll: { paddingHorizontal: isWeb ? 32 : 16, paddingTop: 16 },
+    scroll: { paddingHorizontal: isDesktop ? 32 : 16, paddingTop: 16 },
     gridWeb: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },
     colLeft: { flex: 1.4 },
     colRight: { flex: 1 },

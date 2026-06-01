@@ -1,12 +1,13 @@
 // components/UI/CustomerDetail.jsx — style giống order panel
 
+import { useLayout } from '@/components/Main/TabScreenLayout';
 import { fmtDate, fmtPhone, getInitials } from '@/components/Utils/formatters';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useContext, useEffect, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-const isWeb = Platform.OS === 'web';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+const { isDesktop } = useLayout();
 
 const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444'];
 const hashColor = s => AVATAR_COLORS[(s || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
@@ -118,7 +119,7 @@ export default function CustomerDetail({ customer, onClose, onEdit }) {
 }
 
 const S = StyleSheet.create({
-    panel: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', flexDirection: 'column', borderRadius: isWeb ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
+    panel: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', flexDirection: 'column', borderRadius: isDesktop ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
     header: { padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 10 },
     headerTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
     closeBtn: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

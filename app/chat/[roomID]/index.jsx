@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 function getInitials(name) {
     if (!name) return '?';
@@ -170,7 +171,7 @@ export default function ChatScreen() {
     };
 
     return (
-        <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+        <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
             <BgWatermark />
             {/* Header */}
             <View style={S.header}>
@@ -236,7 +237,7 @@ export default function ChatScreen() {
                             placeholderTextColor="#94A3B8"
                             multiline
                             maxLength={500}
-                            onKeyPress={isWeb ? (e) => {
+                            onKeyPress={isDesktop ? (e) => {
                                 if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
                                     e.preventDefault();
                                     handleSend();

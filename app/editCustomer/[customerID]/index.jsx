@@ -16,7 +16,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 // ── Field Component ───────────────────────────────────────────
 function Field({ label, required, children }) {
@@ -173,7 +174,7 @@ export default function EditCustomerScreen() {
         <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={[W.scroll, isWeb && { maxWidth: 600, alignSelf: 'center', width: '100%' }]}
+            contentContainerStyle={[W.scroll, isDesktop && { maxWidth: 600, alignSelf: 'center', width: '100%' }]}
         >
             {/* Loại khách hàng */}
             <View style={W.card}>
@@ -281,7 +282,7 @@ export default function EditCustomerScreen() {
     );
 
     return (
-        <View style={[W.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+        <View style={[W.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
             <BgWatermark />
             {/* Header */}
             <View style={W.header}>

@@ -6,14 +6,15 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, FlatList, Platform,
+    ActivityIndicator, FlatList,
     RefreshControl, ScrollView, StyleSheet, Text,
-    TextInput, TouchableOpacity, View,
+    TextInput, TouchableOpacity, View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 function getInitials(name) {
     if (!name) return '?';
@@ -121,7 +122,7 @@ export default function CTVCustomersScreen() {
                 <View style={[S.tableCell, { flex: 1.5 }]}>
                     <Text style={S.rowPhone}>{item.phone || '—'}</Text>
                 </View>
-                {isWeb && (
+                {isDesktop && (
                     <View style={[S.tableCell, { flex: 1.2 }]}>
                         <Text style={S.rowDate}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : '—'}</Text>
                     </View>
@@ -138,7 +139,7 @@ export default function CTVCustomersScreen() {
     };
 
     return (
-        <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+        <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
             <BgWatermark />
             {/* Header */}
             <View style={S.header}>
@@ -163,7 +164,7 @@ export default function CTVCustomersScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }}>
                     <View style={{ flexDirection: 'row', gap: 10, paddingRight: 16 }}>
                         {STATS.map(s => (
-                            <View key={s.label} style={[S.statCard, isWeb && { width: undefined, flex: 1 }]}>
+                            <View key={s.label} style={[S.statCard, isDesktop && { width: undefined, flex: 1 }]}>
                                 <View style={[S.statIconWrap, { backgroundColor: s.bg }]}>
                                     <Ionicons name={s.icon} size={20} color={s.color} />
                                 </View>
@@ -200,7 +201,7 @@ export default function CTVCustomersScreen() {
                     <View style={S.colHeader}>
                         <Text style={[S.colText, { flex: 2.5 }]}>TÊN KHÁCH HÀNG</Text>
                         <Text style={[S.colText, { flex: 1.5 }]}>SỐ ĐIỆN THOẠI</Text>
-                        {isWeb && <Text style={[S.colText, { flex: 1.2 }]}>NGÀY ĐĂNG KÝ</Text>}
+                        {isDesktop && <Text style={[S.colText, { flex: 1.2 }]}>NGÀY ĐĂNG KÝ</Text>}
                         <Text style={[S.colText, { flex: 1.5 }]}>TRẠNG THÁI TƯ VẤN</Text>
                         <View style={{ width: 20 }} />
                     </View>
@@ -250,7 +251,7 @@ const S = StyleSheet.create({
     headerTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
     headerSub: { fontSize: 12, color: '#64748B', marginTop: 1 },
     refreshBtn: { width: 34, height: 34, borderRadius: 8, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
-    scroll: { paddingHorizontal: isWeb ? 32 : 16, paddingTop: 16 },
+    scroll: { paddingHorizontal: isDesktop ? 32 : 16, paddingTop: 16 },
     // Stats
     statCard: { width: 150, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0' },
     statIconWrap: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
@@ -260,7 +261,7 @@ const S = StyleSheet.create({
     tableCard: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', marginBottom: 16 },
     tableTopBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     tableTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-    searchBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: '#E2E8F0', minWidth: isWeb ? 180 : 140 },
+    searchBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: '#E2E8F0', minWidth: isDesktop ? 180 : 140 },
     searchInput: { flex: 1, fontSize: 13, color: '#0F172A' },
     colHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     colText: { fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5 },

@@ -25,7 +25,8 @@ if (Platform.OS === 'web') {
     QRCodeWeb = require('qrcode.react').QRCodeSVG;
 }
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 
 // ── Xuất biên bản bàn giao ────────────────────────────────────
@@ -39,7 +40,7 @@ async function _getLogo() {
 }
 
 async function _printHtml(html) {
-    if (isWeb) {
+    if (isDesktop) {
         const w = window.open('', '_blank');
         w.document.write(html);
         w.document.close();
@@ -141,7 +142,8 @@ function _buildHandoverHtml({ order, seller, services, logoBase64 }) {
         <div class="header-title">BIÊN BẢN NGHIỆM THU VÀ BÀN GIAO CHẤT LƯỢNG<br/>KHỐI LƯỢNG HẠNG MỤC THI CÔNG</div>
         <div class="sub-title">Ngày bàn giao: ..../..../${currentYear}</div>
 
-        <p>Hạng mục cung cấp thiết bị và thi công: <strong>“Máy lọc nước tổng sinh hoạt ${order.items?.[0]?.name || ''}”</strong></p>
+   <p>Hạng mục cung cấp thiết bị và thi công: <strong>"${(order.items || []).map(p => p.name).join(', ')
+        }"</strong></p>
 
         <!-- BÊN NHẬN -->
         <table class="info-table">
@@ -177,29 +179,26 @@ function _buildHandoverHtml({ order, seller, services, logoBase64 }) {
                 <td class="label">BÊN BÀN GIAO:</td>
                 <td style="font-weight:bold;">${seller.companyName || seller.name || 'CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VÀ SẢN XUẤT GOLDEN PANTHERA'}</td>
             </tr>
+            ${seller.taxCode && `  <tr>
+                <td>Mã số thuế:</td>
+                <td>${seller.taxCode}</td>
+            </tr>`}
             <tr>
                 <td>Số điện thoại:</td>
                 <td>${seller.phone || '...........................................................................................'}</td>
             </tr>
             <tr>
-                <td>Địa chỉ email:</td>
-                <td>${seller.email || '...........................................................................................'}</td>
-            </tr>
               ${seller.taxCode ? `
                 <td>Địa chỉ:</td>
                 <td>${seller.bizAddress || seller.address || 'Số 4C Đường Tăng Bạt Hổ, Phường Hai Bà Trưng, TP Hà Nội'}</td>
             </tr>
-            <tr>
-                <td>Mã số thuế:</td>
-                <td>${seller.taxCode}</td>
-            </tr>
            <tr>
                 <td>Người đại diện:</td>
-                <td>${seller.name}</td>
+                <td>${seller.contactName}</td>
             </tr>
             <tr>
                 <td>Chức vụ:</td>
-                <td>${seller.title}</td>
+                <td>${seller.title || '...........................................................................................'}</td>
             </tr> `
             : ''}
             <tr>
@@ -794,7 +793,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
 }
 
 const DP = StyleSheet.create({
-    root: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', borderRadius: isWeb ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
+    root: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', borderRadius: isDesktop ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
     header: { padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 6 },
     headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     date: { fontSize: 11, color: '#94A3B8' },
@@ -841,7 +840,7 @@ const DP = StyleSheet.create({
     qrSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 8, backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' },
     qrHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
     qrTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-    qrBody: { flexDirection: isWeb ? 'row' : 'column', alignItems: 'center', gap: 16 },
+    qrBody: { flexDirection: isDesktop ? 'row' : 'column', alignItems: 'center', gap: 16 },
     qrCode: { backgroundColor: '#fff', padding: 8, borderRadius: 12, alignSelf: 'center' },
     bankInfo: { flex: 1, gap: 4 },
     bankName: { fontSize: 14, fontWeight: '700', color: '#1E3A5F' },

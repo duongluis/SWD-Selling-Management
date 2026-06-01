@@ -1,4 +1,5 @@
 import BgWatermark from '@/components/Main/BgWatermark';
+import { useLayout } from '@/components/Main/TabScreenLayout';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { db } from '../../config/firebaseConfig';
-const isWeb = Platform.OS === 'web';
+const { isDesktop } = useLayout();
 
 export default function AddCustomer() {
   const router = useRouter();
@@ -124,7 +125,7 @@ export default function AddCustomer() {
   // ─────────────────────────────────────────────────────────
   // WEB LAYOUT
   // ─────────────────────────────────────────────────────────
-  if (isWeb) {
+  if (isDesktop) {
     return (
       <View style={W.root}>
         <BgWatermark />

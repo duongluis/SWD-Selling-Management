@@ -1,4 +1,4 @@
-// app/news/index.jsx — Tin tức (admin CRUD + notification)
+// app/(tabs)/news.jsx — Tin tức (admin CRUD + notification)
 
 import BgWatermark from '@/components/Main/BgWatermark';
 import { createNotification } from '@/components/Utils/chatService';
@@ -15,13 +15,14 @@ import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage
 import { useContext, useEffect, useState } from 'react';
 import {
     ActivityIndicator, Image,
-    Modal, Platform,
+    Modal,
     ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db, storage } from '../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 const MAX_IMAGE_BLOCKS = 5;
 
 const TABS = ['Tất cả', 'Hệ thống', 'Sự kiện', 'Công nghệ'];
@@ -234,7 +235,7 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
         });
         if (!result.canceled && result.assets?.[0]?.uri) {
             const uri = result.assets[0].uri;
-            const final = isWeb ? await compressForWeb(uri) : uri;
+            const final = isDesktop ? await compressForWeb(uri) : uri;
             setImageUri(final);
             setImageModified(true);
         }
@@ -251,7 +252,7 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
         });
         if (!result.canceled && result.assets?.[0]?.uri) {
             const uri = result.assets[0].uri;
-            const final = isWeb ? await compressForWeb(uri) : uri;
+            const final = isDesktop ? await compressForWeb(uri) : uri;
             setBlocks(b => [...b, { type: 'image', value: final }]);
         }
     };
@@ -264,7 +265,7 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
         });
         if (!result.canceled && result.assets?.[0]?.uri) {
             const uri = result.assets[0].uri;
-            const final = isWeb ? await compressForWeb(uri) : uri;
+            const final = isDesktop ? await compressForWeb(uri) : uri;
             setBlocks(b => b.map((bl, i) => i === idx ? { ...bl, value: final } : bl));
         }
     };
@@ -293,7 +294,7 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
     // ════════════════════════════════════════════════════════════
     // WEB: full-page 2-column layout
     // ════════════════════════════════════════════════════════════
-    if (isWeb) {
+    if (isDesktop) {
         return (
             <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
                 <View style={WB.root}>
@@ -495,7 +496,7 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
 
 const FM = StyleSheet.create({
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-    modal: { backgroundColor: '#fff', borderRadius: 16, width: isWeb ? 580 : '100%', maxHeight: '92%', overflow: 'hidden' },
+    modal: { backgroundColor: '#fff', borderRadius: 16, width: isDesktop ? 580 : '100%', maxHeight: '92%', overflow: 'hidden' },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     headerTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
     closeBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
@@ -707,14 +708,18 @@ export default function NewsScreen() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editItem, setEditItem] = useState(null);
 
-    const fetchNews = async () => {
-        try {
-            const snap = await getDocs(query(collection(db, 'news'), orderBy('createdAt', 'desc')));
+    useEffect(() => {
+        const q = query(collection(db, 'news'), orderBy('createdAt', 'desc'));
+        const unsub = onSnapshot(q, (snap) => {
             setNews(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-        } catch (e) { console.error(e); }
-        finally { setLoading(false); }
-    };
-    useEffect(() => { fetchNews(); }, []);
+            setLoading(false);
+        }, (error) => {
+            console.error("Lỗi đồng bộ tin tức:", error);
+            setLoading(false);
+        });
+
+        return () => unsub();
+    }, []);
 
     // Non-admin users don't see hidden articles
     const visible = admin ? news : news.filter(n => !n.hidden);
@@ -764,7 +769,7 @@ export default function NewsScreen() {
             }
         }
         setEditItem(null);
-        fetchNews();
+
     };
 
     const goToDetail = (item) =>
@@ -772,11 +777,11 @@ export default function NewsScreen() {
 
     const handleDelete = async (item) => {
         await deleteDoc(doc(db, 'news', item.id));
-        fetchNews();
+
     };
 
     return (
-        <View style={[N.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+        <View style={[N.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
             <BgWatermark />
             <View style={N.topBar}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
@@ -843,7 +848,7 @@ const N = StyleSheet.create({
     tabBtnTextActive: { color: '#fff' },
     addBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563EB', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, flexShrink: 0 },
     addBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
-    scroll: { padding: isWeb ? 32 : 16 },
+    scroll: { padding: isDesktop ? 32 : 16 },
     sectionHeader: { marginBottom: 16 },
     sectionTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
     sectionSub: { fontSize: 13, color: '#64748B', marginTop: 3 },

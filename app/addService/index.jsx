@@ -18,7 +18,8 @@ import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { db } from '../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 // ── Component NotesInput để tránh mất focus ─────────────────
 const NotesInput = memo(({ value, onChange, label }) => {
@@ -268,7 +269,7 @@ export default function AddService() {
     // ─────────────────────────────────────────────────────────
     // WEB LAYOUT
     // ─────────────────────────────────────────────────────────
-    if (isWeb) return (
+    if (isDesktop) return (
         <View style={W.root}>
             <BgWatermark />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>

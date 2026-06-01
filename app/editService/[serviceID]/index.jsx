@@ -16,7 +16,8 @@ import { showAlert } from '../../../components/Main/showAlert';
 import { showSuccess } from '../../../components/Main/showSuccess';
 import { db } from '../../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 const SERVICE_TYPES = [
     { key: 'MAINTENANCE', label: 'Bảo dưỡng', icon: 'construct-outline', color: '#F59E0B', bg: '#FFFBEB' },
@@ -215,7 +216,7 @@ export default function EditService() {
     // ─────────────────────────────────────────────────────────
     // WEB LAYOUT
     // ─────────────────────────────────────────────────────────
-    if (isWeb) return (
+    if (isDesktop) return (
         <View style={W.root}>
             <BgWatermark />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>

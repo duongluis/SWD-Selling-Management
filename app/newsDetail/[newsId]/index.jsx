@@ -5,13 +5,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator, Image, Platform,
-    ScrollView, StyleSheet, Text, TouchableOpacity, View,
+    ActivityIndicator, Image,
+    ScrollView, StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 
 const CAT_COLORS = {
     'Hệ thống': { c: '#EF4444', bg: '#FEF2F2' },
@@ -79,7 +80,7 @@ export default function NewsDetailScreen() {
     const hasBlocks = news.blocks?.length > 0;
 
     return (
-        <View style={[S.root, { paddingTop: isWeb ? 0 : insets.top }]}>
+        <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
             {/* Header */}
             <View style={S.header}>
                 <TouchableOpacity style={S.backBtn} onPress={() => router.back()}>
@@ -90,7 +91,7 @@ export default function NewsDetailScreen() {
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={[S.scroll, isWeb && { maxWidth: 720, alignSelf: 'center', width: '100%' }]}
+                contentContainerStyle={[S.scroll, isDesktop && { maxWidth: 720, alignSelf: 'center', width: '100%' }]}
             >
                 {/* Hero image */}
                 {news.imageUrl ? (
@@ -165,13 +166,13 @@ const S = StyleSheet.create({
     },
     backBtnSmall: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: '#EFF6FF' },
     headerTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#0F172A' },
-    scroll: { padding: isWeb ? 32 : 16 },
+    scroll: { padding: isDesktop ? 32 : 16 },
 
-    heroWrap: { borderRadius: 16, overflow: 'hidden', height: isWeb ? 380 : 220, marginBottom: 20, position: 'relative', backgroundColor: '#0F172A' },
+    heroWrap: { borderRadius: 16, overflow: 'hidden', height: isDesktop ? 380 : 220, marginBottom: 20, position: 'relative', backgroundColor: '#0F172A' },
     heroImage: { width: '100%', height: '100%' },
     heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.08)' },
     heroPlaceholder: {
-        height: isWeb ? 200 : 140, borderRadius: 16, marginBottom: 20,
+        height: isDesktop ? 200 : 140, borderRadius: 16, marginBottom: 20,
         backgroundColor: '#1E3A5F', alignItems: 'center', justifyContent: 'center',
     },
 
@@ -180,7 +181,7 @@ const S = StyleSheet.create({
     catBadgeText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
     metaTime: { fontSize: 12, color: '#94A3B8' },
 
-    title: { fontSize: isWeb ? 28 : 22, fontWeight: '800', color: '#0F172A', lineHeight: isWeb ? 38 : 30, letterSpacing: -0.5, marginBottom: 16 },
+    title: { fontSize: isDesktop ? 28 : 22, fontWeight: '800', color: '#0F172A', lineHeight: isDesktop ? 38 : 30, letterSpacing: -0.5, marginBottom: 16 },
 
     authorRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
     authorAvatar: {
@@ -194,12 +195,12 @@ const S = StyleSheet.create({
     divider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 16 },
 
     contentBlock: {
-        fontSize: isWeb ? 16 : 14, color: '#374151',
-        lineHeight: isWeb ? 28 : 24, letterSpacing: 0.1,
+        fontSize: isDesktop ? 16 : 14, color: '#374151',
+        lineHeight: isDesktop ? 28 : 24, letterSpacing: 0.1,
         marginBottom: 16,
     },
     inlineImgWrap: { borderRadius: 12, overflow: 'hidden', marginBottom: 16, backgroundColor: '#F1F5F9' },
     inlineImage: {
-        width: '100%', height: isWeb ? 360 : 220,
+        width: '100%', height: isDesktop ? 360 : 220,
     },
 });

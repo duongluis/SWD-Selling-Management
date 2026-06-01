@@ -9,6 +9,7 @@ import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import FilterChips from '@/components/UI/FilterChips';
 import ServiceDetail from '@/components/UI/ServiceDetail';
 import StatBar from '@/components/UI/StatBar';
+import { getSupportRoomId, sendSystemMessage } from '@/components/Utils/chatService';
 import { fmtDate } from '@/components/Utils/formatters';
 import { isCTV } from '@/components/Utils/roleHelper';
 import { isServiceStatusLocked, syncOrderStatusFromService } from '@/components/Utils/syncOrderStatus';
@@ -17,12 +18,14 @@ import { useRouter } from 'expo-router';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useMemo, useRef, useState } from 'react';
 import {
-  Dimensions, FlatList, Modal, Platform, Pressable, RefreshControl,
-  StyleSheet, Text, TouchableOpacity, View,
+  Dimensions, FlatList, Modal,
+  Pressable, RefreshControl,
+  StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
-const isWeb = Platform.OS === 'web';
+import { useLayout } from '@/components/Main/TabScreenLayout';
+const { isDesktop } = useLayout();
 const AVATAR_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4'];
 
 const STATUS_CFG = {
@@ -84,7 +87,7 @@ const TYPE_FILTERS = [
 ];
 
 function TableHead() {
-  if (!isWeb) return null;
+  if (!isDesktop) return null;
   return (
     <View style={T.head}>
       <View style={{ width: 42 }} />
@@ -128,13 +131,13 @@ function ServiceRow({ item, index, isActive, onPress, isAdmin, onStatusPress }) 
       </View>
       {/* ID + đơn hàng */}
       <View style={[R.col, { flex: 1.8 }]}>
-        <Text style={R.id} numberOfLines={1}>#{item.id || item.docId?.slice(-6)}</Text>
+        <Text style={R.id} numberOfLines={1}>#{item.id.slice(0, 9) || item.docId?.slice(-6)}</Text>
         {item.orderId && <Text style={R.sub}>Đơn: #{item.orderId}</Text>}
       </View>
       {/* Khách hàng */}
-      {isWeb && <Text style={[R.col, R.colText, { flex: 1 }]} numberOfLines={1}>{item.customer || '—'}</Text>}
+      {isDesktop && <Text style={[R.col, R.colText, { flex: 1 }]} numberOfLines={1}>{item.customer || '—'}</Text>}
       {/* Loại */}
-      {isWeb && (
+      {isDesktop && (
         <View style={[R.col, { flex: 0.8 }]}>
           <View style={[R.typePill, { backgroundColor: tcfg.bg }]}>
             <Text style={[R.typeText, { color: tcfg.c }]}>{tcfg.label}</Text>
@@ -142,9 +145,9 @@ function ServiceRow({ item, index, isActive, onPress, isAdmin, onStatusPress }) 
         </View>
       )}
       {/* Ngày */}
-      {isWeb && <Text style={[R.col, R.colSub, { flex: 0.8 }]}>{fmtDate(item.createdAt)}</Text>}
+      {isDesktop && <Text style={[R.col, R.colSub, { flex: 0.8 }]}>{fmtDate(item.createdAt)}</Text>}
       {/* Status — clickable khi admin */}
-      <View style={[R.col, { flex: isWeb ? 1 : undefined }]}>
+      <View style={[R.col, { flex: isDesktop ? 1 : undefined }]}>
         {canQuick ? (
           <TouchableOpacity ref={pillRef} onPress={handleStatusPillPress} activeOpacity={0.75} style={{ alignSelf: 'flex-start' }}>
             <View style={[R.pill, R.pillClickable, { backgroundColor: scf.bg, borderColor: scf.bd }]}>
@@ -215,7 +218,7 @@ export default function ServiceScreen() {
   ];
 
   const handlePress = item => {
-    if (isWeb) setSelected(p => p?.docId === item.docId ? null : item);
+    if (isDesktop) setSelected(p => p?.docId === item.docId ? null : item);
     else router.push({ pathname: '/ServiceView/[serviceID]', params: { serviceID: item.docId, serviceParam: JSON.stringify(item) } });
   };
 
@@ -225,15 +228,27 @@ export default function ServiceScreen() {
     const item = quickMenu?.item;
     setQuickMenu(null);
     if (!item || newStatus === item.status) return;
+
     showAlert('Cập nhật trạng thái', `Chuyển sang "${newStatus}"?`, async () => {
       try {
+        // 1. Cập nhật Database
         await updateDoc(doc(db, 'service', item.docId), { status: newStatus });
+
+        // 2. Đồng bộ trạng thái đơn hàng (nếu có)
         syncOrderStatusFromService(
           { type: item.type, orderId: item.orderId, phone: item.phone },
           newStatus
-        ).then(newOrderStatus => {
-          if (newOrderStatus) showAlert('Đã đồng bộ', `Đơn hàng #${item.orderId} tự động chuyển sang "${newOrderStatus}"`);
-        }).catch(() => { });
+        );
+
+        // 3. GỬI TIN NHẮN CHAT THÔNG BÁO
+        const creatorEmail = item.createdBy; // Người tạo dịch vụ (Đại lý/CTV)
+        if (creatorEmail) {
+          const roomId = getSupportRoomId(creatorEmail);
+          const message = `🔧 **Cập nhật dịch vụ:** Dịch vụ #${item.id || item.docId.slice(-6)} (Khách: ${item.customer}) đã được cập nhật trạng thái thành: **${newStatus}**`;
+
+          await sendSystemMessage(roomId, message);
+        }
+
         refresh();
       } catch (e) { showAlert('Lỗi', e.message); }
     });
@@ -247,7 +262,7 @@ export default function ServiceScreen() {
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Tìm dịch vụ, khách hàng..."
-        actionLabel={!isCTV(role) && isWeb ? ' Đăng ký dịch vụ' : undefined}
+        actionLabel={!isCTV(role) && isDesktop ? ' Đăng ký dịch vụ' : undefined}
         actionIcon="add"
         onAction={!isCTV(role) ? () => router.push('/addService') : undefined}
       />
@@ -258,7 +273,7 @@ export default function ServiceScreen() {
       {/* Hàng filter: loại dịch vụ */}
       <FilterChips options={TYPE_FILTERS} value={typeFilter} onChange={f => { setTypeFilter(f); setSelected(null); }} />
 
-      <View style={{ flex: 1, flexDirection: 'row', padding: isWeb ? 16 : 0, paddingTop: 0 }}>
+      <View style={{ flex: 1, flexDirection: 'row', padding: isDesktop ? 16 : 0, paddingTop: 0 }}>
         {/* List — left */}
         <View style={WRAP.card}>
           <TableHead />
@@ -283,12 +298,12 @@ export default function ServiceScreen() {
                 )}
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-                contentContainerStyle={{ paddingBottom: isWeb ? 60 : 100 }}
+                contentContainerStyle={{ paddingBottom: isDesktop ? 60 : 100 }}
               />
             )}
         </View>
         {/* Detail panel — right */}
-        {isWeb && selected && (
+        {isDesktop && selected && (
           <ServiceDetail
             service={selected}
             onClose={() => setSelected(null)}
@@ -322,7 +337,7 @@ export default function ServiceScreen() {
 const WRAP = StyleSheet.create({
   card: {
     flex: 1, backgroundColor: '#fff',
-    borderRadius: isWeb ? 12 : 0,
+    borderRadius: isDesktop ? 12 : 0,
     borderWidth: 1, borderColor: '#E2E8F0',
     overflow: 'hidden',
     shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2,
