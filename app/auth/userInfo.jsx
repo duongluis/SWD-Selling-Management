@@ -15,12 +15,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../../components/Main/showAlert';
 import BANKS from '../../config/banks.json';
 import { db } from '../../config/firebaseConfig';
-const { isDesktop } = useLayout();
+
 
 const COMMITTED_REVENUE_MIN = 100_000_000;
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
-// ── Cập nhật cấu trúc ROLES với bulletPoints ─────────────────
 const ROLES = [
     {
         key: 'daily',
@@ -569,17 +568,17 @@ export default function UserInfoView() {
                 <View style={S.contactSection}>
                     <View style={S.contactHeader}>
                         <Ionicons name="person-circle-outline" size={15} color="#2563EB" />
-                        <Text style={S.contactTitle}>Người đại diện</Text>
+                        <Text style={S.contactTitle}>Người liên hệ</Text>
                     </View>
                     <View style={S.fg}>
-                        <Text style={S.label}>Họ và tên người đại diện <Text style={S.req}>*</Text></Text>
+                        <Text style={S.label}>Họ và tên người liên hệ<Text style={S.req}>*</Text></Text>
                         <View style={F.inputBox}>
                             <Ionicons name="person-outline" size={15} color="#94A3B8" />
                             <TextInput style={F.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={contactName} onChangeText={setContactName} />
                         </View>
                     </View>
                     <View style={[S.fg, { marginBottom: 4 }]}>
-                        <Text style={S.label}>Số điện thoại người đại diện <Text style={S.req}>*</Text></Text>
+                        <Text style={S.label}>Số điện thoại người liên hệ<Text style={S.req}>*</Text></Text>
                         <View style={F.inputBox}>
                             <Ionicons name="call-outline" size={15} color="#94A3B8" />
                             <TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={contactPhone} onChangeText={setContactPhone} />

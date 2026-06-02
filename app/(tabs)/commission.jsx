@@ -12,16 +12,17 @@ import { useFocusEffect } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
-    ActivityIndicator, Dimensions,
+    ActivityIndicator,
+    Dimensions,
+    Platform,
     RefreshControl,
-    ScrollView, StyleSheet, Text, TouchableOpacity, View
+    ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
-const screenWidth = Dimensions.get('window').width;
-const isMobile = !isDesktop && screenWidth < 768;
+
+const width = Dimensions.get('window');
 
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtShort = n => {
@@ -45,10 +46,10 @@ function StatCard({ label, value, sub, color, borderColor }) {
     );
 }
 const SC = StyleSheet.create({
-    card: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: isMobile ? 12 : 16, borderWidth: 1, borderColor: '#E2E8F0', minWidth: isMobile ? 90 : 130 },
-    label: { fontSize: isMobile ? 9 : 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 6 },
-    value: { fontSize: isMobile ? 18 : 24, fontWeight: '900', letterSpacing: -0.5, marginBottom: 2 },
-    sub: { fontSize: isMobile ? 10 : 11, color: '#64748B' },
+    card: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: !(Platform.OS === 'web' && width >= 768) ? 12 : 16, borderWidth: 1, borderColor: '#E2E8F0', minWidth: !(Platform.OS === 'web' && width >= 768) ? 90 : 130 },
+    label: { fontSize: !(Platform.OS === 'web' && width >= 768) ? 9 : 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 6 },
+    value: { fontSize: !(Platform.OS === 'web' && width >= 768) ? 18 : 24, fontWeight: '900', letterSpacing: -0.5, marginBottom: 2 },
+    sub: { fontSize: !(Platform.OS === 'web' && width >= 768) ? 10 : 11, color: '#64748B' },
 });
 
 function MiniBarChart({ bars }) {
@@ -157,9 +158,6 @@ const MR = StyleSheet.create({
     approveBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563EB', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14, marginTop: 12, alignSelf: 'flex-end' },
 });
 
-// ══════════════════════════════════════════════════════════════
-//   DESKTOP TABLE — SINGLE SOURCE OF LAYOUT
-// ══════════════════════════════════════════════════════════════
 const WRAP_BASE = {
     flexDirection: 'row',
     alignItems: 'center',
@@ -167,7 +165,6 @@ const WRAP_BASE = {
     paddingHorizontal: 16,
 };
 
-// COL dùng chung cho Header + Row → chắc chắn thẳng cột
 const COL_BASE = {
     order: { flex: 1.4, minWidth: 140 },
     customer: { flex: 1.2, minWidth: 120 },
@@ -271,15 +268,13 @@ const DT = StyleSheet.create({
     btnTextDone: { fontSize: 11, color: '#16A34A', fontWeight: '700' },
 });
 
-// ══════════════════════════════════════════════════════════════
-//   MAIN
-// ══════════════════════════════════════════════════════════════
 export default function CommissionScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
     const isAdmin = role === 'admin';
     const myRate = COMM_RATE[role] || 0;
 
+    const { isDesktop, isMobile } = useLayout();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [orders, setOrders] = useState([]);
@@ -574,13 +569,13 @@ export default function CommissionScreen() {
 
 const S = StyleSheet.create({
     // ScreenHeader đã có padding ngang → ScrollView dùng padding ngắn hơn
-    scroll: { padding: isDesktop ? 32 : 16, paddingTop: isDesktop ? 16 : 12 },
-    statsRow: { flexDirection: 'row', gap: isMobile ? 8 : 12, marginBottom: 14 },
-    card: { backgroundColor: '#fff', borderRadius: 16, padding: isMobile ? 16 : 20, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+    scroll: { padding: Platform.OS === 'web' && width >= 768 ? 32 : 16, paddingTop: Platform.OS === 'web' && width >= 768 ? 16 : 12 },
+    statsRow: { flexDirection: 'row', gap: !(Platform.OS === 'web' && width >= 768) ? 8 : 12, marginBottom: 14 },
+    card: { backgroundColor: '#fff', borderRadius: 16, padding: !(Platform.OS === 'web' && width >= 768) ? 16 : 20, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 },
-    cardTitle: { fontSize: isMobile ? 14 : 15, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 },
+    cardTitle: { fontSize: !(Platform.OS === 'web' && width >= 768) ? 14 : 15, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 },
     cardSub: { fontSize: 11, color: '#64748B', marginTop: 2 },
-    periodBtn: { paddingHorizontal: isMobile ? 10 : 12, paddingVertical: 5, borderRadius: 20, backgroundColor: '#F1F5F9' },
+    periodBtn: { paddingHorizontal: !(Platform.OS === 'web' && width >= 768) ? 10 : 12, paddingVertical: 5, borderRadius: 20, backgroundColor: '#F1F5F9' },
     periodBtnActive: { backgroundColor: '#1E3A8A' },
     periodBtnText: { fontSize: 11, fontWeight: '600', color: '#64748B' },
     periodBtnTextActive: { color: '#fff' },
@@ -590,7 +585,7 @@ const S = StyleSheet.create({
     emptyText: { fontSize: 14, color: '#94A3B8' },
     bonusCard: { backgroundColor: '#1E3A5F', borderColor: '#2C5282' },
     bonusLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
-    bonusAmount: { color: '#fff', fontSize: isMobile ? 14 : 15, fontWeight: '700', marginBottom: 4 },
+    bonusAmount: { color: '#fff', fontSize: !(Platform.OS === 'web' && width >= 768) ? 14 : 15, fontWeight: '700', marginBottom: 4 },
     bonusRate: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 12 },
     progressTrack: { height: 6, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 3, overflow: 'hidden' },
     progressFill: { height: '100%', backgroundColor: '#60A5FA', borderRadius: 3 },

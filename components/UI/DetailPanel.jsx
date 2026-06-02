@@ -1,3 +1,5 @@
+// components/UI/DetailPanel.jsx
+
 import { Ionicons } from '@expo/vector-icons';
 import {
     KeyboardAvoidingView, Modal, Platform, Pressable,

@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
 
 const CAT_COLORS = {
     'Hệ thống': { c: '#EF4444', bg: '#FEF2F2' },
@@ -29,16 +29,17 @@ function formatDate(ts) {
 
 // Renders an array of content blocks [{type:'text'|'image', value:string}]
 function BlockContent({ blocks }) {
+    const { isDesktop } = useLayout();
     return blocks.map((block, i) => {
         if (block.type === 'image' && block.value) {
             return (
                 <View key={i} style={S.inlineImgWrap}>
-                    <Image source={{ uri: block.value }} style={S.inlineImage} resizeMode="contain" />
+                    <Image source={{ uri: block.value }} style={[S.inlineImage, { height: isDesktop ? 360 : 220 }]} resizeMode="contain" />
                 </View>
             );
         }
         if (block.type === 'text' && block.value) {
-            return <Text key={i} style={S.contentBlock}>{block.value}</Text>;
+            return <Text key={i} style={[S.contentBlock, { fontSize: isDesktop ? 16 : 14, lineHeight: isDesktop ? 28 : 24 }]}>{block.value}</Text>;
         }
         return null;
     });
@@ -48,6 +49,7 @@ export default function NewsDetailScreen() {
     const { newsId } = useLocalSearchParams();
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const { isDesktop } = useLayout();
 
     const [news, setNews] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -91,16 +93,16 @@ export default function NewsDetailScreen() {
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={[S.scroll, isDesktop && { maxWidth: 720, alignSelf: 'center', width: '100%' }]}
+                contentContainerStyle={[S.scroll, { padding: isDesktop ? 32 : 16 }, isDesktop && { maxWidth: 720, alignSelf: 'center', width: '100%' }]}
             >
                 {/* Hero image */}
                 {news.imageUrl ? (
-                    <View style={S.heroWrap}>
+                    <View style={[S.heroWrap, { height: isDesktop ? 380 : 220 }]}>
                         <Image source={{ uri: news.imageUrl }} style={S.heroImage} resizeMode="contain" />
                         <View style={S.heroOverlay} />
                     </View>
                 ) : (
-                    <View style={S.heroPlaceholder}>
+                    <View style={[S.heroPlaceholder, { height: isDesktop ? 200 : 140 }]}>
                         <Ionicons name="newspaper-outline" size={48} color="rgba(255,255,255,0.4)" />
                     </View>
                 )}
@@ -114,7 +116,7 @@ export default function NewsDetailScreen() {
                 </View>
 
                 {/* Title */}
-                <Text style={S.title}>{news.title}</Text>
+                <Text style={[S.title, { fontSize: isDesktop ? 28 : 22, lineHeight: isDesktop ? 38 : 30 }]}>{news.title}</Text>
 
                 {/* Author */}
                 {news.authorName && (
@@ -138,10 +140,10 @@ export default function NewsDetailScreen() {
                     <BlockContent blocks={news.blocks} />
                 ) : (
                     <>
-                        <Text style={S.contentBlock}>{news.content}</Text>
+                        <Text style={[S.contentBlock, { fontSize: isDesktop ? 16 : 14, lineHeight: isDesktop ? 28 : 24 }]}>{news.content}</Text>
                         {(news.images || []).map((uri, i) => (
                             <View key={i} style={S.inlineImgWrap}>
-                                <Image source={{ uri }} style={S.inlineImage} resizeMode="contain" />
+                                <Image source={{ uri }} style={[S.inlineImage, { height: isDesktop ? 360 : 220 }]} resizeMode="contain" />
                             </View>
                         ))}
                     </>
@@ -166,22 +168,22 @@ const S = StyleSheet.create({
     },
     backBtnSmall: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: '#EFF6FF' },
     headerTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#0F172A' },
-    scroll: { padding: isDesktop ? 32 : 16 },
+    scroll: {},
 
-    heroWrap: { borderRadius: 16, overflow: 'hidden', height: isDesktop ? 380 : 220, marginBottom: 20, position: 'relative', backgroundColor: '#0F172A' },
+    heroWrap: { borderRadius: 16, overflow: 'hidden', marginBottom: 20, position: 'relative', backgroundColor: '#0F172A' },
     heroImage: { width: '100%', height: '100%' },
     heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.08)' },
     heroPlaceholder: {
-        height: isDesktop ? 200 : 140, borderRadius: 16, marginBottom: 20,
+        borderRadius: 16, marginBottom: 20,
         backgroundColor: '#1E3A5F', alignItems: 'center', justifyContent: 'center',
     },
 
     metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
     catBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-    catBadgeText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+    catBadgeText: { fontSize: 11, fontStyle: 'normal', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
     metaTime: { fontSize: 12, color: '#94A3B8' },
 
-    title: { fontSize: isDesktop ? 28 : 22, fontWeight: '800', color: '#0F172A', lineHeight: isDesktop ? 38 : 30, letterSpacing: -0.5, marginBottom: 16 },
+    title: { fontWeight: '800', color: '#0F172A', letterSpacing: -0.5, marginBottom: 16 },
 
     authorRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
     authorAvatar: {
@@ -195,12 +197,12 @@ const S = StyleSheet.create({
     divider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 16 },
 
     contentBlock: {
-        fontSize: isDesktop ? 16 : 14, color: '#374151',
-        lineHeight: isDesktop ? 28 : 24, letterSpacing: 0.1,
+        color: '#374151',
+        letterSpacing: 0.1,
         marginBottom: 16,
     },
     inlineImgWrap: { borderRadius: 12, overflow: 'hidden', marginBottom: 16, backgroundColor: '#F1F5F9' },
     inlineImage: {
-        width: '100%', height: isDesktop ? 360 : 220,
+        width: '100%',
     },
 });

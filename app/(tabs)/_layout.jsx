@@ -12,9 +12,10 @@ import { Tabs, useRouter, useSegments } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { useContext, useState } from 'react';
 import {
+  Dimensions,
   Image, Platform, Pressable, ScrollView,
   StyleSheet, Text, TouchableOpacity,
-  useWindowDimensions, View,
+  View
 } from 'react-native';
 import auth from '../../config/firebaseConfig';
 
@@ -206,7 +207,7 @@ function DesktopSidebar({ activeTab, role, userDetail, collapsed, onToggle, onNa
     <View style={[S.sidebar, collapsed && S.sidebarCollapsed]}>
       {/* Collapse button */}
       <Pressable onPress={onToggle} style={S.collapseBtn}>
-        <Ionicons name={collapsed ? 'chevron-forward-outline' : 'chevron-back-outline'} size={13} color="rgba(255,255,255,0.5)" />
+        <Ionicons name={collapsed ? 'chevron-forward-outline' : 'chevron-back-outline'} size={20} color="rgba(255,255,255,0.5)" />
       </Pressable>
 
       <SidebarContent
@@ -387,7 +388,7 @@ export default function TabLayout() {
   const segments = useSegments();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { width } = useWindowDimensions();
+  const width = Dimensions.get('window')
 
   const role = getRole(userDetail);
 
@@ -494,7 +495,7 @@ const S = StyleSheet.create({
   // Sidebar
   sidebar: { width: 240, backgroundColor: '#2C5282', paddingTop: 0, paddingBottom: 0, paddingHorizontal: 12, flexDirection: 'column', borderRightWidth: 1, borderRightColor: 'rgba(0,0,0,0.15)' },
   sidebarCollapsed: { width: 64, paddingHorizontal: 8 },
-  collapseBtn: { position: 'absolute', top: 14, right: -10, width: 20, height: 20, borderRadius: 10, backgroundColor: '#1E3A5F', alignItems: 'center', justifyContent: 'center', zIndex: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+  collapseBtn: { position: 'absolute', top: 15, right: 25, width: 25, height: 25, borderRadius: 15, backgroundColor: '#1E3A5F', alignItems: 'center', justifyContent: 'center', zIndex: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
 
   workspaceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)', marginBottom: 10 },
   workspaceName: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },

@@ -1,3 +1,4 @@
+// app/(tabs)/customer.jsx
 import { useScreenData } from '@/components/Hooks/useScreenData';
 import { useSearch } from '@/components/Hooks/useSearch';
 import EmptyState from '@/components/Main/EmptyState';
@@ -17,49 +18,45 @@ import {
 } from 'react-native';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+import { useCardStyles } from '@/components/Styles/cardStyles';
+import { useTableStyles } from '@/components/Styles/tableStyles';
+
 const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899'];
 
-function TableHead() {
+function TableHead({ tableStyles }) {
+  const { isDesktop } = useLayout();
   if (!isDesktop) return null;
   return (
-    <View style={T.head}>
+    <View style={tableStyles.head}>
       <View style={{ width: 46 }} />
-      <Text style={[T.hcell, { flex: 2 }]}>Khách hàng</Text>
-      <Text style={[T.hcell, { flex: 1 }]}>Điện thoại</Text>
-      <Text style={[T.hcell, { flex: 1 }]}>Ngày tạo</Text>
-      <Text style={[T.hcell, { flex: 1.2 }]}>Tạo bởi</Text>
+      <Text style={[tableStyles.th, { flex: 2 }]}>Khách hàng</Text>
+      <Text style={[tableStyles.th, { flex: 1 }]}>Điện thoại</Text>
+      <Text style={[tableStyles.th, { flex: 1 }]}>Ngày tạo</Text>
+      <Text style={[tableStyles.th, { flex: 1.2 }]}>Tạo bởi</Text>
       <View style={{ width: 20 }} />
     </View>
   );
 }
-const T = StyleSheet.create({
-  head: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 16, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  hcell: { fontSize: 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.06, paddingHorizontal: 4 },
-});
 
-function CustomerRow({ item, index, isActive, onPress }) {
+function CustomerRow({ item, index, isActive, onPress, tableStyles }) {
   const color = COLORS[index % COLORS.length];
+  const { isDesktop } = useLayout();
   return (
     <TouchableOpacity
-      style={[R.row, isActive && R.rowActive]}
+      style={[tableStyles.row, isActive && tableStyles.rowActive]}
       onPress={() => onPress(item)}
       activeOpacity={0.72}
     >
-      {isActive && <View style={R.leftBar} />}
+      {isActive && <View style={tableStyles.leftAccent} />}
       <View style={[R.avatar, { backgroundColor: color + '20' }]}>
         <Text style={[R.avatarText, { color }]}>{getInitials(item.name)}</Text>
       </View>
-      {/* Tên */}
       <View style={[R.col, { flex: 2 }]}>
         <Text style={R.name} numberOfLines={1}>{item.name || '—'}</Text>
         {!isDesktop && <Text style={R.sub}>{item.phone || '—'}</Text>}
       </View>
-      {/* Phone */}
       {isDesktop && <Text style={[R.col, R.txt, { flex: 1 }]}>{fmtPhone(item.phone)}</Text>}
-      {/* Ngày tạo */}
       {isDesktop && <Text style={[R.col, R.sub2, { flex: 1 }]}>{fmtDate(item.createdAt)}</Text>}
-      {/* Tạo bởi — thay thế group header */}
       {isDesktop && (
         <View style={[R.col, { flex: 1.2 }]}>
           <Text style={R.createdBy} numberOfLines={1}>{item.createdBy || '—'}</Text>
@@ -70,9 +67,6 @@ function CustomerRow({ item, index, isActive, onPress }) {
   );
 }
 const R = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 10, position: 'relative' },
-  rowActive: { backgroundColor: '#F0F7FF' },
-  leftBar: { position: 'absolute', left: 0, top: 4, bottom: 4, width: 3, backgroundColor: '#2563EB', borderRadius: 2 },
   avatar: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   avatarText: { fontSize: 13, fontWeight: '800' },
   col: { paddingHorizontal: 4 },
@@ -88,6 +82,9 @@ export default function CustomerScreen() {
   const { data, loading, refreshing, refresh, stats, role } = useScreenData('customers');
   const { query, setQuery, result } = useSearch(data, ['name', 'phone', 'email']);
   const [selected, setSelected] = useState(null);
+  const { isDesktop } = useLayout();
+  const { styles: cardStyles } = useCardStyles();
+  const { styles: tableStyles } = useTableStyles();
 
   useFocusEffect(useCallback(() => {
     if (isCTV(role)) router.replace('/customerCTV');
@@ -96,6 +93,14 @@ export default function CustomerScreen() {
   const statCards = [
     { icon: 'people-outline', label: 'Tổng khách hàng', value: String(stats.total || 0), color: '#2563EB', bg: '#EFF6FF' },
   ];
+
+  const handlePress = (item) => {
+    if (isDesktop) {
+      setSelected(p => p?.docId === item.docId ? null : item);
+    } else {
+      router.push({ pathname: '/CustomerView/[customerID]', params: { customerid: item.docId, customerParam: JSON.stringify(item) } });
+    }
+  };
 
   return (
     <TabScreenLayout>
@@ -111,9 +116,9 @@ export default function CustomerScreen() {
       />
       <StatBar stats={statCards} />
 
-      <View style={{ flex: 1, flexDirection: 'row' }}>
-        <View style={WRAP.card}>
-          <TableHead />
+      <View style={cardStyles.splitLayout}>
+        <View style={cardStyles.card}>
+          <TableHead tableStyles={tableStyles} />
           {loading && !refreshing ? <EmptyState loading /> :
             result.length === 0 ? (
               <EmptyState empty icon="people-outline"
@@ -126,14 +131,16 @@ export default function CustomerScreen() {
                 data={result}
                 keyExtractor={(item, i) => item.docId || String(i)}
                 renderItem={({ item, index }) => (
-                  <CustomerRow item={item} index={index}
+                  <CustomerRow
+                    item={item} index={index}
                     isActive={selected?.docId === item.docId}
-                    onPress={setSelected}
+                    onPress={handlePress}
+                    tableStyles={tableStyles}
                   />
                 )}
-                showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-                contentContainerStyle={{ paddingBottom: isDesktop ? 60 : 100 }}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={tableStyles.listContainer}
               />
             )}
         </View>
@@ -148,12 +155,3 @@ export default function CustomerScreen() {
     </TabScreenLayout>
   );
 }
-
-const WRAP = StyleSheet.create({
-  card: {
-    flex: 1, backgroundColor: '#fff',
-    borderRadius: isDesktop ? 14 : 0, borderWidth: 1, borderColor: '#E2E8F0',
-    overflow: 'hidden', margin: isDesktop ? 16 : 0, marginTop: 0,
-    shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2,
-  },
-});

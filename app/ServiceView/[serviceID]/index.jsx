@@ -5,7 +5,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useContext, useState } from 'react';
 import {
-    ActivityIndicator, Modal,
+    ActivityIndicator, Dimensions, Modal,
+    Platform,
     Pressable, ScrollView,
     StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
@@ -20,7 +21,7 @@ import { syncOrderStatusFromService } from '../../../components/Utils/syncOrderS
 import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
 
 const SERVICE_TYPES = {
     MAINTENANCE: { label: 'Bảo dưỡng', icon: 'construct-outline', color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A' },
@@ -113,6 +114,7 @@ export default function ServiceDetailScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const params = useLocalSearchParams();
 
+    const { isDesktop } = useLayout();
     const [service, setService] = useState(params.serviceParam ? JSON.parse(params.serviceParam) : {});
     const [updating, setUpdating] = useState(false);
     const [showStatusPicker, setShowStatusPicker] = useState(false);
@@ -423,24 +425,24 @@ export default function ServiceDetailScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: isDesktop ? 32 : 16, paddingVertical: 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-    backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: isDesktop ? 12 : 0, paddingVertical: isDesktop ? 6 : 0, borderRadius: 8, backgroundColor: isDesktop ? '#F1F5F9' : 'transparent', borderWidth: isDesktop ? 1 : 0, borderColor: '#E2E8F0' },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 32 : 16, paddingVertical: 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+    backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 12 : 0, paddingVertical: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 6 : 0, borderRadius: 8, backgroundColor: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? '#F1F5F9' : 'transparent', borderWidth: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 1 : 0, borderColor: '#E2E8F0' },
     backText: { fontSize: 13, color: '#64748B', fontWeight: '500' },
-    headerTitle: { fontSize: isDesktop ? 16 : 17, fontWeight: '800', color: '#0F172A' },
-    editBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: isDesktop ? 12 : 8, paddingVertical: isDesktop ? 7 : 6, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
+    headerTitle: { fontSize: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 16 : 17, fontWeight: '800', color: '#0F172A' },
+    editBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 12 : 8, paddingVertical: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 7 : 6, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
     editBtnText: { fontSize: 13, color: '#2563EB', fontWeight: '600' },
-    scroll: { padding: isDesktop ? 0 : 16 },
+    scroll: { padding: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 0 : 16 },
     scrollWeb: { padding: 32 },
     webGrid: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },
     webCol: { flex: 3 },
     webColRight: { flex: 2, gap: 16 },
-    card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: isDesktop ? 20 : 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14 },
+    card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 20 : 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     cardTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', flex: 1 },
     serviceTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
-    serviceTypeIcon: { width: isDesktop ? 56 : 50, height: isDesktop ? 56 : 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
+    serviceTypeIcon: { width: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 56 : 50, height: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 56 : 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
     serviceIdRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' },
-    serviceId: { fontSize: isDesktop ? 20 : 16, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
+    serviceId: { fontSize: Platform.OS === 'web' && Dimensions.get('window') >= 768 ? 20 : 16, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
     pillsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 6 },
     typePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
     typePillText: { fontSize: 11, fontWeight: '700' },

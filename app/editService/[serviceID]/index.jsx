@@ -1,3 +1,5 @@
+// app/editService/index.jsx
+
 import BgWatermark from '@/components/Main/BgWatermark';
 import { createNotification } from '@/components/Utils/chatService';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -17,7 +19,6 @@ import { showSuccess } from '../../../components/Main/showSuccess';
 import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
 
 const SERVICE_TYPES = [
     { key: 'MAINTENANCE', label: 'Bảo dưỡng', icon: 'construct-outline', color: '#F59E0B', bg: '#FFFBEB' },
@@ -34,6 +35,7 @@ export default function EditService() {
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
     const { userDetail } = useContext(UserDetailContext);
+    const { isDesktop } = useLayout();
 
     // Parse existing service from params
     const existingService = params.serviceParam ? JSON.parse(params.serviceParam) : {};
@@ -393,7 +395,7 @@ export default function EditService() {
                                         style={[M.typeTab, active && M.typeTabActive]}
                                         onPress={() => setServiceType(type.key)} activeOpacity={0.8}
                                     >
-                                        <Text style={[M.typeTabText, active && M.typeTabTextActive]}>{type.label}</Text>
+                                        <Text style={[M.typeTabText, active && { color: type.color, fontWeight: '700' }]}>{type.label}</Text>
                                     </TouchableOpacity>
                                 );
                             })}
@@ -483,7 +485,8 @@ const W = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },
     scroll: { paddingHorizontal: 32, paddingTop: 28, paddingBottom: 40 },
     pageHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 },
-    pageTitle: { fontSize: 24, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5, marginBottom: 4 },
+    backBtn: { width: 34, height: 34, borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+    pageTitle: { fontSize: 24, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
     pageSub: { fontSize: 14, color: '#64748B' },
     cancelBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
     cancelBtnText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
@@ -528,7 +531,7 @@ const W = StyleSheet.create({
 // ── Mobile Styles ─────────────────────────────────────────────
 const M = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F5F7FA' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
     headerTitle: { fontSize: 17, fontWeight: '800', color: '#0F172A' },
     headerAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },

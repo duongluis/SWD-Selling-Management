@@ -4,40 +4,23 @@ import { useScreenData } from '@/components/Hooks/useScreenData';
 import { useSearch } from '@/components/Hooks/useSearch';
 import EmptyState from '@/components/Main/EmptyState';
 import ScreenHeader from '@/components/Main/ScreenHeader';
-import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
+import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import FilterChips from '@/components/UI/FilterChips';
-import StatBar from '@/components/UI/StatBar';
-// ✅ Import từ component riêng — không định nghĩa inline nữa
 import OrderDetail from '@/components/UI/OrderDetail';
+import StatBar from '@/components/UI/StatBar';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
 import { getPriceField, isAdmin, isCTV } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  FlatList,
-  RefreshControl,
-  StyleSheet, Text, TouchableOpacity, View
-} from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const { isDesktop } = useLayout();
+// ── IMPORT HỆ THỐNG STYLES TIỆN ÍCH MỚI ──
+import { useCardStyles } from '@/components/Styles/cardStyles';
+import { useTableStyles } from '@/components/Styles/tableStyles';
+import { THEME } from '@/components/Styles/theme';
+
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
-
-
-
-// ── Status config (dùng cho row badges) ──────────────────────
-const S_CFG = {
-  'Chờ xác nhận': { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
-  'Chờ lắp đặt': { c: '#2563EB', bg: '#EFF6FF', bd: '#BFDBFE' },
-  'Đang lắp đặt': { c: '#7C3AED', bg: '#F5F3FF', bd: '#DDD6FE' },
-  'Đã lắp đặt': { c: '#059669', bg: '#ECFDF5', bd: '#A7F3D0' },
-  'Chờ thanh toán': { c: '#EA580C', bg: '#FFF7ED', bd: '#FED7AA' },
-  'Đã thanh toán': { c: '#16A34A', bg: '#DCFCE7', bd: '#86EFAC' },
-  'Đã hủy': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
-  'CANCELLED': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
-  'PENDING': { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' },
-};
-const scfg = (s) => S_CFG[s] || { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' };
 
 const TYPE_CFG = {
   buon: { label: 'Đơn buôn', c: '#065F46', bg: '#ECFDF5' },
@@ -45,37 +28,34 @@ const TYPE_CFG = {
 };
 const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899'];
 
-// ── Table Header ──────────────────────────────────────────────
-
-//code 1 
-function TableHeader({ showCost }) {
-  if (!isDesktop) return null;
+// ── Bảng tiêu đề (Chỉ hiện trên Desktop) ──
+function TableHeader({ showCost, tableStyles }) {
   return (
-    <View style={[WRAP_BASE, TH.row]}>
+    <View style={tableStyles.head}>
       <View style={COL.lead} />
-      <View style={COL.order}><Text style={TH.cell}>Đơn hàng</Text></View>
-      <View style={COL.date}><Text style={TH.cell}>Ngày</Text></View>
-      <View style={COL.sub}><Text style={TH.cell}>Sản phẩm</Text></View>
+      <View style={COL.order}><Text style={tableStyles.th}>Đơn hàng</Text></View>
+      <View style={COL.date}><Text style={tableStyles.th}>Ngày</Text></View>
+      <View style={COL.sub}><Text style={tableStyles.th}>Sản phẩm</Text></View>
       {showCost && (
         <View style={COL.cost}>
-          <Text style={[TH.cell, TH.cellRight]}>Tổng tiền nhập</Text>
+          <Text style={[tableStyles.th, tableStyles.thRight]}>Tiền nhập</Text>
         </View>
       )}
-      <View style={COL.amount}><Text style={[TH.cell, TH.cellRight]}>Tổng giá trị đơn</Text></View>
-      <View style={COL.status}><Text style={[TH.cell, TH.cellCenter]}>Trạng thái</Text></View>
+      <View style={COL.amount}><Text style={[tableStyles.th, tableStyles.thRight]}>Tổng giá trị</Text></View>
+      <View style={COL.status}><Text style={[tableStyles.th, tableStyles.thCenter]}>Trạng thái</Text></View>
       <View style={COL.trail} />
     </View>
   );
 }
 
-// ── Order Row ─────────────────────────────────────────────────
-function OrderRow({ item, index, isActive, onPress, showCost, priceField }) {
-  const cfg = scfg(item.status);
+// ── Dòng dữ liệu đơn hàng ──
+function OrderRow({ item, index, isActive, onPress, showCost, priceField, tableStyles }) {
   const tcfg = TYPE_CFG[item.orderType];
   const total = (item.items || []).reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
   const pCount = (item.items || []).length;
   const isCancelled = (item.status || '').includes('hủy') || item.status === 'CANCELLED';
   const avatarColor = isCancelled ? '#94A3B8' : AVATAR_COLORS[index % AVATAR_COLORS.length];
+
   const date = item.createdAt
     ? new Date(item.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : '—';
@@ -85,29 +65,21 @@ function OrderRow({ item, index, isActive, onPress, showCost, priceField }) {
     return s + costPrice * PARSE(p.qty || 1);
   }, 0);
 
-  // ── 3. ROW ── (cùng số children, cùng COL với header)
   return (
     <TouchableOpacity
-      style={[WRAP_BASE, ROW.wrap, isActive && ROW.wrapActive, isCancelled && ROW.wrapCancelled]}
+      style={[tableStyles.row, isActive && tableStyles.rowActive, isCancelled && tableStyles.rowCancelled]}
       onPress={() => onPress(item)}
       activeOpacity={0.72}
     >
-      {isActive && <View style={ROW.leftAccent} />}
+      {isActive && <View style={tableStyles.leftAccent} />}
 
-      {/* 1. avatar (COL.lead) */}
       <View style={[COL.lead, ROW.avatar, { backgroundColor: avatarColor + '22' }]}>
-        <Text style={[ROW.avatarText, { color: avatarColor }]}>
-          {getInitials(item.customer)}
-        </Text>
+        <Text style={[ROW.avatarText, { color: avatarColor }]}>{getInitials(item.customer)}</Text>
       </View>
 
-      {/* 2. order (COL.order) */}
       <View style={COL.order}>
         <View style={ROW.nameRow}>
-          <Text
-            style={[ROW.orderId, isCancelled && ROW.textStrike]}
-            numberOfLines={1}
-          >
+          <Text style={[ROW.orderId, isCancelled && ROW.textStrike]} numberOfLines={1}>
             Đơn hàng #{item.id}
           </Text>
           {tcfg && (
@@ -116,25 +88,17 @@ function OrderRow({ item, index, isActive, onPress, showCost, priceField }) {
             </View>
           )}
         </View>
-        <Text
-          style={[ROW.customer, isCancelled && ROW.textMuted]}
-          numberOfLines={1}
-        >
-          {item.customer}
-        </Text>
+        <Text style={[ROW.customer, isCancelled && ROW.textMuted]} numberOfLines={1}>{item.customer}</Text>
       </View>
 
-      {/* 3. date */}
       <View style={COL.date}>
-        <Text style={ROW.cellMuted} numberOfLines={1}>{date}</Text>
+        <Text style={tableStyles.cellMuted} numberOfLines={1}>{date}</Text>
       </View>
 
-      {/* 4. sub */}
       <View style={COL.sub}>
-        <Text style={ROW.cellMuted} numberOfLines={1}>{pCount} sản phẩm</Text>
+        <Text style={tableStyles.cellMuted} numberOfLines={1}>{pCount} sản phẩm</Text>
       </View>
 
-      {/* 4.5 Tổng tiền nhập */}
       {showCost && (
         <View style={COL.cost}>
           <Text style={[ROW.cellAmount, isCancelled && ROW.textMuted]} numberOfLines={1}>
@@ -143,39 +107,28 @@ function OrderRow({ item, index, isActive, onPress, showCost, priceField }) {
         </View>
       )}
 
-      {/* 5. amount */}
       <View style={COL.amount}>
-        <Text
-          style={[ROW.cellAmount, isCancelled && ROW.textMuted]}
-          numberOfLines={1}
-        >
+        <Text style={[ROW.cellAmount, isCancelled && ROW.textMuted]} numberOfLines={1}>
           {fmtCurrency(total)}
         </Text>
       </View>
 
-      {/* 6. status */}
       <View style={COL.status}>
-        <View style={[ROW.statusPill, { backgroundColor: cfg.bg, borderColor: cfg.bd }]}>
-          <View style={[ROW.dot, { backgroundColor: cfg.c }]} />
-          <Text style={[ROW.statusLabel, { color: cfg.c }]} numberOfLines={1}>
-            {item.status || 'PENDING'}
-          </Text>
+        <View style={ROW.statusContainer}>
+          <Text style={ROW.statusLabel}>{item.status || 'PENDING'}</Text>
         </View>
       </View>
 
-      {/* 7. trail (chevron) */}
       <View style={COL.trail}>
-        <Ionicons name="chevron-forward" size={14} color={isActive ? '#2563EB' : '#CBD5E1'} />
+        <Ionicons name="chevron-forward" size={14} color={isActive ? THEME.colors.primary : '#CBD5E1'} />
       </View>
     </TouchableOpacity>
   );
 }
 
-// ── Main Screen ───────────────────────────────────────────────
 export default function OrderScreen() {
   const router = useRouter();
   const { data, loading, refreshing, refresh, stats, role, userDetail } = useScreenData('orders');
-  // Chỉ hiện với daily (npp) hoặc user không có advisor
   const showCostField = role === 'daily' || userDetail?.advisor == null || isAdmin(role);
   const priceField = getPriceField(role);
   const { query, setQuery } = useSearch(data, ['id', 'customer']);
@@ -183,7 +136,10 @@ export default function OrderScreen() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selected, setSelected] = useState(null);
 
-  // Sync selected with latest data after refresh
+  // ── ÁP DỤNG HOOK STYLES ĐỘNG ──
+  const { styles: cardStyles, isDesktop } = useCardStyles();
+  const { styles: tableStyles } = useTableStyles();
+
   useEffect(() => {
     if (selected) {
       const latest = data.find(o => o.id === selected.id);
@@ -209,8 +165,7 @@ export default function OrderScreen() {
     , [data]);
 
   const totalCost = useMemo(() =>
-    data
-      .filter(o => !['Đã hủy', 'CANCELLED'].includes(o.status))
+    data.filter(o => !['Đã hủy', 'CANCELLED'].includes(o.status))
       .reduce((sum, o) =>
         sum + (o.items || []).reduce((s, p) => {
           const costPrice = PARSE(p.productPrice?.[priceField] ?? p[priceField] ?? 0);
@@ -220,25 +175,20 @@ export default function OrderScreen() {
     , [data, priceField]);
 
   const statCards = [
-    { icon: 'receipt-outline', label: 'Đơn hàng', value: String(stats.total || 0), color: '#2563EB', bg: '#EFF6FF' },
-    // { icon: 'cube-outline', label: 'Đơn buôn', value: String(data.filter(o => o.orderType === 'buon').length), color: '#059669', bg: '#ECFDF5' },
-    // { icon: 'home-outline', label: 'Đơn lẻ', value: String(data.filter(o => o.orderType === 'le').length), color: '#8B5CF6', bg: '#F5F3FF' },
-
-    ...(showCostField ? [{
-      icon: 'pricetag-outline',
-      label: isAdmin(role) ? 'Doanh thu' : 'Giá nhập',
-      value: fmtCurrency(totalCost),
-      color: '#0891B2',
-      bg: '#ECFEFF',
-    }] : []),
-    ...(isAdmin(role) ? [] : [{ icon: 'cash-outline', label: 'Doanh thu', value: fmtCurrency(totalRevenue), color: '#F59E0B', bg: '#FFFBEB' }]),
+    { icon: 'receipt-outline', label: 'Đơn hàng', value: String(stats.total || 0), color: THEME.colors.primary, bg: THEME.colors.primaryLight },
+    { icon: 'cube-outline', label: 'Đơn buôn', value: String(data.filter(o => o.orderType === 'buon').length), color: THEME.colors.success, bg: THEME.colors.successLight },
+    { icon: 'home-outline', label: 'Đơn lẻ', value: String(data.filter(o => o.orderType === 'le').length), color: THEME.colors.purple, bg: THEME.colors.purpleLight },
+    { icon: 'cash-outline', label: 'Doanh thu', value: fmtCurrency(totalRevenue), color: THEME.colors.warning, bg: THEME.colors.warningLight },
+    ...(showCostField ? [{ icon: 'pricetag-outline', label: 'Tiền nhập', value: fmtCurrency(totalCost), color: '#0891B2', bg: '#ECFEFF' }] : []),
   ];
 
-  console.log('statCards length:', statCards.length);
-
+  // ── Xử lý điều hướng Responsive chuẩn hóa ──
   const handlePress = (item) => {
-    if (isDesktop) setSelected(p => p?.id === item.id ? null : item);
-    else router.push({ pathname: '/OrderView/[orderID]', params: { orderID: item.id, orderParam: JSON.stringify(item) } });
+    if (isDesktop) {
+      setSelected(p => p?.id === item.id ? null : item);
+    } else {
+      router.push({ pathname: '/OrderView/[orderID]', params: { orderID: item.id, orderParam: JSON.stringify(item) } });
+    }
   };
 
   return (
@@ -275,10 +225,9 @@ export default function OrderScreen() {
         onChange={s => { setStatusFilter(s); setSelected(null); }}
       />
 
-      <View style={{ flex: 1, flexDirection: 'row', padding: isDesktop ? 16 : 0, paddingTop: 0 }}>
-        {/* List */}
-        <View style={WRAP.card}>
-          <TableHeader showCost={showCostField} />
+      <View style={cardStyles.splitLayout}>
+        <View style={cardStyles.card}>
+          {isDesktop && <TableHeader showCost={showCostField} tableStyles={tableStyles} />}
 
           {loading && !refreshing ? <EmptyState loading /> :
             filtered.length === 0 ? (
@@ -297,18 +246,18 @@ export default function OrderScreen() {
                     index={index}
                     isActive={selected?.id === item.id}
                     onPress={handlePress}
-                    showCost={showCostField}      // ✅
-                    priceField={priceField}       // ✅
+                    showCost={showCostField}
+                    priceField={priceField}
+                    tableStyles={tableStyles}
                   />
                 )}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: isDesktop ? 60 : 100 }}
+                contentContainerStyle={tableStyles.listContainer}
               />
             )}
         </View>
 
-        {/* ✅ Detail panel — dùng component riêng */}
         {isDesktop && selected && (
           <OrderDetail
             order={selected}
@@ -322,96 +271,29 @@ export default function OrderScreen() {
   );
 }
 
-const WRAP = StyleSheet.create({
-  card: {
-    flex: 1, backgroundColor: '#fff',
-    borderRadius: isDesktop ? 12 : 0, borderWidth: 1, borderColor: '#E2E8F0',
-    overflow: 'hidden', margin: isDesktop ? 16 : 0, marginTop: 0,
-    shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2,
-  },
-});
-
-// ── 1. SINGLE SOURCE OF TRUTH cho layout ──
+// ── Chỉ giữ lại các style đặc thù không thể dùng chung của màn hình này ──
 const COL = {
   lead: { width: 36 },
   order: { flex: 2, minWidth: 160 },
   date: { flex: 1, minWidth: 90 },
   sub: { flex: 1, minWidth: 90 },
   amount: { flex: 1, minWidth: 110 },
-  cost: { flex: 1, minWidth: 110 }, // ✅ thêm mới
+  cost: { flex: 1, minWidth: 110 },
   status: { width: 130 },
   trail: { width: 20 },
 };
 
-const WRAP_BASE = {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 10,
-  paddingHorizontal: isDesktop ? 20 : 14,
-};
-
-// ── 4. STYLES — bỏ hết flex/width trong style (đã ở COL) ──
-const TH = StyleSheet.create({
-  row: {
-    backgroundColor: '#F8FAFC', paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#E2E8F0'
-  },
-  cell: {
-    fontSize: 11, fontWeight: '700', color: '#64748B',
-    letterSpacing: 0.5, textTransform: 'uppercase'
-  },
-  cellRight: { textAlign: 'center' },
-  cellCenter: { textAlign: 'center' },
-});
-
 const ROW = StyleSheet.create({
-  wrap: {
-    backgroundColor: '#fff', paddingVertical: 14,
-    borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9',
-    position: 'relative'
-  },
-  wrapActive: { backgroundColor: '#F0F7FF' },
-  wrapCancelled: { opacity: 0.6 },
-  leftAccent: {
-    position: 'absolute', left: 0, top: 4, bottom: 4,
-    width: 3, backgroundColor: '#2563EB', borderRadius: 2
-  },
-
-  // avatar — KHÔNG có width (đã ở COL.lead), chỉ style visual
-  avatar: {
-    height: 36, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center'
-  },
+  avatar: { height: 36, borderRadius: THEME.radius.sm, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 12, fontWeight: '800' },
-
-  // order column
-  nameRow: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: 6, marginBottom: 2
-  },
-  orderId: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
-  customer: { fontSize: 12, color: '#64748B' },
-  badge: {
-    paddingHorizontal: 6, paddingVertical: 1,
-    borderRadius: 6
-  },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  orderId: { fontSize: 13, fontWeight: '700', color: THEME.colors.textPrimary },
+  customer: { fontSize: 12, color: THEME.colors.textSecondary },
+  badge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: THEME.radius.sm },
   badgeText: { fontSize: 10, fontWeight: '700' },
-
-  // data cells
-  cellMuted: { fontSize: 12, color: '#94A3B8', textAlign: 'left' },
-  cellAmount: {
-    fontSize: 13, fontWeight: '500',
-    color: '#0F172A', textAlign: 'center'
-  },
-  // status
-  statusPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 9, paddingVertical: 4,
-    borderRadius: 20, borderWidth: 1, alignSelf: 'center'
-  },
-  dot: { width: 5, height: 5, borderRadius: 3 },
-  statusLabel: { fontSize: 11, fontWeight: '700' },
-
-  textStrike: { textDecorationLine: 'line-through', color: '#94A3B8' },
-  textMuted: { color: '#94A3B8' },
+  cellAmount: { fontSize: 13, fontWeight: '500', color: THEME.colors.textPrimary, textAlign: 'center' },
+  statusContainer: { alignSelf: 'center' },
+  statusLabel: { fontSize: 12, fontWeight: '700', color: THEME.colors.textSecondary },
+  textStrike: { textDecorationLine: 'line-through', color: THEME.colors.textMuted },
+  textMuted: { color: THEME.colors.textMuted },
 });

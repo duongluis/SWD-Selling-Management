@@ -11,14 +11,18 @@ import { useFocusEffect } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
+  Dimensions,
   FlatList,
+  Platform,
   RefreshControl,
-  StyleSheet, Text, View
+  StyleSheet, Text,
+  View
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
+const width = Dimensions.get('window')
 const RANK_COLORS = ['#F59E0B', '#94A3B8', '#CD7F32'];
 const AVATAR_COLORS = ['#2563EB', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444'];
 const RANK_ICONS = ['🥇', '🥈', '🥉'];
@@ -89,6 +93,7 @@ function SectionHeader({ title }) {
 }
 
 function RoleSection({ title, data }) {
+  const { isDesktop } = useLayout();
   if (!data.length) return (
     <View>
       <SectionHeader title={title} />
@@ -128,7 +133,7 @@ export default function LeaderboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [periodFilter, setPeriodFilter] = useState('month');
-
+  const { isDesktop } = useLayout();
   const myRole = normalizeRole(userDetail || {});
   const isAdmin = myRole === 'admin';
 
@@ -242,7 +247,7 @@ export default function LeaderboardScreen() {
 }
 
 const L = StyleSheet.create({
-  sectionHeader: { paddingHorizontal: isDesktop ? 32 : 16, paddingTop: 16, paddingBottom: 8 },
+  sectionHeader: { paddingHorizontal: Platform.OS === 'web' && width >= 768 ? 32 : 16, paddingTop: 16, paddingBottom: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0', gap: 10 },
   rankBadge: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

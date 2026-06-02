@@ -1,10 +1,12 @@
+// app/addCustomer/index.jsx
+
 import BgWatermark from '@/components/Main/BgWatermark';
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { useContext, useState } from 'react';
 import {
   Alert,
@@ -299,7 +301,7 @@ export default function AddCustomer() {
   }
 
   // ─────────────────────────────────────────────────────────
-  // MOBILE LAYOUT — giữ nguyên
+  // MOBILE LAYOUT
   // ─────────────────────────────────────────────────────────
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>

@@ -6,16 +6,18 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, FlatList,
+    ActivityIndicator, Dimensions, FlatList,
+    Platform,
     RefreshControl, ScrollView, StyleSheet, Text,
-    TextInput, TouchableOpacity, View
+    TextInput, TouchableOpacity,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
 
+const width = Dimensions.get('window')
 function getInitials(name) {
     if (!name) return '?';
     return name.trim().split(/\s+/).filter(n => n.length > 0).map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -33,7 +35,7 @@ export default function CTVCustomersScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
-
+    const { isDesktop } = useLayout();
     const targetEmail = params.email || '';
     const targetName = params.name || targetEmail;
 
@@ -251,7 +253,7 @@ const S = StyleSheet.create({
     headerTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
     headerSub: { fontSize: 12, color: '#64748B', marginTop: 1 },
     refreshBtn: { width: 34, height: 34, borderRadius: 8, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
-    scroll: { paddingHorizontal: isDesktop ? 32 : 16, paddingTop: 16 },
+    scroll: { paddingHorizontal: Platform.OS === 'web' && width >= 768 ? 32 : 16, paddingTop: 16 },
     // Stats
     statCard: { width: 150, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0' },
     statIconWrap: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
@@ -261,7 +263,7 @@ const S = StyleSheet.create({
     tableCard: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', marginBottom: 16 },
     tableTopBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     tableTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-    searchBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: '#E2E8F0', minWidth: isDesktop ? 180 : 140 },
+    searchBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: '#E2E8F0', minWidth: Platform.OS === 'web' && width >= 768 ? 180 : 140 },
     searchInput: { flex: 1, fontSize: 13, color: '#0F172A' },
     colHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     colText: { fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5 },

@@ -14,9 +14,8 @@ import {
 import { db } from '../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
-const isAdmin = r => r === 'admin';
 
+const isAdmin = r => r === 'admin';
 const fmtVND = n => (n || 0).toLocaleString('vi-VN');
 const parseNum = s => parseFloat(String(s).replace(/[^0-9.]/g, '')) || 0;
 
@@ -87,38 +86,36 @@ const PK = StyleSheet.create({
 });
 
 // ── Row item ─────────────────────────────────────────────────
-function CalcRow({ item, index, priceField, role, onChange, onRemove }) {
+function CalcRow({ item, index, priceField, role, onChange, onRemove, isDesktop }) {
     const admin = isAdmin(role);
 
-    const baseListPrice = parseNum(item.listPrice);  // giá niêm yết (editable, chỉ để tham khảo)
-    const baseSellPrice = parseNum(item.sellPrice);  // giá ưu đãi theo vai trò
+    const baseListPrice = parseNum(item.listPrice);
+    const baseSellPrice = parseNum(item.sellPrice);
     const qty = parseNum(item.qty) || 1;
-    const discount = parseNum(item.discount);   // hoa hồng %
+    const discount = parseNum(item.discount);
 
-    // thành tiền = giá ưu đãi × (1 - hoa hồng%)
     const sellAfterDisc = discount > 0
         ? baseSellPrice * (1 - discount / 100)
         : baseSellPrice;
 
-    // hoa hồng = (niêm yết - ưu đãi × (1 - CK%)) × SL  →  mặc định = niêm yết - ưu đãi
     const commission = (baseListPrice - baseSellPrice * (1 - discount / 100)) * qty;
     const totalSell = sellAfterDisc * qty;
     const totalList = baseListPrice * qty;
 
     const isPositive = commission >= 0;
 
+    const webInputStyle = isDesktop ? { outlineStyle: 'none' } : {};
+
     return (
         <View style={[R.row, index % 2 === 1 && { backgroundColor: '#FAFBFF' }]}>
-            {/* Tên mặt hàng */}
             <View style={[R.cell, { flex: 2 }]}>
                 <Text style={R.productName} numberOfLines={2}>{item.name || '—'}</Text>
                 {item.capacity && <Text style={R.productSub}>{item.capacity}</Text>}
             </View>
 
-            {/* Số lượng */}
             <View style={[R.cell, { width: 70 }]}>
                 <TextInput
-                    style={R.numInput}
+                    style={[R.numInput, webInputStyle]}
                     value={String(item.qty || 1)}
                     onChangeText={v => onChange(index, 'qty', v)}
                     keyboardType="numeric"
@@ -126,10 +123,9 @@ function CalcRow({ item, index, priceField, role, onChange, onRemove }) {
                 />
             </View>
 
-            {/* Giá niêm yết (editable) */}
             <View style={[R.cell, { flex: 1.4 }]}>
                 <TextInput
-                    style={[R.numInput, { textAlign: 'right' }]}
+                    style={[R.numInput, { textAlign: 'right' }, webInputStyle]}
                     value={fmtVND(parseNum(item.listPrice))}
                     onChangeText={v => onChange(index, 'listPrice', v)}
                     keyboardType="numeric"
@@ -137,11 +133,10 @@ function CalcRow({ item, index, priceField, role, onChange, onRemove }) {
                 />
             </View>
 
-            {/* Giá bán vai trò (chỉ admin sửa) */}
             <View style={[R.cell, { flex: 1.4 }]}>
                 {admin ? (
                     <TextInput
-                        style={[R.numInput, { textAlign: 'right', color: '#7C3AED' }]}
+                        style={[R.numInput, { textAlign: 'right', color: '#7C3AED' }, webInputStyle]}
                         value={fmtVND(parseNum(item.sellPrice))}
                         onChangeText={v => onChange(index, 'sellPrice', v)}
                         keyboardType="numeric"
@@ -152,11 +147,10 @@ function CalcRow({ item, index, priceField, role, onChange, onRemove }) {
                 )}
             </View>
 
-            {/* Chiết khấu % */}
             <View style={[R.cell, { flex: 1.1, alignItems: 'flex-end' }]}>
                 <View style={R.discountWrap}>
                     <TextInput
-                        style={R.discountInput}
+                        style={[R.discountInput, webInputStyle]}
                         value={item.discount || ''}
                         onChangeText={v => onChange(index, 'discount', v)}
                         keyboardType="numeric"
@@ -168,15 +162,12 @@ function CalcRow({ item, index, priceField, role, onChange, onRemove }) {
                 </View>
             </View>
 
-            {/* Hoa hồng */}
             <View style={[R.cell, { flex: 1.3 }]}>
                 <Text style={[R.commValue, { color: isPositive ? '#059669' : '#EF4444' }]}>
                     {isPositive ? '+' : ''}{fmtVND(commission)}
                 </Text>
-                {/* <Text style={R.commSub}>= (NL - BH) × SL</Text> */}
             </View>
 
-            {/* Thành tiền */}
             <View style={[R.cell, { flex: 1.4 }]}>
                 <Text style={R.totalSell}>{fmtVND(totalSell)}</Text>
                 {discount > 0 && (
@@ -184,7 +175,6 @@ function CalcRow({ item, index, priceField, role, onChange, onRemove }) {
                 )}
             </View>
 
-            {/* Xóa */}
             <TouchableOpacity style={R.removeBtn} onPress={() => onRemove(index)}>
                 <Ionicons name="trash-outline" size={14} color="#EF4444" />
             </TouchableOpacity>
@@ -197,13 +187,12 @@ const R = StyleSheet.create({
     cell: { justifyContent: 'center' },
     productName: { fontSize: 13, fontWeight: '700', color: '#0F172A', lineHeight: 18 },
     productSub: { fontSize: 10, color: '#94A3B8', marginTop: 2 },
-    numInput: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, color: '#0F172A', textAlign: 'center', ...(isDesktop ? { outlineStyle: 'none' } : {}) },
+    numInput: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, color: '#0F172A', textAlign: 'center' },
     readOnly: { fontSize: 13, fontWeight: '700', textAlign: 'right' },
     discountWrap: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-end', backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, gap: 4, width: 80 },
-    discountInput: { width: 44, fontSize: 13, color: '#D97706', textAlign: 'right', ...(isDesktop ? { outlineStyle: 'none' } : {}) },
+    discountInput: { width: 44, fontSize: 13, color: '#D97706', textAlign: 'right' },
     discountPct: { fontSize: 12, color: '#D97706', fontWeight: '700', width: 14 },
     commValue: { fontSize: 13, fontWeight: '800', textAlign: 'right' },
-    commSub: { fontSize: 9, color: '#94A3B8', textAlign: 'right', marginTop: 2 },
     totalSell: { fontSize: 13, fontWeight: '800', color: '#0F172A', textAlign: 'right' },
     totalList: { fontSize: 10, color: '#94A3B8', textDecorationLine: 'line-through', textAlign: 'right', marginTop: 2 },
     removeBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -214,15 +203,17 @@ export default function CalculatorScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
     const priceField = getPriceField(role);
-    const admin = isAdmin(role);
     const roleInfo = ROLE_LABEL_MAP[role] || ROLE_LABEL_MAP.other;
 
+    const { isDesktop } = useLayout();
     const [products, setProducts] = useState([]);
     const [loadingProd, setLoadingProd] = useState(true);
     const [items, setItems] = useState([]);
     const [pickerOpen, setPickerOpen] = useState(false);
 
-    // Fetch products
+    // Dynamic styles based on isDesktop
+    const styles = useMemo(() => createStyles(isDesktop), [isDesktop]);
+
     useEffect(() => {
         getDocs(collection(db, 'productPrice'))
             .then(snap => setProducts(
@@ -233,7 +224,6 @@ export default function CalculatorScreen() {
             .finally(() => setLoadingProd(false));
     }, []);
 
-    // Thêm sản phẩm vào danh sách
     const handleSelectProduct = (product) => {
         const listPrice = parseNum(product.price) || 0;
         const sellPrice = parseNum(product[priceField]) || listPrice;
@@ -248,24 +238,21 @@ export default function CalculatorScreen() {
         }]);
     };
 
-    // Cập nhật field của row
     const handleChange = (index, field, value) => {
         setItems(prev => prev.map((item, i) => {
             if (i !== index) return item;
-            const updated = { ...item, [field]: value }; m
-            return updated;
+            return { ...item, [field]: value };
         }));
     };
 
     const handleRemove = (index) => setItems(prev => prev.filter((_, i) => i !== index));
     const handleClear = () => setItems([]);
 
-    // Tổng kết
     const totals = useMemo(() => {
         return items.reduce((acc, item) => {
             const list = parseNum(item.listPrice);
-            const sell = parseNum(item.sellPrice);  // giá ưu đãi
-            const disc = parseNum(item.discount);   // hoa hồng %
+            const sell = parseNum(item.sellPrice);
+            const disc = parseNum(item.discount);
             const qty = parseNum(item.qty) || 1;
             const sellAfterDisc = disc > 0 ? (sell * (1 - disc / 100)) : sell;
             acc.totalList += list * qty;
@@ -280,7 +267,7 @@ export default function CalculatorScreen() {
         { label: 'Tên mặt hàng', flex: 2, align: 'left' },
         { label: 'SL', width: 70, align: 'center' },
         { label: 'Giá niêm yết', flex: 1.4, align: 'right' },
-        { label: roleInfo.label, flex: 1.4, align: 'right' },  // Giá bán theo role
+        { label: roleInfo.label, flex: 1.4, align: 'right' },
         { label: 'Chiết khấu %', flex: 1.1, align: 'right' },
         { label: 'Hoa hồng', flex: 1.3, align: 'right' },
         { label: 'Thành tiền', flex: 1.4, align: 'right' },
@@ -289,64 +276,59 @@ export default function CalculatorScreen() {
 
     return (
         <TabScreenLayout>
-            <View style={S.root}>
-
-                {/* ── Header bar ── */}
-                <View style={S.topBar}>
+            <View style={styles.root}>
+                <View style={styles.topBar}>
                     <View>
-                        <Text style={S.pageTitle}>Bảng tính toán</Text>
-                        <Text style={S.pageSub}>
+                        <Text style={styles.pageTitle}>Bảng tính toán</Text>
+                        <Text style={styles.pageSub}>
                             Vai trò: <Text style={{ color: '#2563EB', fontWeight: '700' }}>{getRoleLabel(role)}</Text>
                             {' · '}Giá bán: <Text style={{ color: '#7C3AED', fontWeight: '700' }}>{roleInfo.label}</Text>
                         </Text>
                     </View>
-                    <View style={S.topActions}>
+                    <View style={styles.topActions}>
                         {items.length > 0 && (
-                            <TouchableOpacity style={S.clearBtn} onPress={handleClear}>
+                            <TouchableOpacity style={styles.clearBtn} onPress={handleClear}>
                                 <Ionicons name="trash-outline" size={14} color="#EF4444" />
-                                <Text style={S.clearBtnText}>Xóa tất cả</Text>
+                                <Text style={styles.clearBtnText}>Xóa tất cả</Text>
                             </TouchableOpacity>
                         )}
-                        <TouchableOpacity style={S.addBtn}
+                        <TouchableOpacity style={styles.addBtn}
                             onPress={() => setPickerOpen(true)}
                             disabled={loadingProd}>
                             {loadingProd
                                 ? <ActivityIndicator size="small" color="#fff" />
-                                : <><Ionicons name="add" size={16} color="#fff" /><Text style={S.addBtnText}>Thêm mặt hàng</Text></>
+                                : <><Ionicons name="add" size={16} color="#fff" /><Text style={styles.addBtnText}>Thêm mặt hàng</Text></>
                             }
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* ── Legend ── */}
-                <View style={S.legend}>
-                    <View style={S.legendItem}>
-                        <View style={[S.legendDot, { backgroundColor: '#64748B' }]} />
-                        <Text style={S.legendText}>NL = Giá niêm yết</Text>
+                <View style={styles.legend}>
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#64748B' }]} />
+                        <Text style={styles.legendText}>NL = Giá niêm yết</Text>
                     </View>
-                    <View style={S.legendItem}>
-                        <View style={[S.legendDot, { backgroundColor: '#7C3AED' }]} />
-                        <Text style={S.legendText}>BH = {roleInfo.label}</Text>
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#7C3AED' }]} />
+                        <Text style={styles.legendText}>BH = {roleInfo.label}</Text>
                     </View>
-                    <View style={S.legendItem}>
-                        <View style={[S.legendDot, { backgroundColor: '#059669' }]} />
-                        <Text style={S.legendText}>HH = ( NL - ( BH × (1 - CK%) ) ) × SL</Text>
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#059669' }]} />
+                        <Text style={styles.legendText}>HH = ( NL - ( BH × (1 - CK%) ) ) × SL</Text>
                     </View>
-                    <View style={S.legendItem}>
-                        <View style={[S.legendDot, { backgroundColor: '#D97706' }]} />
-                        <Text style={S.legendText}>Thành tiền = BH × (1 − CK%)</Text>
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#D97706' }]} />
+                        <Text style={styles.legendText}>Thành tiền = BH × (1 − CK%)</Text>
                     </View>
                 </View>
 
-                {/* ── Table ── */}
-                <View style={S.tableWrap}>
-                    {/* Table header */}
-                    <View style={S.tableHead}>
-                        <View style={S.thRow}>
+                <View style={styles.tableWrap}>
+                    <View style={styles.tableHead}>
+                        <View style={styles.thRow}>
                             {TABLE_HEADERS.map((h, i) => (
                                 <Text key={i}
                                     style={[
-                                        S.th,
+                                        styles.th,
                                         h.flex ? { flex: h.flex } : { width: h.width },
                                         h.align === 'right' && { textAlign: 'right' },
                                         h.align === 'center' && { textAlign: 'center' },
@@ -358,17 +340,16 @@ export default function CalculatorScreen() {
                         </View>
                     </View>
 
-                    {/* Empty state */}
                     {items.length === 0 ? (
-                        <View style={S.empty}>
-                            <View style={S.emptyIcon}>
+                        <View style={styles.empty}>
+                            <View style={styles.emptyIcon}>
                                 <Ionicons name="calculator-outline" size={40} color="#CBD5E1" />
                             </View>
-                            <Text style={S.emptyTitle}>Chưa có mặt hàng</Text>
-                            <Text style={S.emptySub}>Bấm "Thêm mặt hàng" để bắt đầu tính toán</Text>
-                            <TouchableOpacity style={S.emptyBtn} onPress={() => setPickerOpen(true)}>
+                            <Text style={styles.emptyTitle}>Chưa có mặt hàng</Text>
+                            <Text style={styles.emptySub}>Bấm "Thêm mặt hàng" để bắt đầu tính toán</Text>
+                            <TouchableOpacity style={styles.emptyBtn} onPress={() => setPickerOpen(true)}>
                                 <Ionicons name="add-circle-outline" size={16} color="#2563EB" />
-                                <Text style={S.emptyBtnText}>Thêm mặt hàng</Text>
+                                <Text style={styles.emptyBtnText}>Thêm mặt hàng</Text>
                             </TouchableOpacity>
                         </View>
                     ) : (
@@ -382,26 +363,26 @@ export default function CalculatorScreen() {
                                     role={role}
                                     onChange={handleChange}
                                     onRemove={handleRemove}
+                                    isDesktop={isDesktop}
                                 />
                             ))}
 
-                            {/* Subtotal row */}
-                            <View style={S.subtotalRow}>
-                                <Text style={[S.subtotalLabel, { flex: 2 }]}>
+                            <View style={styles.subtotalRow}>
+                                <Text style={[styles.subtotalLabel, { flex: 2 }]}>
                                     Tổng cộng ({totals.totalQty} sản phẩm)
                                 </Text>
                                 <View style={{ width: 70 }} />
-                                <Text style={[S.subtotalValue, { flex: 1.4, textAlign: 'right', color: '#64748B' }]}>
+                                <Text style={[styles.subtotalValue, { flex: 1.4, textAlign: 'right', color: '#64748B' }]}>
                                     {fmtVND(totals.totalList)}
                                 </Text>
-                                <Text style={[S.subtotalValue, { flex: 1.4, textAlign: 'right', color: '#7C3AED' }]}>
+                                <Text style={[styles.subtotalValue, { flex: 1.4, textAlign: 'right', color: '#7C3AED' }]}>
                                     {fmtVND(totals.totalSell)}
                                 </Text>
                                 <View style={{ flex: 1.1 }} />
-                                <Text style={[S.subtotalValue, { flex: 1.3, textAlign: 'right', color: totals.totalComm >= 0 ? '#059669' : '#EF4444' }]}>
+                                <Text style={[styles.subtotalValue, { flex: 1.3, textAlign: 'right', color: totals.totalComm >= 0 ? '#059669' : '#EF4444' }]}>
                                     {fmtVND(totals.totalComm)}
                                 </Text>
-                                <Text style={[S.subtotalValue, { flex: 1.4, textAlign: 'right', color: '#0F172A' }]}>
+                                <Text style={[styles.subtotalValue, { flex: 1.4, textAlign: 'right', color: '#0F172A' }]}>
                                     {fmtVND(totals.totalSell)}
                                 </Text>
                                 <View style={{ width: 36 }} />
@@ -410,36 +391,34 @@ export default function CalculatorScreen() {
                     )}
                 </View>
 
-                {/* ── Summary bottom bar ── */}
                 {items.length > 0 && (
-                    <View style={S.summaryBar}>
-                        <View style={S.summaryItem}>
-                            <Text style={S.summaryLabel}>Tổng niêm yết</Text>
-                            <Text style={S.summaryValue}>{fmtVND(totals.totalList)} đ</Text>
+                    <View style={styles.summaryBar}>
+                        <View style={styles.summaryItem}>
+                            <Text style={styles.summaryLabel}>Tổng niêm yết</Text>
+                            <Text style={styles.summaryValue}>{fmtVND(totals.totalList)} đ</Text>
                         </View>
-                        <View style={S.summaryDivider} />
-                        <View style={S.summaryItem}>
-                            <Text style={S.summaryLabel}>{roleInfo.label} tổng</Text>
-                            <Text style={[S.summaryValue, { color: '#7C3AED' }]}>{fmtVND(totals.totalSell)} đ</Text>
+                        <View style={styles.summaryDivider} />
+                        <View style={styles.summaryItem}>
+                            <Text style={styles.summaryLabel}>{roleInfo.label} tổng</Text>
+                            <Text style={[styles.summaryValue, { color: '#7C3AED' }]}>{fmtVND(totals.totalSell)} đ</Text>
                         </View>
-                        <View style={S.summaryDivider} />
-                        <View style={S.summaryItem}>
-                            <Text style={S.summaryLabel}>Hoa hồng</Text>
-                            <Text style={[S.summaryValue, { color: totals.totalComm >= 0 ? '#059669' : '#EF4444' }]}>
+                        <View style={styles.summaryDivider} />
+                        <View style={styles.summaryItem}>
+                            <Text style={styles.summaryLabel}>Hoa hồng</Text>
+                            <Text style={[styles.summaryValue, { color: totals.totalComm >= 0 ? '#059669' : '#EF4444' }]}>
                                 {fmtVND(totals.totalComm)} đ
                             </Text>
                         </View>
-                        <View style={S.summaryDivider} />
-                        <View style={[S.summaryItem, { flex: 1.5 }]}>
-                            <Text style={S.summaryLabel}>Doanh thu dự kiến</Text>
-                            <Text style={[S.summaryValue, { fontSize: 20, color: '#1E3A8A' }]}>
+                        <View style={styles.summaryDivider} />
+                        <View style={[styles.summaryItem, { flex: 1.5 }]}>
+                            <Text style={styles.summaryLabel}>Doanh thu dự kiến</Text>
+                            <Text style={[styles.summaryValue, { fontSize: 20, color: '#1E3A8A' }]}>
                                 {fmtVND(totals.totalSell)} đ
                             </Text>
                         </View>
                     </View>
                 )}
 
-                {/* ── Product picker ── */}
                 <ProductPicker
                     visible={pickerOpen}
                     products={products}
@@ -451,9 +430,8 @@ export default function CalculatorScreen() {
     );
 }
 
-const S = StyleSheet.create({
+const createStyles = (isDesktop) => StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC', flexDirection: 'column' },
-    // Top bar
     topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: isDesktop ? 32 : 16, paddingVertical: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', flexWrap: 'wrap', gap: 12 },
     pageTitle: { fontSize: isDesktop ? 24 : 20, fontWeight: '800', color: '#0F172A', letterSpacing: -0.4 },
     pageSub: { fontSize: 12, color: '#64748B', marginTop: 3 },
@@ -462,28 +440,23 @@ const S = StyleSheet.create({
     clearBtnText: { fontSize: 13, fontWeight: '600', color: '#EF4444' },
     addBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, backgroundColor: '#2563EB' },
     addBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-    // Legend
     legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, paddingHorizontal: isDesktop ? 32 : 16, paddingVertical: 10, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     legendDot: { width: 8, height: 8, borderRadius: 4 },
     legendText: { fontSize: 11, color: '#64748B', fontWeight: '500' },
-    // Table
     tableWrap: { flex: 1, backgroundColor: '#fff', margin: isDesktop ? 16 : 0, marginBottom: 0, borderRadius: isDesktop ? 14 : 0, borderWidth: isDesktop ? 1 : 0, borderColor: '#E2E8F0', overflow: 'hidden' },
     tableHead: { backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     thRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
     th: { fontSize: 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.04 },
-    // Subtotal
     subtotalRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#F0F7FF', borderTopWidth: 1.5, borderTopColor: '#BFDBFE', gap: 8 },
     subtotalLabel: { fontSize: 13, fontWeight: '800', color: '#0F172A' },
     subtotalValue: { fontSize: 13, fontWeight: '800' },
-    // Empty
     empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 12 },
     emptyIcon: { width: 80, height: 80, borderRadius: 20, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
     emptyTitle: { fontSize: 18, fontWeight: '700', color: '#374151' },
     emptySub: { fontSize: 13, color: '#94A3B8', textAlign: 'center' },
     emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', marginTop: 4 },
     emptyBtnText: { fontSize: 14, fontWeight: '600', color: '#2563EB' },
-    // Summary bar
     summaryBar: { flexDirection: isDesktop ? 'row' : 'column', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingHorizontal: isDesktop ? 32 : 20, paddingVertical: 16, gap: isDesktop ? 0 : 12, shadowColor: '#0F172A', shadowOpacity: 0.06, shadowRadius: 12, elevation: 8 },
     summaryItem: { flex: 1, alignItems: isDesktop ? 'center' : 'flex-start' },
     summaryDivider: { width: 1, backgroundColor: '#F1F5F9', marginHorizontal: 16 },

@@ -19,7 +19,6 @@ import {
 import { db } from '../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
 
 const ORDER_TYPE_CFG = {
     buon: { label: 'Đơn buôn', color: '#2563EB', bg: '#EFF6FF' },
@@ -131,7 +130,7 @@ export default function ChatListScreen() {
     const role = getRole(userDetail);
     const myEmail = userDetail?.email || '';
     const isAdmin = role === 'admin';
-
+    const { isDesktop } = useLayout();
     const [rooms, setRooms] = useState([]);
     const [customerMap, setCustomerMap] = useState({}); // roomId -> { email, displayName }
     const [loading, setLoading] = useState(true);

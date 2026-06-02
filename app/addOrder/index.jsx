@@ -21,7 +21,7 @@ import { showSuccess } from '../../components/Main/showSuccess';
 import { useLayout } from '../../components/Main/TabScreenLayout';
 import { db } from '../../config/firebaseConfig';
 
-const { isDesktop } = useLayout();
+
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 
 // ── Date helpers ─────────────────────────────────────────────
@@ -70,7 +70,7 @@ const DateField = React.memo(({ orderDate, setOrderDate, selectedDate, setSelect
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const minDate = today;
-
+  const { isDesktop } = useLayout();
   const onChange = (_, date) => {
     if (Platform.OS === 'android') setShowDatePicker(false);
     if (date && date >= minDate) {
@@ -390,7 +390,6 @@ const PaymentMethodField = React.memo(({ ws, orderType, useFixedPrice, fixedPaym
           <View style={[ws ? W.pmOptionIcon : styles.pmOptionIcon, { backgroundColor: cfg.color + '22' }]}><Ionicons name={cfg.icon} size={15} color={cfg.color} /></View>
           <View style={{ flex: 1 }}>
             <Text style={[ws ? W.pmOptionLabel : styles.pmOptionLabel, { color: cfg.color, fontWeight: '700' }]}>{cfg.label}</Text>
-            <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Áp dụng bắt buộc cho đơn buôn</Text>
           </View>
           <View style={[ws ? W.pmCheck : styles.pmCheck, { backgroundColor: cfg.color }]}><Ionicons name="checkmark" size={10} color="#fff" /></View>
         </View>
@@ -429,6 +428,7 @@ export default function AddOrder() {
   const insets = useSafeAreaInsets();
   const { userDetail } = useContext(UserDetailContext);
   const role = getRole(userDetail);
+  const { isDesktop } = useLayout();
 
   // --- 1. ĐƯA TẤT CẢ STATE LÊN ĐẦU ĐỂ TRÁNH LỖI INITIALIZATION ---
   const [serviceTypesList, setServiceTypesList] = useState([]); // Chuyển lên đầu

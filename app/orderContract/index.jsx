@@ -12,14 +12,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, getDocs } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, Alert,
-    ScrollView,
-    StyleSheet, Text, TextInput, TouchableOpacity, View
+    ActivityIndicator, Alert, ScrollView,
+    StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
+
 const fmt = (n) => Math.round(n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtN = (n) => Math.round(n || 0).toLocaleString('vi-VN');
 const COMM = { buon: 0.03, le: 0.05 };
@@ -63,6 +63,7 @@ async function getBase64Logo() {
     }
 }
 async function exportPDF(htmlContent) {
+    const { isDesktop } = useLayout();
     if (isDesktop) {
         const w = window.open('', '_blank');
         w.document.write(htmlContent);
@@ -435,6 +436,7 @@ function Contract({ order, seller, items: itemsProp, disc, total, discAmt }) {
     const items = Array.isArray(itemsProp) ? itemsProp : [];     // ✅ guard
     const hdNum = `HD-${new Date().getFullYear()}-${(order.id || Math.floor(Math.random() * 999 + 1).toString()).slice(-6).padStart(6, '0')}`;
     const today = new Date().toLocaleDateString('vi-VN');
+    const { isDesktop } = useLayout();
 
     return (
         <View style={S.contractCard}>
@@ -561,6 +563,7 @@ export default function OrderContractScreen() {
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
     const { userDetail } = useContext(UserDetailContext);
+    const { isDesktop } = useLayout();
 
     const mode = params.mode || 'order';
     const rawOrder = params.orderParam ? (() => { try { return JSON.parse(params.orderParam); } catch { return {}; } })() : {};
@@ -578,7 +581,6 @@ export default function OrderContractScreen() {
         : mode === 'order' ? [] : form.items;
 
     const [items, setItems] = useState(safeItems);
-    const currentItems = mode === 'order' ? (rawOrder.items || []) : form.items;
     const [disc, setDisc] = useState('0');
     const [exporting, setExporting] = useState(false);
 
@@ -765,7 +767,7 @@ const S = StyleSheet.create({
     dropTriggerText: { flex: 1, fontSize: 13, color: '#0F172A', fontWeight: '500' },
     dropTriggerPlaceholder: { flex: 1, fontSize: 13, color: '#CBD5E1' },
     calcProdName: { fontSize: 12, fontWeight: '600', color: '#0F172A', marginBottom: 6 },
-    calcInputs: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+    calcInputs: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
     calcField: { gap: 3 },
     calcFieldLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '600' },
     tInput: { fontSize: 13, fontWeight: '600', color: '#0F172A', backgroundColor: '#F8FAFC', borderWidth: 0.5, borderColor: '#E2E8F0', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, textAlign: 'center' },

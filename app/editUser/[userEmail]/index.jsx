@@ -1,4 +1,4 @@
-// app/editUser/[userEmail]/index.jsx
+// app/editUser/index.jsx
 import BgWatermark from '@/components/Main/BgWatermark';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,7 +14,6 @@ import { showSuccess } from '../../../components/Main/showSuccess';
 import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
 
 const ROLE_CONFIG = {
     'đại lý': { color: '#2563EB', bg: '#EFF6FF', label: 'Đại lý / NPP' },
@@ -76,6 +75,7 @@ export default function EditUserScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
+    const { isDesktop } = useLayout();
 
     const user = params.userParam ? JSON.parse(params.userParam) : {};
     const roleCfg = getRoleCfg(user.role || user.member);
@@ -161,7 +161,7 @@ export default function EditUserScreen() {
                 <ScrollView
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
-                    contentContainerStyle={S.scroll}
+                    contentContainerStyle={[S.scroll, { padding: isDesktop ? 32 : 16 }]}
                 >
                     <View style={isDesktop ? S.gridWeb : undefined}>
 
@@ -285,7 +285,7 @@ const S = StyleSheet.create({
     headerSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
     roleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
     roleBadgeText: { fontSize: 11, fontWeight: '700' },
-    scroll: { paddingHorizontal: isDesktop ? 32 : 16, paddingTop: 16 },
+    scroll: {},
     gridWeb: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },
     colLeft: { flex: 1.4 },
     colRight: { flex: 1 },

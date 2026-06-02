@@ -1,3 +1,5 @@
+// components/UI/DataTable.jsx
+
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';

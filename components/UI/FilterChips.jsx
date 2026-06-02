@@ -1,9 +1,11 @@
-import { ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
+// components/UI/FilterChips.jsx
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+import { ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 export default function FilterChips({ options = [], value, onChange }) {
+    const { isDesktop } = useLayout();
+
     if (!options.length) return null;
 
     return (

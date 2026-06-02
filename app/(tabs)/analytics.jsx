@@ -1,6 +1,6 @@
-// app/(tabs)/analytics.jsx — Báo cáo doanh thu (redesign)
-
+// app/(tabs)/analytics.jsx — Báo cáo doanh thu (redesign) responsive
 import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
+import { THEME } from '@/components/Styles/theme';
 import { getRole } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
-const { isDesktop } = useLayout();
+
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtShort = n => {
     if (!n) return '0';
@@ -50,13 +50,12 @@ export default function AnalyticsScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
     const isAdmin = role === 'admin';
-
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [orders, setOrders] = useState([]);
     const [leaderboard, setLeaderboard] = useState([]);
     const [period, setPeriod] = useState('quarterly'); // 'quarterly'|'yearly'
-
+    const { isDesktop } = useLayout();
     const fetchData = useCallback(async () => {
         if (!userDetail?.email) return;
         try {
@@ -109,7 +108,7 @@ export default function AnalyticsScreen() {
             const v = active.filter(o => (o.createdAt || '').startsWith(String(yr))).reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
             return { l: String(yr), v };
         });
-    }, [active, period]);
+    }, [active, period, now]);
 
     const topProducts = useMemo(() => {
         const map = new Map();
@@ -131,31 +130,27 @@ export default function AnalyticsScreen() {
 
     return (
         <TabScreenLayout>
-            <ScrollView showsVerticalScrollIndicator={false}
-                contentContainerStyle={A.scroll}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}>
-
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[A.scroll, { padding: isDesktop ? THEME.spacing.xxl : THEME.spacing.lg }]}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}
+            >
                 <View style={A.pageHeader}>
-                    <Text style={A.pageTitle}>Báo cáo doanh thu</Text>
+                    <Text style={[A.pageTitle, { fontSize: isDesktop ? 26 : 22 }]}>Báo cáo doanh thu</Text>
                     <View style={A.userBadge}>
                         <Ionicons name={isAdmin ? 'shield-checkmark-outline' : 'person-outline'} size={13} color="#2563EB" />
-                        <Text style={A.userBadgeText}>
-                            {isAdmin ? 'Toàn hệ thống' : (userDetail?.name || userDetail?.email || 'Của tôi')}
-                        </Text>
+                        <Text style={A.userBadgeText}>{isAdmin ? 'Toàn hệ thống' : (userDetail?.name || userDetail?.email || 'Của tôi')}</Text>
                     </View>
                 </View>
 
-                {/* Top 3 stat cards */}
-                <View style={A.topCards}>
-                    <View style={A.topCard}>
+                <View style={[A.topCards, { flexDirection: isDesktop ? 'row' : 'column', gap: 12 }]}>
+                    <View style={[A.topCard, { flex: isDesktop ? 1 : undefined }]}>
                         <View style={[A.topCardIcon, { backgroundColor: '#EFF6FF' }]}>
                             <Ionicons name="trending-up-outline" size={20} color="#2563EB" />
                         </View>
                         <Text style={A.topCardLabel}>TỔNG THU NHẬP</Text>
                         <Text style={A.topCardValue}>{fmt(totalRevenue)}</Text>
-                        {growth && <Text style={[A.topCardSub, { color: parseFloat(growth) >= 0 ? '#10B981' : '#EF4444' }]}>
-                            {parseFloat(growth) >= 0 ? '↗' : '↘'} {parseFloat(growth) >= 0 ? '+' : ''}{growth}% so với tháng trước
-                        </Text>}
+                        {growth && <Text style={[A.topCardSub, { color: parseFloat(growth) >= 0 ? '#10B981' : '#EF4444' }]}>↗ {parseFloat(growth) >= 0 ? '+' : ''}{growth}% so với tháng trước</Text>}
                     </View>
                     <View style={A.topCard}>
                         <View style={[A.topCardIcon, { backgroundColor: '#FFFBEB' }]}>
@@ -174,7 +169,6 @@ export default function AnalyticsScreen() {
                     </View>
                 </View>
 
-                {/* Chart */}
                 <View style={A.card}>
                     <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                         <View>
@@ -192,7 +186,6 @@ export default function AnalyticsScreen() {
                     <BarChart bars={bars} />
                 </View>
 
-                {/* Table lịch sử */}
                 <View style={A.card}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                         <Text style={A.cardTitle}>Lịch sử giao dịch</Text>
@@ -217,9 +210,7 @@ export default function AnalyticsScreen() {
                                 <Text style={[A.td, { flex: 1, textAlign: 'center', fontWeight: '700' }]}>{fmtShort(val)}</Text>
                                 <View style={{ flex: 0.8 }}>
                                     <View style={[A.sBadge, { backgroundColor: isPaid ? '#ECFDF5' : '#FFFBEB' }]}>
-                                        <Text style={{ fontSize: 10, fontWeight: '700', color: isPaid ? '#16A34A' : '#D97706' }}>
-                                            {isPaid ? 'ĐÃ TT' : 'CHỜ TT'}
-                                        </Text>
+                                        <Text style={{ fontSize: 10, fontWeight: '700', color: isPaid ? '#16A34A' : '#D97706' }}>{isPaid ? 'ĐÃ TT' : 'CHỜ TT'}</Text>
                                     </View>
                                 </View>
                             </View>
@@ -227,7 +218,6 @@ export default function AnalyticsScreen() {
                     })}
                 </View>
 
-                {/* Top products */}
                 {topProducts.length > 0 && (
                     <View style={A.card}>
                         <Text style={A.cardTitle}>Sản phẩm hàng đầu</Text>
@@ -246,7 +236,6 @@ export default function AnalyticsScreen() {
                     </View>
                 )}
 
-                {/* Leaderboard admin */}
                 {isAdmin && leaderboard.length > 0 && (
                     <View style={A.card}>
                         <Text style={A.cardTitle}>🏆 Top doanh số</Text>
@@ -273,13 +262,12 @@ export default function AnalyticsScreen() {
 }
 
 const A = StyleSheet.create({
-    scroll: { padding: isDesktop ? 32 : 16, paddingTop: isDesktop ? 24 : 16 },
     pageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-    pageTitle: { fontSize: isDesktop ? 26 : 22, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
+    pageTitle: { fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
     userBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: '#BFDBFE' },
     userBadgeText: { fontSize: 12, fontWeight: '600', color: '#2563EB', maxWidth: 160 },
-    topCards: { flexDirection: isDesktop ? 'row' : 'column', gap: 12, marginBottom: 16 },
-    topCard: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 18, borderWidth: 1, borderColor: '#E2E8F0', gap: 4, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
+    topCards: { marginBottom: 16 },
+    topCard: { backgroundColor: '#fff', borderRadius: 14, padding: 18, borderWidth: 1, borderColor: '#E2E8F0', gap: 4, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
     topCardIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
     topCardLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.06, textTransform: 'uppercase' },
     topCardValue: { fontSize: 22, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },

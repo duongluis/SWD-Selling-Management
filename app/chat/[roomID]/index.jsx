@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
 
 function getInitials(name) {
     if (!name) return '?';
@@ -88,6 +88,7 @@ export default function ChatScreen() {
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
     const { userDetail } = useContext(UserDetailContext);
+    const { isDesktop } = useLayout();
 
     // ✅ Đọc cả hai — tránh case-sensitive mismatch giữa folder name và params
     const roomId = params.roomID || params.roomId || '';

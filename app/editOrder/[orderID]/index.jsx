@@ -1,3 +1,5 @@
+// app/editOrder/[orderID]/index.jsx
+
 import BgWatermark from '@/components/Main/BgWatermark';
 import { createNotification } from '@/components/Utils/chatService';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -17,7 +19,6 @@ import { showSuccess } from '../../../components/Main/showSuccess';
 import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
 
 const toDateStr = (d) => {
     const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
@@ -42,6 +43,8 @@ const STATUS_CONFIG = {
 function DateField({ value, onChange, webStyle }) {
     const [show, setShow] = useState(false);
     const [sel, setSel] = useState(new Date());
+    const { isDesktop } = useLayout();
+
     const onNative = (_, date) => {
         if (Platform.OS === 'android') setShow(false);
         if (date) { setSel(date); onChange(toDateStr(date)); }
@@ -88,22 +91,17 @@ export default function EditOrder() {
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
     const { userDetail } = useContext(UserDetailContext);
+    const { isDesktop } = useLayout();
 
-    // ── 1. Parse params TRƯỚC ──
     const existing = params.orderParam ? JSON.parse(params.orderParam) : {};
     const phone = existing.customerPhone || existing._phone || '';
 
-    // ── 2. Role SAU khi đã có existing ──
     const _role = (userDetail?.role || userDetail?.member || '').toLowerCase();
     const isAdmin = _role === 'admin';
     const isCTV = ['cộng tác viên', 'ctv', 'collaborator'].includes(_role);
 
-    // ── 3. isCreator dùng cả existing lẫn userDetail ──
-    // Không dùng existing.createdBy vì field đó không tồn tại trên order
-    // → xác định qua query khi cần, ở đây chỉ dùng để check canEdit
-    const canEdit = isAdmin || !isCTV;   // CTV không được sửa, còn lại đều được
+    const canEdit = isAdmin || !isCTV;
 
-    // ── 4. Form state ──
     const [orderDate, setOrderDate] = useState(existing.createdAt || '');
     const [deliveryAddress, setDeliveryAddress] = useState(existing.address || '');
     const [notes, setNotes] = useState(existing.note || '');
@@ -122,7 +120,6 @@ export default function EditOrder() {
         if (!phone) { showAlert('Lỗi', 'Không xác định được số điện thoại'); return; }
         setSubmitting(true);
         try {
-            // ── 1. Update order ──
             const orderRef = doc(db, 'orders', existing.id);
             await updateDoc(orderRef, {
                 createdAt: orderDate,
@@ -131,7 +128,6 @@ export default function EditOrder() {
                 items: items,
             });
 
-            // ── 2. Tra createdBy từ customer ──
             let createdBy = null;
             try {
                 const custSnap = await getDocs(
@@ -153,7 +149,7 @@ export default function EditOrder() {
                         body: `Admin đã cập nhật thông tin đơn #${existing.id} (KH: ${existing.customer || '—'})`,
                         orderId: existing.id,
                         roomId,
-                        path: '/(tabs)/order',     // ← màn order
+                        path: '/(tabs)/order',
                     });
                 }
             } else {
@@ -171,7 +167,7 @@ export default function EditOrder() {
                             body: `${userDetail?.name || userDetail?.email} đã sửa thông tin đơn #${existing.id} (KH: ${existing.customer || '—'})`,
                             orderId: existing.id,
                             roomId,
-                            path: '/(tabs)/order', // ← màn order
+                            path: '/(tabs)/order',
                         });
                     })
                 );
@@ -185,7 +181,6 @@ export default function EditOrder() {
         }
     };
 
-    // ── Status + type badges ──────────────────────────────────
     const statusCfg = STATUS_CONFIG[existing.status] || STATUS_CONFIG.PENDING;
     const typeCfg = ORDER_TYPE_CONFIG[existing.orderType];
 
@@ -400,7 +395,7 @@ export default function EditOrder() {
     );
 
     // ─────────────────────────────────────────────────────────
-    // MOBILE LAYOUT — giữ nguyên từ trước
+    // MOBILE LAYOUT — hiển thị dọc
     // ─────────────────────────────────────────────────────────
     const mobileBody = (
         <View style={[S.formCard, { borderTopLeftRadius: 28, borderTopRightRadius: 28 }]}>

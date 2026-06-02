@@ -9,14 +9,17 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
+    Dimensions,
+    Platform,
     RefreshControl,
-    ScrollView, StyleSheet, Text, TouchableOpacity, View
+    ScrollView, StyleSheet, Text, TouchableOpacity,
+    View
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 import provinceData from '../../config/province.json';
 
-import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
+const width = Dimensions.get('window')
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtShort = n => {
     if (!n) return '0';
@@ -316,15 +319,15 @@ export default function RegionReportScreen() {
 }
 
 const G = StyleSheet.create({
-    scroll: { padding: isDesktop ? 32 : 16, paddingTop: isDesktop ? 24 : 16 },
-    pageTitle: { fontSize: isDesktop ? 26 : 22, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5, marginBottom: 20 },
+    scroll: { padding: Platform.OS === 'web' && width >= 768 ? 32 : 16, paddingTop: Platform.OS === 'web' && width >= 768 ? 24 : 16 },
+    pageTitle: { fontSize: Platform.OS === 'web' && width >= 768 ? 26 : 22, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5, marginBottom: 20 },
     summaryBar: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
     summaryItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
     summaryDivider: { width: 1, backgroundColor: '#F1F5F9', marginHorizontal: 8 },
     summaryLabel: { fontSize: 11, color: '#94A3B8' },
     summaryValue: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
     sectionTitle: { fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 12 },
-    regionCards: { flexDirection: isDesktop ? 'row' : 'column', gap: 12, marginBottom: 16 },
+    regionCards: { flexDirection: Platform.OS === 'web' && width >= 768 ? 'row' : 'column', gap: 12, marginBottom: 16 },
     detailCard: { backgroundColor: '#fff', borderRadius: 14, padding: 20, marginBottom: 14, borderWidth: 1, borderColor: '#BFDBFE', borderLeftWidth: 4, borderLeftColor: '#2563EB', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
     card: { backgroundColor: '#fff', borderRadius: 14, padding: 20, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
     cardTitle: { fontSize: 15, fontWeight: '800', color: '#0F172A' },

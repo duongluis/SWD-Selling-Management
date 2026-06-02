@@ -135,6 +135,7 @@ const S = StyleSheet.create({
     sectionTitle: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.07, marginBottom: 10 },
     infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 7, borderBottomWidth: 0.5, borderBottomColor: '#F8FAFC', gap: 8 },
     infoIconWrap: { width: 20, alignItems: 'center', marginTop: 1 },
+    infoIconWrap: { width: 20, alignItems: 'center', marginTop: 1 },
     infoLabel: { width: 80, fontSize: 12, color: '#94A3B8', flexShrink: 0 },
     infoValue: { flex: 1, fontSize: 12, color: '#0F172A', fontWeight: '500' },
 });

@@ -18,7 +18,6 @@ import {
 } from 'react-native';
 
 
-const { isDesktop } = useLayout();
 
 const CONSULT_STATUS_CFG = {
     success: { color: '#059669', bg: '#ECFDF5', label: 'Thành công' },
@@ -54,6 +53,7 @@ export default function CustomerCTVScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const { data: consultList, loading, refreshing, refresh, stats } = useScreenData('consults');
     const { query, setQuery, result } = useSearch(consultList, ['name', 'phone']);
+    const { isDesktop } = useLayout();
 
     // map docId → status
     const consultMap = Object.fromEntries(consultList.map(c => [c.docId, c.status || 'none']));

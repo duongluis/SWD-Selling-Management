@@ -1,6 +1,4 @@
 // app/addConsult/index.jsx
-// Tạo bản ghi tư vấn mới — lưu vào db/consult/{id}
-// Khi tư vấn thành công → admin/CTV có thể chuyển thành khách hàng chính thức
 
 import BgWatermark from '@/components/Main/BgWatermark';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -9,8 +7,9 @@ import { useRouter } from 'expo-router';
 import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
-    StyleSheet, Text, TextInput, TouchableOpacity, View,
+    ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, ScrollView,
+    StyleSheet, Text, TextInput, TouchableOpacity,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../../components/Main/showAlert';
@@ -19,19 +18,19 @@ import { createNotification } from '../../components/Utils/chatService';
 import { db } from '../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
 
+const width = Dimensions.get('window')
 // ── Field component ───────────────────────────────────────────
 function Field({ label, value, onChange, multiline, keyboard, required, placeholder }) {
     return (
-        <View style={S.fg}>
+        <View style={styles.fg}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 6 }}>
-                <Text style={S.label}>{label}</Text>
-                {required && <Text style={S.req}>*</Text>}
+                <Text style={styles.label}>{label}</Text>
+                {required && <Text style={styles.req}>*</Text>}
             </View>
-            <View style={[S.inputBox, multiline && { alignItems: 'flex-start', minHeight: 80 }]}>
+            <View style={[styles.inputBox, multiline && { alignItems: 'flex-start', minHeight: 80 }]}>
                 <TextInput
-                    style={[S.input, multiline && { textAlignVertical: 'top' }]}
+                    style={[styles.input, multiline && { textAlignVertical: 'top' }]}
                     value={value}
                     onChangeText={onChange}
                     multiline={multiline}
@@ -49,6 +48,7 @@ export default function AddConsultScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { userDetail } = useContext(UserDetailContext);
+    const { isDesktop } = useLayout();
 
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
@@ -68,7 +68,7 @@ export default function AddConsultScreen() {
         getDocs(collection(db, 'productPrice'))
             .then(snap => {
                 const items = snap.docs
-                    .map(d => ({ ...d.data(), docId: d.id }))
+                    .map(doc => ({ ...doc.data(), docId: doc.id }))
                     .sort((a, b) => (a.id || 0) - (b.id || 0));
                 setCatalog(items);
             })
@@ -98,7 +98,6 @@ export default function AddConsultScreen() {
                 phone: phone.trim(),
                 address: address.trim(),
                 age: age.trim() ? parseInt(age) : null,
-                // Lưu cả id lẫn tên để dễ đọc
                 productIds: products,
                 productNames: catalog
                     .filter(p => products.includes(String(p.id || p.docId)))
@@ -129,16 +128,16 @@ export default function AddConsultScreen() {
     };
 
     return (
-        <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
+        <View style={[styles.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
             <BgWatermark />
             {/* Header */}
-            <View style={S.header}>
-                <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={20} color="#0F172A" />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
-                    <Text style={S.headerTitle}>Thêm khách hàng tư vấn</Text>
-                    <Text style={S.headerSub}>Ghi nhận thông tin buổi tư vấn</Text>
+                    <Text style={styles.headerTitle}>Thêm khách hàng tư vấn</Text>
+                    <Text style={styles.headerSub}>Ghi nhận thông tin buổi tư vấn</Text>
                 </View>
             </View>
 
@@ -146,16 +145,16 @@ export default function AddConsultScreen() {
                 <ScrollView
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
-                    contentContainerStyle={S.scroll}
+                    contentContainerStyle={styles.scroll}
                 >
-                    <View style={isDesktop ? S.gridWeb : undefined}>
+                    <View style={isDesktop ? styles.gridWeb : undefined}>
 
                         {/* LEFT */}
-                        <View style={isDesktop ? S.colLeft : undefined}>
-                            <View style={S.section}>
-                                <View style={S.sectionHeader}>
+                        <View style={isDesktop ? styles.colLeft : undefined}>
+                            <View style={styles.section}>
+                                <View style={styles.sectionHeader}>
                                     <Ionicons name="person-outline" size={15} color="#2563EB" />
-                                    <Text style={S.sectionTitle}>Thông tin khách hàng</Text>
+                                    <Text style={styles.sectionTitle}>Thông tin khách hàng</Text>
                                 </View>
 
                                 <Field label="Tên khách hàng" value={name} onChange={setName} required placeholder="Nguyễn Văn A" />
@@ -167,12 +166,12 @@ export default function AddConsultScreen() {
                         </View>
 
                         {/* RIGHT */}
-                        <View style={isDesktop ? S.colRight : undefined}>
+                        <View style={isDesktop ? styles.colRight : undefined}>
 
-                            <View style={S.section}>
-                                <View style={S.sectionHeader}>
+                            <View style={styles.section}>
+                                <View style={styles.sectionHeader}>
                                     <Ionicons name="water-outline" size={15} color="#7C3AED" />
-                                    <Text style={[S.sectionTitle, { color: '#7C3AED' }]}>Sản phẩm quan tâm</Text>
+                                    <Text style={[styles.sectionTitle, { color: '#7C3AED' }]}>Sản phẩm quan tâm</Text>
                                 </View>
                                 {catalogLoad ? (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8 }}>
@@ -182,21 +181,21 @@ export default function AddConsultScreen() {
                                 ) : catalog.length === 0 ? (
                                     <Text style={{ fontSize: 13, color: '#94A3B8', padding: 8 }}>Chưa có sản phẩm trong danh mục</Text>
                                 ) : (
-                                    <View style={S.tagGrid}>
+                                    <View style={styles.tagGrid}>
                                         {catalog.map(p => {
                                             const key = String(p.id || p.docId);
                                             const selected = products.includes(key);
                                             return (
                                                 <TouchableOpacity
                                                     key={key}
-                                                    style={[S.tag, selected && S.tagSelected]}
+                                                    style={[styles.tag, selected && styles.tagSelected]}
                                                     onPress={() => setProducts(prev =>
                                                         prev.includes(key) ? prev.filter(x => x !== key) : [...prev, key]
                                                     )}
                                                     activeOpacity={0.7}
                                                 >
                                                     {selected && <Ionicons name="checkmark" size={12} color="#2563EB" />}
-                                                    <Text style={[S.tagText, selected && S.tagTextSelected]} numberOfLines={1}>
+                                                    <Text style={[styles.tagText, selected && styles.tagTextSelected]} numberOfLines={1}>
                                                         {p.name}
                                                     </Text>
                                                 </TouchableOpacity>
@@ -205,7 +204,7 @@ export default function AddConsultScreen() {
                                     </View>
                                 )}
                                 {products.length > 0 && (
-                                    <Text style={S.selectedCount}>
+                                    <Text style={styles.selectedCount}>
                                         Đã chọn: {products.length} sản phẩm
                                         {' · '}{catalog.filter(p => products.includes(String(p.id || p.docId))).map(p => p.name).join(', ')}
                                     </Text>
@@ -213,10 +212,10 @@ export default function AddConsultScreen() {
                             </View>
 
                             {/* Trạng thái tư vấn */}
-                            <View style={S.section}>
-                                <View style={S.sectionHeader}>
+                            <View style={styles.section}>
+                                <View style={styles.sectionHeader}>
                                     <Ionicons name="git-branch-outline" size={15} color="#F59E0B" />
-                                    <Text style={[S.sectionTitle, { color: '#F59E0B' }]}>Kết quả tư vấn <Text style={S.req}>*</Text></Text>
+                                    <Text style={[styles.sectionTitle, { color: '#F59E0B' }]}>Kết quả tư vấn <Text style={styles.req}>*</Text></Text>
                                 </View>
                                 <View style={{ gap: 8 }}>
                                     {STATUS_OPTIONS.map(opt => {
@@ -224,12 +223,12 @@ export default function AddConsultScreen() {
                                         return (
                                             <TouchableOpacity
                                                 key={opt.key}
-                                                style={[S.statusOpt, active && { borderColor: opt.color, backgroundColor: opt.bg }]}
+                                                style={[styles.statusOpt, active && { borderColor: opt.color, backgroundColor: opt.bg }]}
                                                 onPress={() => setStatus(opt.key)}
                                                 activeOpacity={0.8}
                                             >
                                                 <Ionicons name={opt.icon} size={18} color={active ? opt.color : '#94A3B8'} />
-                                                <Text style={[S.statusOptText, active && { color: opt.color, fontWeight: '700' }]}>
+                                                <Text style={[styles.statusOptText, active && { color: opt.color, fontWeight: '700' }]}>
                                                     {opt.label}
                                                 </Text>
                                                 {active && <Ionicons name="checkmark-circle" size={18} color={opt.color} />}
@@ -241,13 +240,13 @@ export default function AddConsultScreen() {
                                 {/* Lý do thất bại */}
                                 {status === 'failed' && (
                                     <View style={{ marginTop: 12 }}>
-                                        <View style={S.sectionHeader}>
+                                        <View style={styles.sectionHeader}>
                                             <Ionicons name="alert-circle-outline" size={14} color="#EF4444" />
-                                            <Text style={[S.sectionTitle, { color: '#EF4444', fontSize: 12 }]}>Lý do thất bại <Text style={S.req}>*</Text></Text>
+                                            <Text style={[styles.sectionTitle, { color: '#EF4444', fontSize: 12 }]}>Lý do thất bại <Text style={styles.req}>*</Text></Text>
                                         </View>
-                                        <View style={[S.inputBox, { alignItems: 'flex-start', minHeight: 80, borderColor: '#FECACA' }]}>
+                                        <View style={[styles.inputBox, { alignItems: 'flex-start', minHeight: 80, borderColor: '#FECACA' }]}>
                                             <TextInput
-                                                style={[S.input, { textAlignVertical: 'top' }]}
+                                                style={[styles.input, { textAlignVertical: 'top' }]}
                                                 value={reason}
                                                 onChangeText={setReason}
                                                 multiline
@@ -267,31 +266,31 @@ export default function AddConsultScreen() {
             </KeyboardAvoidingView>
 
             {/* Bottom bar */}
-            <View style={[S.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-                <TouchableOpacity style={S.cancelBtn} onPress={() => router.back()} activeOpacity={0.8}>
-                    <Text style={S.cancelBtnText}>Huỷ</Text>
+            <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()} activeOpacity={0.8}>
+                    <Text style={styles.cancelBtnText}>Huỷ</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[S.saveBtn, submitting && { opacity: 0.6 }]}
+                    style={[styles.saveBtn, submitting && { opacity: 0.6 }]}
                     onPress={handleSubmit}
                     disabled={submitting}
                     activeOpacity={0.85}
                 >
                     <Ionicons name={submitting ? 'hourglass-outline' : 'checkmark-circle-outline'} size={18} color="#fff" />
-                    <Text style={S.saveBtnText}>{submitting ? 'Đang lưu...' : 'Lưu khách hàng'}</Text>
+                    <Text style={styles.saveBtnText}>{submitting ? 'Đang lưu...' : 'Lưu khách hàng'}</Text>
                 </TouchableOpacity>
             </View>
         </View>
     );
 }
 
-const S = StyleSheet.create({
+const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },
     header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
     headerTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
     headerSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-    scroll: { paddingHorizontal: isDesktop ? 32 : 16, paddingTop: 16 },
+    scroll: { paddingHorizontal: Platform.OS === 'web' && width >= 768 ? 32 : 16, paddingTop: 16 },
     gridWeb: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },
     colLeft: { flex: 1.3 },
     colRight: { flex: 1 },
@@ -317,6 +316,6 @@ const S = StyleSheet.create({
     bottomBar: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E2E8F0', flexDirection: 'row', gap: 10 },
     cancelBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
     cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
-    saveBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 12, backgroundColor: '#1E3A8A', shadowColor: '#1E3A8A', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+    saveBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 12, backgroundColor: '#1E3A8A', shadowColor: '#1E3A8A', shadowOpacity: 0.3, shadowRadius: 12, elevation: 4 },
     saveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
 });

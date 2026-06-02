@@ -1,4 +1,4 @@
-// app/(tabs)/users.jsx — table style
+// app/(tabs)/user.jsx
 
 import { useScreenData } from '@/components/Hooks/useScreenData';
 import { useSearch } from '@/components/Hooks/useSearch';
@@ -13,22 +13,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-    FlatList,
-    RefreshControl,
-    StyleSheet, Text, TouchableOpacity, View
+    FlatList, RefreshControl,
+    StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import { useCardStyles } from '@/components/Styles/cardStyles';
+import { useTableStyles } from '@/components/Styles/tableStyles';
+
 const { isDesktop } = useLayout();
 const AVATAR_COLORS = ['#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2'];
 
-const ROLE_CFG = {
+const ROLE_GRID_CFG = {
     'đại lý': { label: 'Đại lý', c: '#2563EB', bg: '#EFF6FF' },
     'cộng tác viên': { label: 'CTV', c: '#7C3AED', bg: '#F5F3FF' },
     'Đối tác': { label: 'Đối tác', c: '#059669', bg: '#ECFDF5' },
     'admin': { label: 'Admin', c: '#64748B', bg: '#F1F5F9' },
 };
-const rcfg = r => ROLE_CFG[(r || '').toLowerCase()] || ROLE_CFG[r] || { label: r || '—', c: '#64748B', bg: '#F1F5F9' };
+const rcfg = r => ROLE_GRID_CFG[(r || '').toLowerCase()] || ROLE_GRID_CFG[r] || { label: r || '—', c: '#64748B', bg: '#F1F5F9' };
 
 const FILTERS = [
     { key: 'all', label: 'Tất cả' },
@@ -36,34 +38,30 @@ const FILTERS = [
     { key: 'verified', label: 'Đã xác minh' },
 ];
 
-function TableHead() {
+function TableHead({ tableStyles }) {
     if (!isDesktop) return null;
     return (
-        <View style={T.head}>
+        <View style={tableStyles.head}>
             <View style={{ width: 46 }} />
-            <Text style={[T.hcell, { flex: 2 }]}>Người dùng</Text>
-            <Text style={[T.hcell, { flex: 1 }]}>Vai trò</Text>
-            <Text style={[T.hcell, { flex: 1 }]}>Ngày tạo</Text>
-            <Text style={[T.hcell, { flex: 1 }]}>Trạng thái</Text>
+            <Text style={[tableStyles.th, { flex: 2 }]}>Người dùng</Text>
+            <Text style={[tableStyles.th, { flex: 1 }]}>Vai trò</Text>
+            <Text style={[tableStyles.th, { flex: 1 }]}>Ngày tạo</Text>
+            <Text style={[tableStyles.th, { flex: 1 }]}>Trạng thái</Text>
             <View style={{ width: 20 }} />
         </View>
     );
 }
-const T = StyleSheet.create({
-    head: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 16, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-    hcell: { fontSize: 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.06, paddingHorizontal: 4 },
-});
 
-function UserRow({ item, index, isActive, onPress }) {
+function UserRow({ item, index, isActive, onPress, tableStyles }) {
     const color = AVATAR_COLORS[index % AVATAR_COLORS.length];
     const role = rcfg(item.role || item.member);
     return (
         <TouchableOpacity
-            style={[R.row, isActive && R.rowActive, item.locked ? R.rowLocked : !item.verified && R.rowPending]}
+            style={[tableStyles.row, isActive && tableStyles.rowActive, item.locked ? styles.rowLocked : !item.verified && styles.rowPending]}
             onPress={() => onPress(item)}
             activeOpacity={0.72}
         >
-            {isActive && <View style={R.leftBar} />}
+            {isActive && <View style={tableStyles.leftAccent} />}
             {/* Avatar */}
             <View style={[R.avatar, { backgroundColor: color + '22' }]}>
                 <Text style={[R.avatarText, { color }]}>{getInitials(item.name || item.companyName)}</Text>
@@ -107,12 +105,8 @@ function UserRow({ item, index, isActive, onPress }) {
         </TouchableOpacity>
     );
 }
+
 const R = StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 10, position: 'relative' },
-    rowActive: { backgroundColor: '#F0F7FF' },
-    rowPending: { borderLeftWidth: 3, borderLeftColor: '#FDE68A' },
-    rowLocked: { borderLeftWidth: 3, borderLeftColor: '#FCA5A5', backgroundColor: '#FFF5F5' },
-    leftBar: { position: 'absolute', left: 0, top: 4, bottom: 4, width: 3, backgroundColor: '#2563EB', borderRadius: 2 },
     avatar: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative' },
     avatarText: { fontSize: 13, fontWeight: '800' },
     pendingDot: { position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: '#F59E0B', borderWidth: 1.5, borderColor: '#fff' },
@@ -133,6 +127,10 @@ export default function UsersScreen() {
     const [filter, setFilter] = useState('all');
     const [selected, setSelected] = useState(null);
 
+    const { isDesktop } = useLayout();
+    const { styles: cardStyles } = useCardStyles();
+    const { styles: tableStyles } = useTableStyles();
+
     const filtered = useMemo(() =>
         filter === 'all' ? result
             : filter === 'verified' ? result.filter(u => u.verified)
@@ -151,6 +149,10 @@ export default function UsersScreen() {
         </TabScreenLayout>
     );
 
+    const handlePress = (item) => {
+        setSelected(p => p?.email === item.email ? null : item);
+    };
+
     return (
         <TabScreenLayout>
             <ScreenHeader
@@ -163,28 +165,32 @@ export default function UsersScreen() {
             <StatBar stats={statCards} />
             <FilterChips options={FILTERS} value={filter} onChange={f => { setFilter(f); setSelected(null); }} />
 
-            <View style={{ flex: 1, flexDirection: 'row' }}>
-                <View style={WRAP.card}>
-                    <TableHead />
+            <View style={cardStyles.splitLayout}>
+                <View style={cardStyles.card}>
+                    <TableHead tableStyles={tableStyles} />
                     {loading && !refreshing ? <EmptyState loading /> :
                         filtered.length === 0 ? (
                             <EmptyState empty icon="people-outline" title={query ? 'Không tìm thấy' : 'Không có người dùng'} />
                         ) : (
                             <FlatList
                                 data={filtered}
-                                keyExtractor={item => item.email || item.docId}
+                                keyExtractor={(item) => item.email || item.docId}
                                 renderItem={({ item, index }) => (
-                                    <UserRow item={item} index={index}
+                                    <UserRow
+                                        item={item} index={index}
                                         isActive={selected?.email === item.email}
-                                        onPress={setSelected}
+                                        onPress={handlePress}
+                                        tableStyles={tableStyles}
                                     />
                                 )}
                                 showsVerticalScrollIndicator={false}
                                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-                                contentContainerStyle={{ paddingBottom: isDesktop ? 60 : 100 }}
+                                contentContainerStyle={tableStyles.listContainer}
                             />
                         )}
                 </View>
+
+                {/* Desktop view: Hiện split-panel bên phải */}
                 {isDesktop && selected && (
                     <UserDetail
                         user={selected}
@@ -193,15 +199,29 @@ export default function UsersScreen() {
                     />
                 )}
             </View>
+
+            {/* Mobile view: Hiện UserDetail dạng Modal lớp phủ phía dưới */}
+            {!isDesktop && selected && (
+                <Modal visible={!!selected} animationType="slide" transparent>
+                    <View style={styles.modalBackdrop}>
+                        <Pressable style={{ flex: 1 }} onPress={() => setSelected(null)} />
+                        <View style={styles.modalContent}>
+                            <UserDetail
+                                user={selected}
+                                onClose={() => setSelected(null)}
+                                onUpdated={u => { setSelected(u); refresh(); }}
+                            />
+                        </View>
+                    </View>
+                </Modal>
+            )}
         </TabScreenLayout>
     );
 }
 
-const WRAP = StyleSheet.create({
-    card: {
-        flex: 1, backgroundColor: '#fff',
-        borderRadius: isDesktop ? 14 : 0, borderWidth: 1, borderColor: '#E2E8F0',
-        overflow: 'hidden', margin: isDesktop ? 16 : 0, marginTop: 0,
-        shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2,
-    },
+const styles = StyleSheet.create({
+    rowPending: { borderLeftWidth: 3, borderLeftColor: '#FDE68A' },
+    rowLocked: { borderLeftWidth: 3, borderLeftColor: '#FCA5A5', backgroundColor: '#FFF5F5' },
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    modalContent: { height: '80%', backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
 });

@@ -1,7 +1,4 @@
 // app/editCustomer/index.jsx
-// Màn sửa khách hàng — nhận customerId (docId) từ CustomerDetail
-// Fetch từ customers/{docId} → cho phép sửa → updateDoc
-
 import BgWatermark from '@/components/Main/BgWatermark';
 import { showInfo } from '@/components/Main/showInfo';
 import { db } from '@/config/firebaseConfig';
@@ -17,7 +14,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
 
 // ── Field Component ───────────────────────────────────────────
 function Field({ label, required, children }) {
@@ -75,6 +71,8 @@ export default function EditCustomerScreen() {
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
     const docId = params.customerId || params.docId || '';
+
+    const { isDesktop } = useLayout();
 
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
