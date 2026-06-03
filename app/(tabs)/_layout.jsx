@@ -367,10 +367,22 @@ const BT = StyleSheet.create({
 
 // ── Tab Screens list ──────────────────────────────────────────
 const TAB_SCREENS = [
-  'home', 'order', 'customer', 'service', 'leaderboard',
-  'users', 'customerctv', 'analytics', 'commission',
-  'regionAnalytics', 'news', 'information', 'chatList',
-  'editProfile', 'calculator', 'team',
+  'home',
+  'order',
+  'customer',
+  'service',
+  'leaderboard',
+  'users',
+  'customerctv',
+  'analytics',
+  'commission',
+  'regionAnalytics',
+  'news',
+  'information',
+  'chatList',
+  'editProfile',
+  'calculator',
+  'team',
 ];
 
 const SEGMENT_KEY_MAP = {
@@ -388,11 +400,10 @@ export default function TabLayout() {
   const segments = useSegments();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const width = Dimensions.get('window')
-
+  const width = Dimensions.get('window').width
+  const { isDesktop } = useLayout();
   const role = getRole(userDetail);
 
-  const { isDesktop } = useLayout();
 
   const rawTab = segments[segments.length - 1] || 'home';
   const activeTab = SEGMENT_KEY_MAP[rawTab] || rawTab;
@@ -405,9 +416,14 @@ export default function TabLayout() {
   ));
 
   // ── Desktop Web ──────────────────────────────────────────────
-  if (isDesktop) {
-    return (
-      <View style={S.root}>
+
+
+
+  return (
+    <View style={isDesktop ? S.root : { flex: 1 }}>
+
+      {/* Sidebar — chỉ hiện trên desktop */}
+      {isDesktop && (
         <DesktopSidebar
           activeTab={activeTab}
           role={role}
@@ -417,12 +433,16 @@ export default function TabLayout() {
           onNavigate={handleNavigate}
           router={router}
         />
-        <View style={S.mainArea}>
-          {/* Topbar */}
+      )}
+
+      <View style={isDesktop ? S.mainArea : { flex: 1 }}>
+
+        {/* Topbar desktop */}
+        {isDesktop && (
           <View style={S.topBar}>
             <Image source={BANNER_IMAGE} style={[S.topBarBanner, { width }]} resizeMode="cover" />
             <View style={S.breadcrumb}>
-              <Text style={S.breadcrumbRoot}>   SWD Seller</Text>
+              <Text style={S.breadcrumbRoot}>SWD Seller</Text>
               <Ionicons name="chevron-forward" size={12} color="#fff" />
               <Text style={S.breadcrumbCurrent}>{pageLabel}</Text>
             </View>
@@ -440,47 +460,45 @@ export default function TabLayout() {
               </View>
             </View>
           </View>
-          <View style={S.contentArea}>
-            <Tabs tabBar={() => null} screenOptions={{ headerShown: false }}>
-              {tabScreens}
-            </Tabs>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  // ── Mobile (native + web nhỏ) ────────────────────────────────
-  return (
-    <View style={{ flex: 1 }}>
-      {/* Drawer overlay — render trên cùng */}
-      <MobileDrawer
-        visible={drawerOpen}
-        activeTab={activeTab}
-        role={role}
-        userDetail={userDetail}
-        onNavigate={handleNavigate}
-        router={router}
-        onClose={() => setDrawerOpen(false)}
-      />
-
-      <Tabs
-        tabBar={(props) => (
-          <MobileTabBar {...props} activeKey={activeTab} />
         )}
-        screenOptions={{ headerShown: false }}
-      >
-        {tabScreens}
-      </Tabs>
 
-      {/* Topbar nổi trên cùng — dùng absolute để không chiếm layout */}
-      <View style={[S.mobileTopBarWrap, { pointerEvents: 'box-none' }]}>
-        <MobileTopBar
-          pageLabel={pageLabel}
-          userDetail={userDetail}
-          onMenuPress={() => setDrawerOpen(true)}
-          router={router}
-        />
+        {/* Mobile drawer */}
+        {!isDesktop && (
+          <MobileDrawer
+            visible={drawerOpen}
+            activeTab={activeTab}
+            role={role}
+            userDetail={userDetail}
+            onNavigate={handleNavigate}
+            router={router}
+            onClose={() => setDrawerOpen(false)}
+          />
+        )}
+
+        {/* ✅ MỘT Tabs DUY NHẤT — chỉ đổi tabBar prop */}
+        <Tabs
+          tabBar={(props) =>
+            isDesktop
+              ? null
+              : <MobileTabBar {...props} activeKey={activeTab} />
+          }
+          screenOptions={{ headerShown: false }}
+        >
+          {tabScreens}
+        </Tabs>
+
+        {/* Mobile topbar float */}
+        {!isDesktop && (
+          <View style={[S.mobileTopBarWrap, { pointerEvents: 'box-none' }]}>
+            <MobileTopBar
+              pageLabel={pageLabel}
+              userDetail={userDetail}
+              onMenuPress={() => setDrawerOpen(true)}
+              router={router}
+            />
+          </View>
+        )}
+
       </View>
     </View>
   );

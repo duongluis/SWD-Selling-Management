@@ -25,8 +25,7 @@ if (Platform.OS === 'web') {
     QRCodeWeb = require('qrcode.react').QRCodeSVG;
 }
 
-import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 
 // ── Xuất biên bản bàn giao ────────────────────────────────────
@@ -39,7 +38,7 @@ async function _getLogo() {
     } catch { return null; }
 }
 
-async function _printHtml(html) {
+async function _printHtml(html, isDesktop) {
     if (isDesktop) {
         const w = window.open('', '_blank');
         w.document.write(html);
@@ -55,12 +54,12 @@ async function _printHtml(html) {
 
 async function _getAdminInfo() {
     try {
-        const q = query(collection(db, 'users'), where('email', '==', 'kinhdoanh@swd.vn'));
+        const q = query(collection(db, 'users'), where('email', '==', 'admin@swd.vn'));
         const snap = await getDocs(q);
         if (!snap.empty) return snap.docs[0].data();
-        return { name: 'CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VÀ SẢN XUẤT GOLDEN PANTHERA', phone: '0108133982', email: 'kinhdoanh@swd.vn' };
+        return { name: 'CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VÀ SẢN XUẤT GOLDEN PANTHERA', phone: '0108133982', email: 'admin@swd.vn' };
     } catch {
-        return { name: 'GOLDEN PANTHERA (Admin)', email: 'kinhdoanh@swd.vn' };
+        return { name: 'GOLDEN PANTHERA (Admin)', email: 'admin@swd.vn' };
     }
 }
 
@@ -365,6 +364,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     const { userDetail } = useContext(UserDetailContext);
     const admin = checkAdmin(role);
     const chipRef = useRef(null);
+    const { isDesktop } = useLayout();
 
     // ── State — khai báo TRƯỚC mọi return ──
     const [localOrder, setLocalOrder] = useState(null);
@@ -494,7 +494,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                 logoBase64: logo
             });
 
-            await _printHtml(html);
+            await _printHtml(html, isDesktop);
         } catch (e) {
             console.error(e);
             showAlert('Lỗi', 'Không thể xuất hóa đơn: ' + e.message);
@@ -793,7 +793,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
 }
 
 const DP = StyleSheet.create({
-    root: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', borderRadius: isDesktop ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
+    root: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', borderRadius: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
     header: { padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 6 },
     headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     date: { fontSize: 11, color: '#94A3B8' },
@@ -840,7 +840,7 @@ const DP = StyleSheet.create({
     qrSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 8, backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' },
     qrHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
     qrTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-    qrBody: { flexDirection: isDesktop ? 'row' : 'column', alignItems: 'center', gap: 16 },
+    qrBody: { flexDirection: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 'row' : 'column', alignItems: 'center', gap: 16 },
     qrCode: { backgroundColor: '#fff', padding: 8, borderRadius: 12, alignSelf: 'center' },
     bankInfo: { flex: 1, gap: 4 },
     bankName: { fontSize: 14, fontWeight: '700', color: '#1E3A5F' },

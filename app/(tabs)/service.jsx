@@ -28,7 +28,7 @@ import { useLayout } from '@/components/Main/TabScreenLayout';
 import { useCardStyles } from '@/components/Styles/cardStyles';
 import { useTableStyles } from '@/components/Styles/tableStyles';
 
-const { isDesktop } = useLayout();
+
 const AVATAR_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4'];
 
 const STATUS_CFG = {
@@ -86,7 +86,7 @@ const TYPE_FILTERS = [
   ...Object.entries(TYPE_CFG).map(([key, cfg]) => ({ key, label: cfg.label })),
 ];
 
-function TableHead({ tableStyles }) {
+function TableHead({ tableStyles, isDesktop }) {
   if (!isDesktop) return null;
   return (
     <View style={tableStyles.head}>
@@ -101,7 +101,7 @@ function TableHead({ tableStyles }) {
   );
 }
 
-function ServiceRow({ item, index, isActive, onPress, isAdmin, onStatusPress, tableStyles }) {
+function ServiceRow({ item, index, isActive, onPress, isAdmin, onStatusPress, tableStyles, isDesktop }) {
   const color = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const tcfg = TYPE_CFG[item.type] || TYPE_CFG.INSTALLATION;
   const scf = scfg(item.status);
@@ -246,7 +246,7 @@ export default function ServiceScreen() {
 
       <View style={cardStyles.splitLayout}>
         <View style={cardStyles.card}>
-          <TableHead tableStyles={tableStyles} />
+          <TableHead tableStyles={tableStyles} isDesktop={isDesktop} />
           {loading && !refreshing ? <EmptyState loading /> :
             filteredData.length === 0 ? (
               <EmptyState empty icon="build-outline"
@@ -266,6 +266,7 @@ export default function ServiceScreen() {
                     isAdmin={isAdmin}
                     onStatusPress={handleStatusPress}
                     tableStyles={tableStyles}
+                    isDesktop={isDesktop}
                   />
                 )}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}

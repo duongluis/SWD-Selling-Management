@@ -1,7 +1,6 @@
 // components/UI/ServiceDetail.jsx — style giống order panel
 
 import { showAlert } from '@/components/Main/showAlert';
-import { useLayout } from '@/components/Main/TabScreenLayout';
 import { createNotification } from '@/components/Utils/chatService';
 import { fmtCurrency, fmtDate, fmtPhone } from '@/components/Utils/formatters';
 import { getRole } from '@/components/Utils/roleHelper';
@@ -14,12 +13,13 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { useContext, useEffect, useRef, useState } from 'react';
 import {
     Dimensions, Modal,
+    Platform,
     Pressable,
     ScrollView, StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 
 const PARSE = v => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
-const { isDesktop } = useLayout();
+
 
 const STATUS_CFG = {
     'Chờ xử lý': { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
@@ -277,7 +277,7 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
 }
 
 const S = StyleSheet.create({
-    panel: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', flexDirection: 'column', borderRadius: isDesktop ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
+    panel: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', flexDirection: 'column', borderRadius: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
     header: { padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 10 },
     headerTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
     closeBtn: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

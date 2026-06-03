@@ -19,7 +19,7 @@ import { db } from '../../config/firebaseConfig';
 import provinceData from '../../config/province.json';
 
 
-const width = Dimensions.get('window')
+const width = Dimensions.get('window').width
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtShort = n => {
     if (!n) return '0';

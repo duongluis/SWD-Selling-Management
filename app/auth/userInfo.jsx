@@ -1,5 +1,4 @@
 import BgWatermark from '@/components/Main/BgWatermark';
-import { useLayout } from '@/components/Main/TabScreenLayout';
 import { Ionicons } from '@expo/vector-icons';
 import bcrypt from 'bcryptjs';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -296,7 +295,7 @@ export default function UserInfoView() {
                     if (!taxCode.trim()) { showAlert('Thông báo', 'Vui lòng nhập mã số thuế'); return false; }
                     if (!bizAddress.trim()) { showAlert('Thông báo', 'Vui lòng nhập địa chỉ đăng ký KD'); return false; }
                     if (!contactName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên người liên hệ'); return false; }
-                    if (!contactPhone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại người liên hệ'); return false; }
+
                 } else {
                     // Nếu có mã giới thiệu thì không cần CCCD
                     if (!hasReferral) {
@@ -578,7 +577,7 @@ export default function UserInfoView() {
                         </View>
                     </View>
                     <View style={[S.fg, { marginBottom: 4 }]}>
-                        <Text style={S.label}>Số điện thoại người liên hệ<Text style={S.req}>*</Text></Text>
+                        <Text style={S.label}>Số điện thoại người liên hệ</Text>
                         <View style={F.inputBox}>
                             <Ionicons name="call-outline" size={15} color="#94A3B8" />
                             <TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={contactPhone} onChangeText={setContactPhone} />

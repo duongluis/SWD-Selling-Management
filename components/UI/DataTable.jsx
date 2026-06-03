@@ -1,9 +1,8 @@
 // components/UI/DataTable.jsx
 
-import { StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Platform, StyleSheet, Text, View } from 'react-native';
 
-import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
 
 /**
  * @param columns - [{ key, label, flex, align }]
@@ -79,7 +78,7 @@ const T = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E2E8F0',
         overflow: 'hidden',
-        marginHorizontal: isDesktop ? 32 : 16,
+        marginHorizontal: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 32 : 16,
         marginBottom: 12,
         // Shadow
         shadowColor: '#0F172A',

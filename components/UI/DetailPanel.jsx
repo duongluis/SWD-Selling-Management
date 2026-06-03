@@ -8,7 +8,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
 
 export default function DetailPanel({
     visible,
@@ -24,11 +24,11 @@ export default function DetailPanel({
     panelWidth = 420,
 }) {
     const insets = useSafeAreaInsets();
-
+    const { isDesktop } = useLayout();
     if (!visible) return null;
 
     // Web: panel cố định bên phải
-    if (isDesktop) return (
+    return isDesktop ? (
         <>
             {/* Backdrop */}
             <Pressable style={W.backdrop} onPress={onClose} />
@@ -41,30 +41,30 @@ export default function DetailPanel({
                 {footer && <View style={W.footer}>{footer}</View>}
             </View>
         </>
-    );
+    ) :
 
-    // Mobile: Modal full screen
-    return (
-        <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-            <View style={[M.root, { paddingTop: insets.top }]}>
-                <Header title={title} subtitle={subtitle} right={headerRight} onClose={onClose} />
-                <KeyboardAvoidingView
-                    style={{ flex: 1 }}
-                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                >
-                    <ScrollView showsVerticalScrollIndicator={false}
-                        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
-                        {children}
-                    </ScrollView>
-                    {footer && (
-                        <View style={[M.footer, { paddingBottom: insets.bottom + 12 }]}>
-                            {footer}
-                        </View>
-                    )}
-                </KeyboardAvoidingView>
-            </View>
-        </Modal>
-    );
+        // Mobile: Modal full screen
+        (
+            <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+                <View style={[M.root, { paddingTop: insets.top }]}>
+                    <Header title={title} subtitle={subtitle} right={headerRight} onClose={onClose} />
+                    <KeyboardAvoidingView
+                        style={{ flex: 1 }}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    >
+                        <ScrollView showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+                            {children}
+                        </ScrollView>
+                        {footer && (
+                            <View style={[M.footer, { paddingBottom: insets.bottom + 12 }]}>
+                                {footer}
+                            </View>
+                        )}
+                    </KeyboardAvoidingView>
+                </View>
+            </Modal>
+        );
 }
 
 function Header({ title, subtitle, right, onClose }) {

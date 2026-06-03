@@ -84,7 +84,7 @@ const DateField = React.memo(({ orderDate, setOrderDate, selectedDate, setSelect
         }
     };
 
-    if (isDesktop) return (
+    return isDesktop ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 9, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 8 }}>
             <input
                 type="date"
@@ -100,9 +100,7 @@ const DateField = React.memo(({ orderDate, setOrderDate, selectedDate, setSelect
             />
             <Ionicons name="calendar-outline" size={16} color="#94A3B8" />
         </View>
-    );
-
-    return (
+    ) : (
         <>
             <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: '#E5E7EB' }} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
                 <Text style={{ flex: 1, fontSize: 14, color: orderDate ? '#1A1A2E' : '#B0B0C8' }}>{orderDate ? toDisplayStr(orderDate) : 'Chọn ngày giao hàng...'}</Text>
@@ -699,7 +697,7 @@ export default function AddOrder() {
     // ─────────────────────────────────────────────────────────
     // WEB LAYOUT
     // ─────────────────────────────────────────────────────────
-    if (isDesktop) return (
+    return isDesktop ? (
         <View style={W.root}>
             <BgWatermark />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
@@ -870,151 +868,151 @@ export default function AddOrder() {
                 </View>
             </ScrollView>
         </View>
-    );
+    ) :
 
-    // ─────────────────────────────────────────────────────────
-    // MOBILE LAYOUT
-    // ─────────────────────────────────────────────────────────
-    return (
-        <View style={[styles.container, { paddingTop: insets.top }]}>
-            <BgWatermark />
-            <StatusBar barStyle="light-content" backgroundColor="#0A0F2C" />
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.replace('(tabs)/order')} style={styles.backBtn}><Ionicons name="arrow-back" size={20} color="#fff" /></TouchableOpacity>
-                <Text style={styles.headerLabel}>Tạo đơn hàng</Text>
-                <View style={styles.headerAvatar}><Text style={styles.headerAvatarText}>{userDetail?.name?.trim().split(/\s+/).pop()?.[0]?.toUpperCase() ?? 'U'}{userDetail?.name?.trim().split(/\s+/)[0]?.[0]?.toUpperCase() ?? ''}</Text></View>
-            </View>
+        // ─────────────────────────────────────────────────────────
+        // MOBILE LAYOUT
+        // ─────────────────────────────────────────────────────────
+        (
+            <View style={[styles.container, { paddingTop: insets.top }]}>
+                <BgWatermark />
+                <StatusBar barStyle="light-content" backgroundColor="#0A0F2C" />
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => router.replace('(tabs)/order')} style={styles.backBtn}><Ionicons name="arrow-back" size={20} color="#fff" /></TouchableOpacity>
+                    <Text style={styles.headerLabel}>Tạo đơn hàng</Text>
+                    <View style={styles.headerAvatar}><Text style={styles.headerAvatarText}>{userDetail?.name?.trim().split(/\s+/).pop()?.[0]?.toUpperCase() ?? 'U'}{userDetail?.name?.trim().split(/\s+/)[0]?.[0]?.toUpperCase() ?? ''}</Text></View>
+                </View>
 
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
-                    <View style={styles.formCard}>
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Order ID</Text>
-                            <View style={styles.inputBox}><Text style={styles.inputReadonly}>{orderId}</Text></View>
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Ngày giao hàng <Text style={{ color: '#EF4444' }}>*</Text></Text>
-                            <DateField orderDate={orderDate} setOrderDate={setOrderDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} showDatePicker={showDatePicker} setShowDatePicker={setShowDatePicker} />
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Thể loại đơn hàng</Text>
-                            <OrderTypeField ws={false} orderType={orderType} lockedType={lockedType} setOrderType={handleSetOrderType} />
-                        </View>
-
-                        {orderType === 'le' && (
-                            <View style={[W.inputGroup, { zIndex: showCustomerPicker ? 100 : 1 }]}>
-                                <Text style={W.label}>Khách hàng <Text style={W.req}>*</Text></Text>
-                                <TouchableOpacity
-                                    style={[W.inputBox, showCustomerPicker && W.inputBoxFocus]}
-                                    onPress={() => setShowCustomerPicker(p => !p)}
-                                    activeOpacity={0.8}
-                                >
-                                    {selectedCustomer ? (
-                                        <View style={W.selectedCustomer}>
-                                            <View style={W.cAvatar}><Text style={W.cAvatarText}>{/* initials */}</Text></View>
-                                            <View><Text style={W.cName}>{selectedCustomer.name}</Text></View>
-                                        </View>
-                                    ) : <Text style={W.inputPlaceholder}>Chọn khách hàng...</Text>}
-                                    <Ionicons name="chevron-down" size={16} color="#94A3B8" />
-                                </TouchableOpacity>
-                                {showCustomerPicker && (
-                                    <CustomerPickerDropdown
-                                        ws={false}
-                                        customerList={customerList}
-                                        customerLoading={customerLoading}
-                                        customerSearch={customerSearch}
-                                        setCustomerSearch={handleSetCustomerSearch}
-                                        selectedCustomer={selectedCustomer}
-                                        setSelectedCustomer={handleSetSelectedCustomer}
-                                        setDeliveryAddress={handleSetDeliveryAddress}
-                                        setShowCustomerPicker={handleSetShowCustomerPicker}
-                                    />
-                                )}
+                <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                    <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
+                        <View style={styles.formCard}>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Order ID</Text>
+                                <View style={styles.inputBox}><Text style={styles.inputReadonly}>{orderId}</Text></View>
                             </View>
-                        )}
 
-                        <View style={styles.productSection}>
-                            <View style={styles.productHeader}>
-                                <Ionicons name="cube-outline" size={18} color="#fff" />
-                                <Text style={styles.productHeaderText}>Sản phẩm</Text>
-                                <View style={styles.rolePill}><Text style={styles.rolePillText}>{priceLabel}</Text></View>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Ngày giao hàng <Text style={{ color: '#EF4444' }}>*</Text></Text>
+                                <DateField orderDate={orderDate} setOrderDate={setOrderDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} showDatePicker={showDatePicker} setShowDatePicker={setShowDatePicker} />
                             </View>
-                            {products.map(p => (
-                                <View key={p.id} style={styles.productItem}>
-                                    <View style={styles.productItemLeft}><Text style={styles.productItemName} numberOfLines={1}>{p.name}</Text><Text style={styles.productItemMeta}>x{p.qty} • {fmt(p.price)}</Text></View>
-                                    <View style={styles.productItemRight}><Text style={styles.productItemTotal}>{fmt(p.price * p.qty)}</Text><TouchableOpacity onPress={() => removeProduct(p.id)}><Ionicons name="close-circle" size={18} color="#F44336" /></TouchableOpacity></View>
+
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Thể loại đơn hàng</Text>
+                                <OrderTypeField ws={false} orderType={orderType} lockedType={lockedType} setOrderType={handleSetOrderType} />
+                            </View>
+
+                            {orderType === 'le' && (
+                                <View style={[W.inputGroup, { zIndex: showCustomerPicker ? 100 : 1 }]}>
+                                    <Text style={W.label}>Khách hàng <Text style={W.req}>*</Text></Text>
+                                    <TouchableOpacity
+                                        style={[W.inputBox, showCustomerPicker && W.inputBoxFocus]}
+                                        onPress={() => setShowCustomerPicker(p => !p)}
+                                        activeOpacity={0.8}
+                                    >
+                                        {selectedCustomer ? (
+                                            <View style={W.selectedCustomer}>
+                                                <View style={W.cAvatar}><Text style={W.cAvatarText}>{/* initials */}</Text></View>
+                                                <View><Text style={W.cName}>{selectedCustomer.name}</Text></View>
+                                            </View>
+                                        ) : <Text style={W.inputPlaceholder}>Chọn khách hàng...</Text>}
+                                        <Ionicons name="chevron-down" size={16} color="#94A3B8" />
+                                    </TouchableOpacity>
+                                    {showCustomerPicker && (
+                                        <CustomerPickerDropdown
+                                            ws={false}
+                                            customerList={customerList}
+                                            customerLoading={customerLoading}
+                                            customerSearch={customerSearch}
+                                            setCustomerSearch={handleSetCustomerSearch}
+                                            selectedCustomer={selectedCustomer}
+                                            setSelectedCustomer={handleSetSelectedCustomer}
+                                            setDeliveryAddress={handleSetDeliveryAddress}
+                                            setShowCustomerPicker={handleSetShowCustomerPicker}
+                                        />
+                                    )}
                                 </View>
-                            ))}
-                            {showAddProduct ? (
-                                <AddProductForm
-                                    ws={false}
-                                    orderType={orderType}
-                                    catalog={catalog}
-                                    priceField={priceField}
-                                    priceLabel={priceLabel}
-                                    newProduct={newProduct}
-                                    setNewProduct={handleSetNewProduct}
-                                    showProductDrop={showProductDrop}
-                                    setShowProductDrop={handleSetShowProductDrop}
-                                    onAdd={addProduct}
-                                    onCancel={handleCancelAddProduct}
-                                />
-                            ) : (
-                                <TouchableOpacity style={styles.addProductBtn} onPress={() => setShowAddProduct(true)} activeOpacity={0.8}>
-                                    <Ionicons name="add" size={18} color="#2563EB" /><Text style={styles.addProductBtnText}>Thêm sản phẩm</Text>
-                                </TouchableOpacity>
                             )}
-                            {products.length > 0 && <View style={styles.totalRow}><Text style={styles.totalLabel}>Tổng cộng</Text><Text style={styles.totalAmount}>{fmt(totalAmount)}</Text></View>}
-                        </View>
 
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Địa chỉ giao hàng</Text>
-                            <View style={[styles.inputBox, styles.textAreaBox]}>
-                                <TextInput style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]} placeholder="Địa chỉ giao hàng..." placeholderTextColor="#B0B0C8" multiline value={deliveryAddress} onChangeText={handleAddressChange} />
+                            <View style={styles.productSection}>
+                                <View style={styles.productHeader}>
+                                    <Ionicons name="cube-outline" size={18} color="#fff" />
+                                    <Text style={styles.productHeaderText}>Sản phẩm</Text>
+                                    <View style={styles.rolePill}><Text style={styles.rolePillText}>{priceLabel}</Text></View>
+                                </View>
+                                {products.map(p => (
+                                    <View key={p.id} style={styles.productItem}>
+                                        <View style={styles.productItemLeft}><Text style={styles.productItemName} numberOfLines={1}>{p.name}</Text><Text style={styles.productItemMeta}>x{p.qty} • {fmt(p.price)}</Text></View>
+                                        <View style={styles.productItemRight}><Text style={styles.productItemTotal}>{fmt(p.price * p.qty)}</Text><TouchableOpacity onPress={() => removeProduct(p.id)}><Ionicons name="close-circle" size={18} color="#F44336" /></TouchableOpacity></View>
+                                    </View>
+                                ))}
+                                {showAddProduct ? (
+                                    <AddProductForm
+                                        ws={false}
+                                        orderType={orderType}
+                                        catalog={catalog}
+                                        priceField={priceField}
+                                        priceLabel={priceLabel}
+                                        newProduct={newProduct}
+                                        setNewProduct={handleSetNewProduct}
+                                        showProductDrop={showProductDrop}
+                                        setShowProductDrop={handleSetShowProductDrop}
+                                        onAdd={addProduct}
+                                        onCancel={handleCancelAddProduct}
+                                    />
+                                ) : (
+                                    <TouchableOpacity style={styles.addProductBtn} onPress={() => setShowAddProduct(true)} activeOpacity={0.8}>
+                                        <Ionicons name="add" size={18} color="#2563EB" /><Text style={styles.addProductBtnText}>Thêm sản phẩm</Text>
+                                    </TouchableOpacity>
+                                )}
+                                {products.length > 0 && <View style={styles.totalRow}><Text style={styles.totalLabel}>Tổng cộng</Text><Text style={styles.totalAmount}>{fmt(totalAmount)}</Text></View>}
                             </View>
-                        </View>
 
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Ghi chú (tuỳ chọn)</Text>
-                            <View style={[styles.inputBox, styles.textAreaBox]}>
-                                <TextInput style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]} placeholder="Hướng dẫn đặc biệt..." placeholderTextColor="#B0B0C8" multiline value={notes} onChangeText={handleNotesChange} />
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Địa chỉ giao hàng</Text>
+                                <View style={[styles.inputBox, styles.textAreaBox]}>
+                                    <TextInput style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]} placeholder="Địa chỉ giao hàng..." placeholderTextColor="#B0B0C8" multiline value={deliveryAddress} onChangeText={handleAddressChange} />
+                                </View>
                             </View>
-                        </View>
 
-                        <ServiceList
-                            ws={isDesktop}
-                            serviceTypesList={filteredServiceTypes} // <-- Dùng list đã lọc
-                            selectedServices={selectedServices}
-                            setSelectedServices={setSelectedServices}
-                            serviceNote={serviceNote}
-                            onServiceNoteChange={handleServiceNoteChange}
-                            orderType={orderType}
-                        />
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Ghi chú (tuỳ chọn)</Text>
+                                <View style={[styles.inputBox, styles.textAreaBox]}>
+                                    <TextInput style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]} placeholder="Hướng dẫn đặc biệt..." placeholderTextColor="#B0B0C8" multiline value={notes} onChangeText={handleNotesChange} />
+                                </View>
+                            </View>
 
-                        {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
-                        {isLevel1 && (
-                            <PaymentMethodField
+                            <ServiceList
                                 ws={isDesktop}
+                                serviceTypesList={filteredServiceTypes} // <-- Dùng list đã lọc
+                                selectedServices={selectedServices}
+                                setSelectedServices={setSelectedServices}
+                                serviceNote={serviceNote}
+                                onServiceNoteChange={handleServiceNoteChange}
                                 orderType={orderType}
-                                useFixedPrice={useFixedPrice}
-                                fixedPayment={fixedPayment}
-                                paymentMethod={paymentMethod}
-                                setPaymentMethod={setPaymentMethod}
                             />
-                        )}
 
-                        <TouchableOpacity style={[styles.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
-                            <Ionicons name="create-outline" size={20} color="#fff" />
-                            <Text style={styles.submitBtnText}>{submitting ? 'Đang tạo...' : 'Tạo đơn hàng'}</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <View style={{ height: insets.bottom + 24 }} />
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </View>
-    );
+                            {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
+                            {isLevel1 && (
+                                <PaymentMethodField
+                                    ws={isDesktop}
+                                    orderType={orderType}
+                                    useFixedPrice={useFixedPrice}
+                                    fixedPayment={fixedPayment}
+                                    paymentMethod={paymentMethod}
+                                    setPaymentMethod={setPaymentMethod}
+                                />
+                            )}
+
+                            <TouchableOpacity style={[styles.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
+                                <Ionicons name="create-outline" size={20} color="#fff" />
+                                <Text style={styles.submitBtnText}>{submitting ? 'Đang tạo...' : 'Tạo đơn hàng'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={{ height: insets.bottom + 24 }} />
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </View>
+        );
 }
 
 // ── Web Styles ───────────────────────────────────────────────

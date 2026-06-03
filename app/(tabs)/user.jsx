@@ -21,7 +21,6 @@ import { useLayout } from '@/components/Main/TabScreenLayout';
 import { useCardStyles } from '@/components/Styles/cardStyles';
 import { useTableStyles } from '@/components/Styles/tableStyles';
 
-const { isDesktop } = useLayout();
 const AVATAR_COLORS = ['#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2'];
 
 const ROLE_GRID_CFG = {
@@ -38,7 +37,7 @@ const FILTERS = [
     { key: 'verified', label: 'Đã xác minh' },
 ];
 
-function TableHead({ tableStyles }) {
+function TableHead({ tableStyles, isDesktop }) {
     if (!isDesktop) return null;
     return (
         <View style={tableStyles.head}>
@@ -52,7 +51,7 @@ function TableHead({ tableStyles }) {
     );
 }
 
-function UserRow({ item, index, isActive, onPress, tableStyles }) {
+function UserRow({ item, index, isActive, onPress, tableStyles, isDesktop }) {
     const color = AVATAR_COLORS[index % AVATAR_COLORS.length];
     const role = rcfg(item.role || item.member);
     return (
@@ -167,7 +166,7 @@ export default function UsersScreen() {
 
             <View style={cardStyles.splitLayout}>
                 <View style={cardStyles.card}>
-                    <TableHead tableStyles={tableStyles} />
+                    <TableHead tableStyles={tableStyles} isDesktop={isDesktop} />
                     {loading && !refreshing ? <EmptyState loading /> :
                         filtered.length === 0 ? (
                             <EmptyState empty icon="people-outline" title={query ? 'Không tìm thấy' : 'Không có người dùng'} />
@@ -181,6 +180,7 @@ export default function UsersScreen() {
                                         isActive={selected?.email === item.email}
                                         onPress={handlePress}
                                         tableStyles={tableStyles}
+                                        isDesktop={isDesktop}
                                     />
                                 )}
                                 showsVerticalScrollIndicator={false}

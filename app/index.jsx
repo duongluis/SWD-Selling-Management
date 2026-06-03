@@ -1,3 +1,4 @@
+import { useLayout } from "@/components/Main/TabScreenLayout";
 import Colors from "@/constant/Colors";
 import { router } from "expo-router";
 import { useEffect } from 'react';
@@ -18,6 +19,8 @@ const logoImg = require("./../assets/images/logo-dark.png");
 export default function Index() {
   const { height, width } = Dimensions.get("window");
 
+  const { isDesktop } = useLayout()
+
   useEffect(() => {
     if (Platform.OS === 'web' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then((registrations) => {
@@ -26,97 +29,95 @@ export default function Index() {
     }
   }, []);
 
-  if (Platform.OS === "web") {
-    // ✅ Fix double assets
-    const fixUri = (imgObj) => {
-      const uri = typeof imgObj === "object" ? imgObj.uri : imgObj;
-      return uri;
-    };
+  // ✅ Fix double assets
+  const fixUri = (imgObj) => {
+    const uri = typeof imgObj === "object" ? imgObj.uri : imgObj;
+    return uri;
+  }
+  const bgUri = fixUri(backgroundImg);
+  const logoUri = fixUri(logoImg);
 
-    const bgUri = fixUri(backgroundImg);
-    const logoUri = fixUri(logoImg);
-
-    return (
+  return isDesktop ? (
+    <div
+      style={{
+        width: "100vw",
+        height: "100vh",
+        backgroundImage: `url(${bgUri})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}
+    >
+      <img
+        src={logoUri}
+        style={{
+          width: 300,
+          height: 300,
+          objectFit: "contain",
+          marginTop: 50,
+        }}
+      />
       <div
         style={{
-          width: "100vw",
-          height: "100vh",
-          backgroundImage: `url(${bgUri})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+          padding: 25,
+          paddingBottom: 50,
+          width: "100%",
           display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-        <img
-          src={logoUri}
+        <button
+          onClick={() => router.replace("/auth/signIn")}
           style={{
-            width: 300,
-            height: 300,
-            objectFit: "contain",
-            marginTop: 50,
+            width: "100%",
+            padding: 15,
+            borderRadius: 10,
+            backgroundColor: "transparent",
+            border: "none",
+            cursor: "pointer",
+            fontSize: 30,
+            fontWeight: "bold",
+            color: "white",
           }}
-        />
-        <div
+        >
+          Bắt đầu
+        </button>
+      </div>
+    </div>
+  ) :
+
+    // Mobile giữ nguyên
+    (
+      <ImageBackground
+        source={backgroundImg}
+        style={{ resizeMode: "cover", flex: 1, height, width }}
+      >
+        <View style={styles.logo}>
+          <Image
+            source={logoImg}
+            style={{ height: 500, width: "100%", resizeMode: "center" }}
+          />
+        </View>
+        <View
           style={{
             padding: 25,
-            paddingBottom: 50,
-            width: "100%",
-            display: "flex",
-            justifyContent: "center",
+            height: "100%",
+            borderTopLeftRadius: 35,
+            borderTopRightRadius: 35,
           }}
         >
-          <button
-            onClick={() => router.replace("/auth/signIn")}
-            style={{
-              width: "100%",
-              padding: 15,
-              borderRadius: 10,
-              backgroundColor: "transparent",
-              border: "none",
-              cursor: "pointer",
-              fontSize: 30,
-              fontWeight: "bold",
-              color: "white",
-            }}
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => router.replace("/auth/signIn")}
           >
-            Bắt đầu
-          </button>
-        </div>
-      </div>
+            <Text style={styles.buttonText}>Bắt đầu</Text>
+          </TouchableOpacity>
+        </View>
+      </ImageBackground>
     );
-  }
-  // Mobile giữ nguyên
-  return (
-    <ImageBackground
-      source={backgroundImg}
-      style={{ resizeMode: "cover", flex: 1, height, width }}
-    >
-      <View style={styles.logo}>
-        <Image
-          source={logoImg}
-          style={{ height: 500, width: "100%", resizeMode: "center" }}
-        />
-      </View>
-      <View
-        style={{
-          padding: 25,
-          height: "100%",
-          borderTopLeftRadius: 35,
-          borderTopRightRadius: 35,
-        }}
-      >
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => router.replace("/auth/signIn")}
-        >
-          <Text style={styles.buttonText}>Bắt đầu</Text>
-        </TouchableOpacity>
-      </View>
-    </ImageBackground>
-  );
 }
 
 const styles = StyleSheet.create({

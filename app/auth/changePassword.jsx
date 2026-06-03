@@ -10,12 +10,13 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
     ActivityIndicator,
+    Dimensions,
+    Platform,
     StyleSheet, Text,
     TextInput, TouchableOpacity, View
 } from 'react-native';
 
-import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
 
 function PwField({ label, value, onChange, show, toggleShow, placeholder }) {
     return (
@@ -119,7 +120,7 @@ export default function ChangePassword() {
 
 const S = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC', justifyContent: 'center' },
-    backBtn: { position: 'absolute', top: isDesktop ? 20 : 50, left: 20, zIndex: 10 },
+    backBtn: { position: 'absolute', top: Platform.OS == 'web' && Dimensions.get('window').width ? 20 : 50, left: 20, zIndex: 10 },
     icon: { alignItems: 'center', marginBottom: 12 },
     iconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#BFDBFE' },
     title: { textAlign: 'center', fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 8 },

@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
 
 export default function ScreenHeader({
     title,
@@ -65,9 +64,9 @@ export default function ScreenHeader({
 }
 
 const S = StyleSheet.create({
-    wrap: { paddingHorizontal: isDesktop ? 32 : 16, paddingTop: isDesktop ? 20 : 16, paddingBottom: 12, backgroundColor: '#FFFFFF', zIndex: 1 },
+    wrap: { paddingHorizontal: Platform.OS == 'web' && Dimensions.get('window').width ? 32 : 16, paddingTop: Platform.OS == 'web' && Dimensions.get('window').width ? 20 : 16, paddingBottom: 12, backgroundColor: '#FFFFFF', zIndex: 1 },
     titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
-    title: { fontSize: isDesktop ? 24 : 20, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
+    title: { fontSize: Platform.OS == 'web' && Dimensions.get('window').width ? 24 : 20, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
     subtitle: { fontSize: 13, color: '#64748B', marginTop: 3 },
     leftSlot: { marginRight: 8 },
     actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },

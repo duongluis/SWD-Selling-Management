@@ -1,7 +1,6 @@
 // components/UI/UserDetail.jsx — style giống order panel
 
 import { showAlert } from '@/components/Main/showAlert';
-import { useLayout } from '@/components/Main/TabScreenLayout';
 import { createSupportRoom } from '@/components/Utils/chatService';
 import { fmtCurrency, fmtDate, fmtPhone } from '@/components/Utils/formatters';
 import { db } from '@/config/firebaseConfig';
@@ -11,12 +10,14 @@ import { useRouter } from 'expo-router';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
+    Dimensions,
+    Platform,
     ScrollView, StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
 
 const AVATAR_COLORS = ['#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2'];
 const hashColor = s => AVATAR_COLORS[(s || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
-const { isDesktop } = useLayout();
+
 const ROLE_LABEL = {
     'đại lý': 'Đại lý', 'cộng tác viên': 'CTV', 'Đối tác': 'Đối tác', 'admin': 'Admin',
 };
@@ -197,7 +198,7 @@ export default function UserDetail({ user, onClose, onUpdated }) {
 }
 
 const S = StyleSheet.create({
-    panel: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', flexDirection: 'column', borderRadius: isDesktop ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
+    panel: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', flexDirection: 'column', borderRadius: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
     header: { padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 10 },
     headerTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
     closeBtn: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

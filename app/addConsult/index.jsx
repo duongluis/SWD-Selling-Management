@@ -19,7 +19,7 @@ import { db } from '../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
 
-const width = Dimensions.get('window')
+const width = Dimensions.get('window').width
 // ── Field component ───────────────────────────────────────────
 function Field({ label, value, onChange, multiline, keyboard, required, placeholder }) {
     return (

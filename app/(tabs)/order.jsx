@@ -38,10 +38,10 @@ function TableHeader({ showCost, tableStyles }) {
       <View style={COL.sub}><Text style={tableStyles.th}>Sản phẩm</Text></View>
       {showCost && (
         <View style={COL.cost}>
-          <Text style={[tableStyles.th, tableStyles.thRight]}>Tiền nhập</Text>
+          <Text style={[tableStyles.th, tableStyles.thCenter]}>Tiền nhập</Text>
         </View>
       )}
-      <View style={COL.amount}><Text style={[tableStyles.th, tableStyles.thRight]}>Tổng giá trị</Text></View>
+      <View style={COL.amount}><Text style={[tableStyles.th, tableStyles.thCenter]}>Tổng giá trị</Text></View>
       <View style={COL.status}><Text style={[tableStyles.th, tableStyles.thCenter]}>Trạng thái</Text></View>
       <View style={COL.trail} />
     </View>

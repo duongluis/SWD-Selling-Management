@@ -16,13 +16,14 @@ import {
     Dimensions,
     Platform,
     RefreshControl,
-    ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View
+    ScrollView, StyleSheet, Text, TouchableOpacity,
+    View
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
 
-const width = Dimensions.get('window');
+const width = Dimensions.get('window').width;
 
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtShort = n => {
@@ -274,7 +275,7 @@ export default function CommissionScreen() {
     const isAdmin = role === 'admin';
     const myRate = COMM_RATE[role] || 0;
 
-    const { isDesktop, isMobile } = useLayout();
+    const { isMobile } = useLayout();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [orders, setOrders] = useState([]);

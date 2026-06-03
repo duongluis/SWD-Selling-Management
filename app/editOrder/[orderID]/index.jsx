@@ -49,7 +49,7 @@ function DateField({ value, onChange, webStyle }) {
         if (Platform.OS === 'android') setShow(false);
         if (date) { setSel(date); onChange(toDateStr(date)); }
     };
-    if (isDesktop) return (
+    return isDesktop ? (
         <View style={webStyle || S.inputBox}>
             <input
                 type="date"
@@ -59,31 +59,31 @@ function DateField({ value, onChange, webStyle }) {
             />
             <Ionicons name="calendar-outline" size={15} color="#94A3B8" />
         </View>
-    );
-    return (
-        <>
-            <TouchableOpacity style={S.inputBox} onPress={() => setShow(true)} activeOpacity={0.8}>
-                <Text style={{ flex: 1, fontSize: 14, color: value ? '#0F172A' : '#B0B0C8' }}>
-                    {value ? toDisplayStr(value) : 'Chọn ngày...'}
-                </Text>
-                <Ionicons name="calendar-outline" size={16} color="#B0B0C8" />
-            </TouchableOpacity>
-            {show && Platform.OS === 'ios' && (
-                <Modal transparent animationType="slide">
-                    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setShow(false)} />
-                    <View style={{ backgroundColor: '#fff', padding: 16 }}>
-                        <DateTimePicker value={sel} mode="date" display="spinner" onChange={onNative} />
-                        <Pressable onPress={() => setShow(false)} style={{ alignItems: 'center', padding: 12 }}>
-                            <Text style={{ color: '#2563EB', fontWeight: '600' }}>Xong</Text>
-                        </Pressable>
-                    </View>
-                </Modal>
-            )}
-            {show && Platform.OS === 'android' && (
-                <DateTimePicker value={sel} mode="date" display="default" onChange={onNative} />
-            )}
-        </>
-    );
+    ) :
+        (
+            <>
+                <TouchableOpacity style={S.inputBox} onPress={() => setShow(true)} activeOpacity={0.8}>
+                    <Text style={{ flex: 1, fontSize: 14, color: value ? '#0F172A' : '#B0B0C8' }}>
+                        {value ? toDisplayStr(value) : 'Chọn ngày...'}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={16} color="#B0B0C8" />
+                </TouchableOpacity>
+                {show && Platform.OS === 'ios' && (
+                    <Modal transparent animationType="slide">
+                        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setShow(false)} />
+                        <View style={{ backgroundColor: '#fff', padding: 16 }}>
+                            <DateTimePicker value={sel} mode="date" display="spinner" onChange={onNative} />
+                            <Pressable onPress={() => setShow(false)} style={{ alignItems: 'center', padding: 12 }}>
+                                <Text style={{ color: '#2563EB', fontWeight: '600' }}>Xong</Text>
+                            </Pressable>
+                        </View>
+                    </Modal>
+                )}
+                {show && Platform.OS === 'android' && (
+                    <DateTimePicker value={sel} mode="date" display="default" onChange={onNative} />
+                )}
+            </>
+        );
 }
 
 export default function EditOrder() {
@@ -183,11 +183,91 @@ export default function EditOrder() {
 
     const statusCfg = STATUS_CONFIG[existing.status] || STATUS_CONFIG.PENDING;
     const typeCfg = ORDER_TYPE_CONFIG[existing.orderType];
+    const mobileBody = (
+        <View style={[S.formCard, { borderTopLeftRadius: 28, borderTopRightRadius: 28 }]}>
+
+            <View style={S.group}>
+                <Text style={S.label}>Order ID</Text>
+                <View style={[S.inputBox, { backgroundColor: '#F1F5F9' }]}>
+                    <Text style={{ flex: 1, fontSize: 14, color: '#94A3B8', fontWeight: '500' }}>{existing.id}</Text>
+                    <Ionicons name="lock-closed-outline" size={13} color="#CBD5E1" />
+                </View>
+            </View>
+
+            <View style={S.group}>
+                <Text style={S.label}>Ngày giao hàng</Text>
+                <DateField value={orderDate} onChange={setOrderDate} />
+            </View>
+
+            <View style={S.group}>
+                <Text style={S.label}>Địa chỉ giao hàng</Text>
+                <View style={[S.inputBox, { alignItems: 'flex-start', minHeight: 72 }]}>
+                    <TextInput style={[S.input, { textAlignVertical: 'top' }]} placeholder="Địa chỉ..." placeholderTextColor="#B0B0C8" multiline value={deliveryAddress} onChangeText={setDeliveryAddress} />
+                </View>
+            </View>
+
+            <View style={S.group}>
+                <Text style={S.label}>Ghi chú</Text>
+                <View style={[S.inputBox, { alignItems: 'flex-start', minHeight: 72 }]}>
+                    <TextInput style={[S.input, { textAlignVertical: 'top' }]} placeholder="Ghi chú..." placeholderTextColor="#B0B0C8" multiline value={notes} onChangeText={setNotes} />
+                </View>
+            </View>
+
+            <View style={S.group}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                    <Text style={[S.label, { flex: 1, marginBottom: 0 }]}>Sản phẩm</Text>
+                    {isCTV && (
+                        <View style={S.lockBadge}>
+                            <Ionicons name="lock-closed" size={10} color="#94A3B8" />
+                            <Text style={S.lockText}>CTV không được sửa</Text>
+                        </View>
+                    )}
+                </View>
+                {items.map((item, i) => (
+                    <View key={item.id || i} style={S.itemRow}>
+                        <View style={S.itemIcon}><Ionicons name="water-outline" size={14} color="#2563EB" /></View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={S.itemName} numberOfLines={1}>{item.name}</Text>
+                            <Text style={S.itemPrice}>{fmt(item.price)}</Text>
+                        </View>
+                        {canEdit ? (
+                            <View style={S.qtyBox}>
+                                <TouchableOpacity onPress={() => updateItemQty(item.id || String(i), item.qty - 1)} style={S.qtyBtn}>
+                                    <Ionicons name="remove" size={14} color="#374151" />
+                                </TouchableOpacity>
+                                <Text style={S.qtyText}>{item.qty}</Text>
+                                <TouchableOpacity onPress={() => updateItemQty(item.id || String(i), item.qty + 1)} style={S.qtyBtn}>
+                                    <Ionicons name="add" size={14} color="#374151" />
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <Text style={S.qtyReadonly}>x{item.qty}</Text>
+                        )}
+                        <Text style={S.itemTotal}>{fmt(item.price * item.qty)}</Text>
+                        {canEdit && (
+                            <TouchableOpacity onPress={() => removeItem(item.id || String(i))} style={S.removeBtn}>
+                                <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                ))}
+                <View style={S.totalRow}>
+                    <Text style={S.totalLabel}>Tổng cộng</Text>
+                    <Text style={S.totalValue}>{fmt(total)}</Text>
+                </View>
+            </View>
+
+            <TouchableOpacity style={[S.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
+                <Ionicons name={submitting ? 'hourglass-outline' : 'checkmark-circle-outline'} size={20} color="#fff" />
+                <Text style={S.submitBtnText}>{submitting ? 'Đang lưu...' : 'Lưu thay đổi'}</Text>
+            </TouchableOpacity>
+        </View>
+    );
 
     // ─────────────────────────────────────────────────────────
     // WEB LAYOUT — 2 columns
     // ─────────────────────────────────────────────────────────
-    if (isDesktop) return (
+    return isDesktop ? (
         <View style={W.root}>
             <BgWatermark />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
@@ -392,110 +472,31 @@ export default function EditOrder() {
                 </View>
             </ScrollView>
         </View>
-    );
+    ) :
 
-    // ─────────────────────────────────────────────────────────
-    // MOBILE LAYOUT — hiển thị dọc
-    // ─────────────────────────────────────────────────────────
-    const mobileBody = (
-        <View style={[S.formCard, { borderTopLeftRadius: 28, borderTopRightRadius: 28 }]}>
+        // ─────────────────────────────────────────────────────────
+        // MOBILE LAYOUT — hiển thị dọc
+        // ─────────────────────────────────────────────────────────
 
-            <View style={S.group}>
-                <Text style={S.label}>Order ID</Text>
-                <View style={[S.inputBox, { backgroundColor: '#F1F5F9' }]}>
-                    <Text style={{ flex: 1, fontSize: 14, color: '#94A3B8', fontWeight: '500' }}>{existing.id}</Text>
-                    <Ionicons name="lock-closed-outline" size={13} color="#CBD5E1" />
+
+        (
+            <View style={{ flex: 1, backgroundColor: '#0A0F2C', paddingTop: insets.top }}>
+                <BgWatermark />
+                <StatusBar barStyle="light-content" backgroundColor="#0A0F2C" />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 }}>
+                    <TouchableOpacity onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="arrow-back" size={20} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Sửa đơn hàng</Text>
+                    <View style={{ width: 36 }} />
                 </View>
+                <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                    <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+                        {mobileBody}
+                    </ScrollView>
+                </KeyboardAvoidingView>
             </View>
-
-            <View style={S.group}>
-                <Text style={S.label}>Ngày giao hàng</Text>
-                <DateField value={orderDate} onChange={setOrderDate} />
-            </View>
-
-            <View style={S.group}>
-                <Text style={S.label}>Địa chỉ giao hàng</Text>
-                <View style={[S.inputBox, { alignItems: 'flex-start', minHeight: 72 }]}>
-                    <TextInput style={[S.input, { textAlignVertical: 'top' }]} placeholder="Địa chỉ..." placeholderTextColor="#B0B0C8" multiline value={deliveryAddress} onChangeText={setDeliveryAddress} />
-                </View>
-            </View>
-
-            <View style={S.group}>
-                <Text style={S.label}>Ghi chú</Text>
-                <View style={[S.inputBox, { alignItems: 'flex-start', minHeight: 72 }]}>
-                    <TextInput style={[S.input, { textAlignVertical: 'top' }]} placeholder="Ghi chú..." placeholderTextColor="#B0B0C8" multiline value={notes} onChangeText={setNotes} />
-                </View>
-            </View>
-
-            <View style={S.group}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                    <Text style={[S.label, { flex: 1, marginBottom: 0 }]}>Sản phẩm</Text>
-                    {isCTV && (
-                        <View style={S.lockBadge}>
-                            <Ionicons name="lock-closed" size={10} color="#94A3B8" />
-                            <Text style={S.lockText}>CTV không được sửa</Text>
-                        </View>
-                    )}
-                </View>
-                {items.map((item, i) => (
-                    <View key={item.id || i} style={S.itemRow}>
-                        <View style={S.itemIcon}><Ionicons name="water-outline" size={14} color="#2563EB" /></View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={S.itemName} numberOfLines={1}>{item.name}</Text>
-                            <Text style={S.itemPrice}>{fmt(item.price)}</Text>
-                        </View>
-                        {canEdit ? (
-                            <View style={S.qtyBox}>
-                                <TouchableOpacity onPress={() => updateItemQty(item.id || String(i), item.qty - 1)} style={S.qtyBtn}>
-                                    <Ionicons name="remove" size={14} color="#374151" />
-                                </TouchableOpacity>
-                                <Text style={S.qtyText}>{item.qty}</Text>
-                                <TouchableOpacity onPress={() => updateItemQty(item.id || String(i), item.qty + 1)} style={S.qtyBtn}>
-                                    <Ionicons name="add" size={14} color="#374151" />
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <Text style={S.qtyReadonly}>x{item.qty}</Text>
-                        )}
-                        <Text style={S.itemTotal}>{fmt(item.price * item.qty)}</Text>
-                        {canEdit && (
-                            <TouchableOpacity onPress={() => removeItem(item.id || String(i))} style={S.removeBtn}>
-                                <Ionicons name="trash-outline" size={13} color="#EF4444" />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                ))}
-                <View style={S.totalRow}>
-                    <Text style={S.totalLabel}>Tổng cộng</Text>
-                    <Text style={S.totalValue}>{fmt(total)}</Text>
-                </View>
-            </View>
-
-            <TouchableOpacity style={[S.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
-                <Ionicons name={submitting ? 'hourglass-outline' : 'checkmark-circle-outline'} size={20} color="#fff" />
-                <Text style={S.submitBtnText}>{submitting ? 'Đang lưu...' : 'Lưu thay đổi'}</Text>
-            </TouchableOpacity>
-        </View>
-    );
-
-    return (
-        <View style={{ flex: 1, backgroundColor: '#0A0F2C', paddingTop: insets.top }}>
-            <BgWatermark />
-            <StatusBar barStyle="light-content" backgroundColor="#0A0F2C" />
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 }}>
-                <TouchableOpacity onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="arrow-back" size={20} color="#fff" />
-                </TouchableOpacity>
-                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Sửa đơn hàng</Text>
-                <View style={{ width: 36 }} />
-            </View>
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-                    {mobileBody}
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </View>
-    );
+        );
 }
 
 // ── Web Styles ────────────────────────────────────────────────

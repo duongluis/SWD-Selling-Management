@@ -9,13 +9,14 @@ import { useRouter } from 'expo-router';
 import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, FlatList, Modal,
+    ActivityIndicator, Dimensions, FlatList, Modal,
+    Platform,
     ScrollView, StyleSheet, Text, TextInput,
     TouchableOpacity, View
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
-const { isDesktop } = useLayout();
+
 
 // ── Role helpers ─────────────────────────────────────────────
 const getRole = (u) => {
@@ -111,6 +112,7 @@ function FormRow({ label, required, children }) {
 
 // ── Create Product Modal ──────────────────────────────────────
 function CreateProductModal({ visible, onClose, onCreated, existingCount }) {
+    const { isDesktop } = useLayout();
     const EMPTY = {
         name: '', capacity: '', technology: '', made_in: 'Việt Nam',
         price: '', price_a: '', price_p: '', price_c: '',
@@ -372,7 +374,7 @@ function CreateServiceModal({ visible, onClose, onCreated, existingCount }) {
     const [hasMachine, setHasMachine] = useState(false);
     const [saving, setSaving] = useState(false);
     const [canAddInOrder, setCanAddInOrder] = useState(true);
-
+    const { isDesktop } = useLayout();
     const resetForm = () => {
         setName('');
         setPrice('');
@@ -746,6 +748,7 @@ function ProductDetail({ product, priceFields, onClose }) {
 
 // ── Product List ──────────────────────────────────────────────
 function ProductList({ products, priceFields, onSelect }) {
+    const { isDesktop } = useLayout();
     return (
         <FlatList
             data={products}
@@ -806,6 +809,7 @@ function ProductList({ products, priceFields, onSelect }) {
 
 // ── Service Category Grid ─────────────────────────────────────
 function ServiceCategoryGrid({ services }) {
+    const { isDesktop } = useLayout();
     if (services.length === 0) return (
         <View style={L.empty}>
             <Ionicons name="construct-outline" size={40} color="#CBD5E1" />
@@ -1015,15 +1019,15 @@ export default function InformationScreen() {
 // ── Main Styles ───────────────────────────────────────────────
 const S = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },
-    container: { flex: 1, backgroundColor: 'transparent', paddingTop: isDesktop ? 0 : 44 },
-    header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: isDesktop ? 32 : 16, paddingVertical: isDesktop ? 20 : 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+    container: { flex: 1, backgroundColor: 'transparent', paddingTop: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 0 : 44 },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 32 : 16, paddingVertical: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 20 : 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
-    headerTitle: { fontSize: isDesktop ? 22 : 18, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
+    headerTitle: { fontSize: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 22 : 18, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
     roleBadge: { marginTop: 2 },
     roleBadgeText: { fontSize: 12, color: '#64748B', fontWeight: '500' },
-    createBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563EB', paddingHorizontal: isDesktop ? 14 : 10, paddingVertical: 8, borderRadius: 10 },
-    createBtnText: { fontSize: isDesktop ? 13 : 12, fontWeight: '700', color: '#fff' },
-    tabBar: { flexDirection: 'row', backgroundColor: '#FFFFFF', paddingHorizontal: isDesktop ? 32 : 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 4 },
+    createBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563EB', paddingHorizontal: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 14 : 10, paddingVertical: 8, borderRadius: 10 },
+    createBtnText: { fontSize: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 13 : 12, fontWeight: '700', color: '#fff' },
+    tabBar: { flexDirection: 'row', backgroundColor: '#FFFFFF', paddingHorizontal: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 32 : 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 4 },
     tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
     tabActive: { borderBottomColor: '#2563EB' },
     tabText: { fontSize: 14, fontWeight: '500', color: '#94A3B8' },
@@ -1031,7 +1035,7 @@ const S = StyleSheet.create({
     tabBadge: { backgroundColor: '#EFF6FF', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10 },
     tabBadgeText: { fontSize: 10, fontWeight: '700', color: '#2563EB' },
     content: { flex: 1 },
-    listContainer: { flex: 1, paddingHorizontal: isDesktop ? 32 : 16, paddingTop: 16 },
+    listContainer: { flex: 1, paddingHorizontal: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 32 : 16, paddingTop: 16 },
     listHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
     listCount: { fontSize: 13, color: '#64748B', fontWeight: '600' },
     loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: 60 },
@@ -1065,24 +1069,24 @@ const SC = StyleSheet.create({
 
 const D = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },
-    content: { paddingHorizontal: isDesktop ? 32 : 16, paddingTop: 16 },
-    header: { paddingHorizontal: isDesktop ? 32 : 16, paddingTop: 16, paddingBottom: 8 },
+    content: { paddingHorizontal: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 32 : 16, paddingTop: 16 },
+    header: { paddingHorizontal: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 32 : 16, paddingTop: 16, paddingBottom: 8 },
     backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#FFFFFF', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' },
     backText: { fontSize: 13, color: '#64748B', fontWeight: '500' },
-    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: isDesktop ? 32 : 16, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginBottom: 16 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 32 : 16, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginBottom: 16 },
     productIcon: { width: 52, height: 52, borderRadius: 14, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
     productName: { fontSize: 20, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
     productSub: { fontSize: 13, color: '#64748B', marginTop: 2 },
-    card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: isDesktop ? 20 : 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14, marginHorizontal: isDesktop ? 32 : 16 },
+    card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 20 : 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14, marginHorizontal: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 32 : 16 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     cardTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
     priceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    priceCard: { flex: 1, minWidth: isDesktop ? 160 : 140, padding: 14, borderRadius: 10 },
+    priceCard: { flex: 1, minWidth: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 160 : 140, padding: 14, borderRadius: 10 },
     priceLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
     priceValue: { fontSize: 16, fontWeight: '800', letterSpacing: -0.3 },
     specRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 8, gap: 12 },
     specRowAlt: { backgroundColor: '#F8FAFC', marginHorizontal: -16, paddingHorizontal: 16, borderRadius: 4 },
-    specLabel: { width: isDesktop ? 200 : 140, fontSize: 12, color: '#64748B', fontWeight: '500' },
+    specLabel: { width: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 200 : 140, fontSize: 12, color: '#64748B', fontWeight: '500' },
     specValue: { flex: 1, fontSize: 12, color: '#0F172A', fontWeight: '600' },
     featureGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     featureItem: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ECFDF5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },

@@ -218,7 +218,7 @@ export default function EditService() {
     // ─────────────────────────────────────────────────────────
     // WEB LAYOUT
     // ─────────────────────────────────────────────────────────
-    if (isDesktop) return (
+    return isDesktop ? (
         <View style={W.root}>
             <BgWatermark />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
@@ -358,112 +358,112 @@ export default function EditService() {
                 </View>
             </ScrollView>
         </View>
-    );
+    ) :
 
-    // ─────────────────────────────────────────────────────────
-    // MOBILE LAYOUT
-    // ─────────────────────────────────────────────────────────
-    return (
-        <View style={[M.container, { paddingTop: insets.top }]}>
-            <BgWatermark />
-            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-            <View style={M.header}>
-                <TouchableOpacity onPress={() => router.back()} style={M.backBtn}><Ionicons name="arrow-back" size={22} color="#0F172A" /></TouchableOpacity>
-                <Text style={M.headerTitle}>Sửa dịch vụ</Text>
-                <View style={M.headerAvatar}><Ionicons name="create-outline" size={16} color="#2563EB" /></View>
-            </View>
+        // ─────────────────────────────────────────────────────────
+        // MOBILE LAYOUT
+        // ─────────────────────────────────────────────────────────
+        (
+            <View style={[M.container, { paddingTop: insets.top }]}>
+                <BgWatermark />
+                <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+                <View style={M.header}>
+                    <TouchableOpacity onPress={() => router.back()} style={M.backBtn}><Ionicons name="arrow-back" size={22} color="#0F172A" /></TouchableOpacity>
+                    <Text style={M.headerTitle}>Sửa dịch vụ</Text>
+                    <View style={M.headerAvatar}><Ionicons name="create-outline" size={16} color="#2563EB" /></View>
+                </View>
 
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={M.scroll}>
+                <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                    <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={M.scroll}>
 
-                    {/* Banner */}
-                    <View style={M.banner}>
-                        <View style={[M.bannerIcon, { backgroundColor: selectedType?.color + '22' }]}>
-                            <Ionicons name={selectedType?.icon} size={40} color={selectedType?.color} />
-                        </View>
-                        <Text style={M.bannerText}>Sửa dịch vụ #{serviceId}</Text>
-                    </View>
-
-                    {/* Service type */}
-                    <View style={M.card}>
-                        <Text style={M.sectionTitle}>LOẠI HÌNH DỊCH VỤ</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={M.typeScroll}>
-                            {SERVICE_TYPES.map(type => {
-                                const active = serviceType === type.key;
-                                return (
-                                    <TouchableOpacity key={type.key}
-                                        style={[M.typeTab, active && M.typeTabActive]}
-                                        onPress={() => setServiceType(type.key)} activeOpacity={0.8}
-                                    >
-                                        <Text style={[M.typeTabText, active && { color: type.color, fontWeight: '700' }]}>{type.label}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
-                    </View>
-
-                    {/* Order picker */}
-                    <View style={M.card}>
-                        <Text style={M.sectionTitle}>ĐƠN HÀNG LIÊN QUAN</Text>
-                        <TouchableOpacity
-                            style={[M.inputBox, showOrderPicker && { borderColor: '#2563EB' }]}
-                            onPress={() => setShowOrderPicker(p => !p)}
-                            activeOpacity={0.8}
-                        >
-                            {selectedOrder ? (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                                    <Ionicons name="receipt-outline" size={15} color="#2563EB" />
-                                    <View style={{ flex: 1 }}><Text style={M.selectedOrderText}>#{selectedOrder.id} · {selectedOrder.customer}</Text></View>
-                                    <TouchableOpacity onPress={() => { setSelectedOrder(null); setCustomerName(''); setCustomerPhone(''); }}>
-                                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <>
-                                    <Ionicons name="search-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
-                                    <Text style={M.inputPlaceholder}>Chọn đơn hàng...</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-                        {showOrderPicker && <OrderPickerDropdown />}
-                        {selectedOrder?.items?.length > 0 && (
-                            <View style={M.orderItemsBox}>
-                                {selectedOrder.items.map((item, i) => (
-                                    <View key={i} style={M.orderItemRow}>
-                                        <Ionicons name="water-outline" size={12} color="#64748B" />
-                                        <Text style={M.orderItemName} numberOfLines={1}>{item.name}</Text>
-                                        <Text style={M.orderItemQty}>x{item.qty}</Text>
-                                    </View>
-                                ))}
+                        {/* Banner */}
+                        <View style={M.banner}>
+                            <View style={[M.bannerIcon, { backgroundColor: selectedType?.color + '22' }]}>
+                                <Ionicons name={selectedType?.icon} size={40} color={selectedType?.color} />
                             </View>
-                        )}
-                    </View>
+                            <Text style={M.bannerText}>Sửa dịch vụ #{serviceId}</Text>
+                        </View>
 
-                    {/* Customer info */}
-                    <View style={M.card}>
-                        <Text style={M.sectionTitle}>THÔNG TIN KHÁCH HÀNG</Text>
-                        <Text style={M.fieldLabel}>TÊN KHÁCH HÀNG</Text>
-                        <View style={M.inputBox}><Ionicons name="person-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={customerName} onChangeText={setCustomerName} /></View>
-                        <Text style={M.fieldLabel}>SỐ ĐIỆN THOẠI</Text>
-                        <View style={M.inputBox}><Ionicons name="call-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="090x xxx xxx" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={customerPhone} onChangeText={setCustomerPhone} /></View>
-                        <Text style={M.fieldLabel}>ĐỊA CHỈ</Text>
-                        <View style={M.inputBox}><Ionicons name="location-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="Quận/Huyện, TP..." placeholderTextColor="#94A3B8" value={address} onChangeText={setAddress} /></View>
-                        <Text style={M.fieldLabel}>GHI CHÚ</Text>
-                        <View style={[M.inputBox, { alignItems: 'flex-start', minHeight: 100 }]}><TextInput style={[M.input, { textAlignVertical: 'top', paddingTop: 2 }]} placeholder="Yêu cầu cụ thể..." placeholderTextColor="#94A3B8" multiline value={note} onChangeText={setNote} /></View>
-                    </View>
+                        {/* Service type */}
+                        <View style={M.card}>
+                            <Text style={M.sectionTitle}>LOẠI HÌNH DỊCH VỤ</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={M.typeScroll}>
+                                {SERVICE_TYPES.map(type => {
+                                    const active = serviceType === type.key;
+                                    return (
+                                        <TouchableOpacity key={type.key}
+                                            style={[M.typeTab, active && M.typeTabActive]}
+                                            onPress={() => setServiceType(type.key)} activeOpacity={0.8}
+                                        >
+                                            <Text style={[M.typeTabText, active && { color: type.color, fontWeight: '700' }]}>{type.label}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+                        </View>
 
-                    <View style={{ height: insets.bottom + 100 }} />
-                </ScrollView>
-            </KeyboardAvoidingView>
+                        {/* Order picker */}
+                        <View style={M.card}>
+                            <Text style={M.sectionTitle}>ĐƠN HÀNG LIÊN QUAN</Text>
+                            <TouchableOpacity
+                                style={[M.inputBox, showOrderPicker && { borderColor: '#2563EB' }]}
+                                onPress={() => setShowOrderPicker(p => !p)}
+                                activeOpacity={0.8}
+                            >
+                                {selectedOrder ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                        <Ionicons name="receipt-outline" size={15} color="#2563EB" />
+                                        <View style={{ flex: 1 }}><Text style={M.selectedOrderText}>#{selectedOrder.id} · {selectedOrder.customer}</Text></View>
+                                        <TouchableOpacity onPress={() => { setSelectedOrder(null); setCustomerName(''); setCustomerPhone(''); }}>
+                                            <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
+                                    <>
+                                        <Ionicons name="search-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
+                                        <Text style={M.inputPlaceholder}>Chọn đơn hàng...</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                            {showOrderPicker && <OrderPickerDropdown />}
+                            {selectedOrder?.items?.length > 0 && (
+                                <View style={M.orderItemsBox}>
+                                    {selectedOrder.items.map((item, i) => (
+                                        <View key={i} style={M.orderItemRow}>
+                                            <Ionicons name="water-outline" size={12} color="#64748B" />
+                                            <Text style={M.orderItemName} numberOfLines={1}>{item.name}</Text>
+                                            <Text style={M.orderItemQty}>x{item.qty}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </View>
 
-            <View style={[M.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-                <TouchableOpacity style={[M.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
-                    <Ionicons name={submitting ? 'hourglass-outline' : 'checkmark-circle-outline'} size={22} color="#fff" />
-                    <Text style={M.submitBtnText}>{submitting ? 'Đang lưu...' : 'Lưu thay đổi'}</Text>
-                </TouchableOpacity>
+                        {/* Customer info */}
+                        <View style={M.card}>
+                            <Text style={M.sectionTitle}>THÔNG TIN KHÁCH HÀNG</Text>
+                            <Text style={M.fieldLabel}>TÊN KHÁCH HÀNG</Text>
+                            <View style={M.inputBox}><Ionicons name="person-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={customerName} onChangeText={setCustomerName} /></View>
+                            <Text style={M.fieldLabel}>SỐ ĐIỆN THOẠI</Text>
+                            <View style={M.inputBox}><Ionicons name="call-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="090x xxx xxx" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={customerPhone} onChangeText={setCustomerPhone} /></View>
+                            <Text style={M.fieldLabel}>ĐỊA CHỈ</Text>
+                            <View style={M.inputBox}><Ionicons name="location-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="Quận/Huyện, TP..." placeholderTextColor="#94A3B8" value={address} onChangeText={setAddress} /></View>
+                            <Text style={M.fieldLabel}>GHI CHÚ</Text>
+                            <View style={[M.inputBox, { alignItems: 'flex-start', minHeight: 100 }]}><TextInput style={[M.input, { textAlignVertical: 'top', paddingTop: 2 }]} placeholder="Yêu cầu cụ thể..." placeholderTextColor="#94A3B8" multiline value={note} onChangeText={setNote} /></View>
+                        </View>
+
+                        <View style={{ height: insets.bottom + 100 }} />
+                    </ScrollView>
+                </KeyboardAvoidingView>
+
+                <View style={[M.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+                    <TouchableOpacity style={[M.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
+                        <Ionicons name={submitting ? 'hourglass-outline' : 'checkmark-circle-outline'} size={22} color="#fff" />
+                        <Text style={M.submitBtnText}>{submitting ? 'Đang lưu...' : 'Lưu thay đổi'}</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
-        </View>
-    );
+        );
 }
 
 // ── Shared picker styles ──────────────────────────────────────

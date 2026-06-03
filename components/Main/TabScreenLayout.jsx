@@ -13,8 +13,8 @@ export function useLayout() {
 }
 
 export default function TabScreenLayout({ children, style }) {
-    const insets = useSafeAreaInsets();
     const { isDesktop } = useLayout();
+    const insets = useSafeAreaInsets();
     return (
         <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }, style]}>
             <BgWatermark />

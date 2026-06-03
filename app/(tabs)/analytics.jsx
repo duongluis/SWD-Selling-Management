@@ -120,145 +120,144 @@ export default function AnalyticsScreen() {
         return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
     }, [active]);
 
-    if (loading) return (
-        <TabScreenLayout>
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                <ActivityIndicator size="large" color="#2563EB" />
-            </View>
-        </TabScreenLayout>
-    );
-
-    return (
-        <TabScreenLayout>
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={[A.scroll, { padding: isDesktop ? THEME.spacing.xxl : THEME.spacing.lg }]}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}
-            >
-                <View style={A.pageHeader}>
-                    <Text style={[A.pageTitle, { fontSize: isDesktop ? 26 : 22 }]}>Báo cáo doanh thu</Text>
-                    <View style={A.userBadge}>
-                        <Ionicons name={isAdmin ? 'shield-checkmark-outline' : 'person-outline'} size={13} color="#2563EB" />
-                        <Text style={A.userBadgeText}>{isAdmin ? 'Toàn hệ thống' : (userDetail?.name || userDetail?.email || 'Của tôi')}</Text>
-                    </View>
+    return loading ?
+        (
+            <TabScreenLayout>
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <ActivityIndicator size="large" color="#2563EB" />
                 </View>
+            </TabScreenLayout>
+        ) : (
+            <TabScreenLayout>
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={[A.scroll, { padding: isDesktop ? THEME.spacing.xxl : THEME.spacing.lg }]}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}
+                >
+                    <View style={A.pageHeader}>
+                        <Text style={[A.pageTitle, { fontSize: isDesktop ? 26 : 22 }]}>Báo cáo doanh thu</Text>
+                        <View style={A.userBadge}>
+                            <Ionicons name={isAdmin ? 'shield-checkmark-outline' : 'person-outline'} size={13} color="#2563EB" />
+                            <Text style={A.userBadgeText}>{isAdmin ? 'Toàn hệ thống' : (userDetail?.name || userDetail?.email || 'Của tôi')}</Text>
+                        </View>
+                    </View>
 
-                <View style={[A.topCards, { flexDirection: isDesktop ? 'row' : 'column', gap: 12 }]}>
-                    <View style={[A.topCard, { flex: isDesktop ? 1 : undefined }]}>
-                        <View style={[A.topCardIcon, { backgroundColor: '#EFF6FF' }]}>
-                            <Ionicons name="trending-up-outline" size={20} color="#2563EB" />
+                    <View style={[A.topCards, { flexDirection: isDesktop ? 'row' : 'column', gap: 12 }]}>
+                        <View style={[A.topCard, { flex: isDesktop ? 1 : undefined }]}>
+                            <View style={[A.topCardIcon, { backgroundColor: '#EFF6FF' }]}>
+                                <Ionicons name="trending-up-outline" size={20} color="#2563EB" />
+                            </View>
+                            <Text style={A.topCardLabel}>TỔNG THU NHẬP</Text>
+                            <Text style={A.topCardValue}>{fmt(totalRevenue)}</Text>
+                            {growth && <Text style={[A.topCardSub, { color: parseFloat(growth) >= 0 ? '#10B981' : '#EF4444' }]}>↗ {parseFloat(growth) >= 0 ? '+' : ''}{growth}% so với tháng trước</Text>}
                         </View>
-                        <Text style={A.topCardLabel}>TỔNG THU NHẬP</Text>
-                        <Text style={A.topCardValue}>{fmt(totalRevenue)}</Text>
-                        {growth && <Text style={[A.topCardSub, { color: parseFloat(growth) >= 0 ? '#10B981' : '#EF4444' }]}>↗ {parseFloat(growth) >= 0 ? '+' : ''}{growth}% so với tháng trước</Text>}
-                    </View>
-                    <View style={A.topCard}>
-                        <View style={[A.topCardIcon, { backgroundColor: '#FFFBEB' }]}>
-                            <Ionicons name="time-outline" size={20} color="#D97706" />
+                        <View style={A.topCard}>
+                            <View style={[A.topCardIcon, { backgroundColor: '#FFFBEB' }]}>
+                                <Ionicons name="time-outline" size={20} color="#D97706" />
+                            </View>
+                            <Text style={A.topCardLabel}>ĐANG CHỜ XỬ LÝ</Text>
+                            <Text style={[A.topCardValue, { color: '#D97706' }]}>{fmt(pending)}</Text>
+                            <Text style={A.topCardSub}>Dự kiến quyết toán sớm</Text>
                         </View>
-                        <Text style={A.topCardLabel}>ĐANG CHỜ XỬ LÝ</Text>
-                        <Text style={[A.topCardValue, { color: '#D97706' }]}>{fmt(pending)}</Text>
-                        <Text style={A.topCardSub}>Dự kiến quyết toán sớm</Text>
-                    </View>
-                    <View style={A.topCard}>
-                        <View style={[A.topCardIcon, { backgroundColor: '#ECFDF5' }]}>
-                            <Ionicons name="checkmark-circle-outline" size={20} color="#16A34A" />
+                        <View style={A.topCard}>
+                            <View style={[A.topCardIcon, { backgroundColor: '#ECFDF5' }]}>
+                                <Ionicons name="checkmark-circle-outline" size={20} color="#16A34A" />
+                            </View>
+                            <Text style={A.topCardLabel}>ĐÃ THANH TOÁN (THÁNG NÀY)</Text>
+                            <Text style={[A.topCardValue, { color: '#16A34A' }]}>{fmt(paidThis)}</Text>
                         </View>
-                        <Text style={A.topCardLabel}>ĐÃ THANH TOÁN (THÁNG NÀY)</Text>
-                        <Text style={[A.topCardValue, { color: '#16A34A' }]}>{fmt(paidThis)}</Text>
                     </View>
-                </View>
 
-                <View style={A.card}>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                        <View>
-                            <Text style={A.cardTitle}>Xu hướng thu nhập</Text>
-                            <Text style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>Biểu đồ tăng trưởng 6 tháng gần nhất</Text>
+                    <View style={A.card}>
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                            <View>
+                                <Text style={A.cardTitle}>Xu hướng thu nhập</Text>
+                                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>Biểu đồ tăng trưởng 6 tháng gần nhất</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                {['quarterly', 'yearly'].map(p => (
+                                    <TouchableOpacity key={p} style={[A.pBtn, period === p && A.pBtnActive]} onPress={() => setPeriod(p)}>
+                                        <Text style={[A.pBtnText, period === p && A.pBtnTextActive]}>{p === 'quarterly' ? 'Quý này' : 'Năm nay'}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
                         </View>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                            {['quarterly', 'yearly'].map(p => (
-                                <TouchableOpacity key={p} style={[A.pBtn, period === p && A.pBtnActive]} onPress={() => setPeriod(p)}>
-                                    <Text style={[A.pBtnText, period === p && A.pBtnTextActive]}>{p === 'quarterly' ? 'Quý này' : 'Năm nay'}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                        <BarChart bars={bars} />
                     </View>
-                    <BarChart bars={bars} />
-                </View>
 
-                <View style={A.card}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                        <Text style={A.cardTitle}>Lịch sử giao dịch</Text>
-                        <Text style={{ fontSize: 12, color: '#94A3B8' }}>{active.length} giao dịch</Text>
-                    </View>
-                    <View style={A.tHead}>
-                        <Text style={[A.th, { flex: 1.5 }]}>Đơn hàng</Text>
-                        <Text style={[A.th, { flex: 1 }]}>Khách hàng</Text>
-                        <Text style={[A.th, { flex: 1, textAlign: 'center' }]}>Giá trị</Text>
-                        <Text style={[A.th, { flex: 0.8, textAlign: 'center' }]}>Trạng thái</Text>
-                    </View>
-                    {active.slice(0, 10).map((o, i) => {
-                        const val = (o.items || []).reduce((s, p) => s + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0);
-                        const isPaid = o.status === 'Đã thanh toán';
-                        return (
-                            <View key={o.id || i} style={[A.tRow, i % 2 === 1 && { backgroundColor: '#FAFBFF' }]}>
-                                <View style={{ flex: 1.5 }}>
-                                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#2563EB' }}>#{o.id}</Text>
-                                    <Text style={{ fontSize: 10, color: '#94A3B8' }}>{o.createdAt?.slice(0, 10) || '—'}</Text>
-                                </View>
-                                <Text style={[A.td, { flex: 1 }]} numberOfLines={1}>{o.customer || '—'}</Text>
-                                <Text style={[A.td, { flex: 1, textAlign: 'center', fontWeight: '700' }]}>{fmtShort(val)}</Text>
-                                <View style={{ flex: 0.8 }}>
-                                    <View style={[A.sBadge, { backgroundColor: isPaid ? '#ECFDF5' : '#FFFBEB' }]}>
-                                        <Text style={{ fontSize: 10, fontWeight: '700', color: isPaid ? '#16A34A' : '#D97706' }}>{isPaid ? 'ĐÃ TT' : 'CHỜ TT'}</Text>
+                    <View style={A.card}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                            <Text style={A.cardTitle}>Lịch sử giao dịch</Text>
+                            <Text style={{ fontSize: 12, color: '#94A3B8' }}>{active.length} giao dịch</Text>
+                        </View>
+                        <View style={A.tHead}>
+                            <Text style={[A.th, { flex: 1.5 }]}>Đơn hàng</Text>
+                            <Text style={[A.th, { flex: 1 }]}>Khách hàng</Text>
+                            <Text style={[A.th, { flex: 1, textAlign: 'center' }]}>Giá trị</Text>
+                            <Text style={[A.th, { flex: 0.8, textAlign: 'center' }]}>Trạng thái</Text>
+                        </View>
+                        {active.slice(0, 10).map((o, i) => {
+                            const val = (o.items || []).reduce((s, p) => s + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0);
+                            const isPaid = o.status === 'Đã thanh toán';
+                            return (
+                                <View key={o.id || i} style={[A.tRow, i % 2 === 1 && { backgroundColor: '#FAFBFF' }]}>
+                                    <View style={{ flex: 1.5 }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#2563EB' }}>#{o.id}</Text>
+                                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>{o.createdAt?.slice(0, 10) || '—'}</Text>
+                                    </View>
+                                    <Text style={[A.td, { flex: 1 }]} numberOfLines={1}>{o.customer || '—'}</Text>
+                                    <Text style={[A.td, { flex: 1, textAlign: 'center', fontWeight: '700' }]}>{fmtShort(val)}</Text>
+                                    <View style={{ flex: 0.8 }}>
+                                        <View style={[A.sBadge, { backgroundColor: isPaid ? '#ECFDF5' : '#FFFBEB' }]}>
+                                            <Text style={{ fontSize: 10, fontWeight: '700', color: isPaid ? '#16A34A' : '#D97706' }}>{isPaid ? 'ĐÃ TT' : 'CHỜ TT'}</Text>
+                                        </View>
                                     </View>
                                 </View>
-                            </View>
-                        );
-                    })}
-                </View>
-
-                {topProducts.length > 0 && (
-                    <View style={A.card}>
-                        <Text style={A.cardTitle}>Sản phẩm hàng đầu</Text>
-                        {topProducts.map((p, i) => (
-                            <View key={p.name} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#F8FAFC', gap: 12 }}>
-                                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#2563EB' }}>{i + 1}</Text>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>{p.name}</Text>
-                                    <Text style={{ fontSize: 11, color: '#94A3B8' }}>{p.units} đơn vị đã bán</Text>
-                                </View>
-                                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>{fmtShort(p.revenue)}</Text>
-                            </View>
-                        ))}
+                            );
+                        })}
                     </View>
-                )}
 
-                {isAdmin && leaderboard.length > 0 && (
-                    <View style={A.card}>
-                        <Text style={A.cardTitle}>🏆 Top doanh số</Text>
-                        {leaderboard.map((u, i) => (
-                            <View key={u.email} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#F8FAFC', gap: 10 }}>
-                                <View style={[{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-                                i === 0 && { backgroundColor: '#F59E0B' }, i === 1 && { backgroundColor: '#94A3B8' }, i === 2 && { backgroundColor: '#CD7F32' }, i > 2 && { backgroundColor: '#E2E8F0' }]}>
-                                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#fff' }}>{i + 1}</Text>
+                    {topProducts.length > 0 && (
+                        <View style={A.card}>
+                            <Text style={A.cardTitle}>Sản phẩm hàng đầu</Text>
+                            {topProducts.map((p, i) => (
+                                <View key={p.name} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#F8FAFC', gap: 12 }}>
+                                    <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#2563EB' }}>{i + 1}</Text>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>{p.name}</Text>
+                                        <Text style={{ fontSize: 11, color: '#94A3B8' }}>{p.units} đơn vị đã bán</Text>
+                                    </View>
+                                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>{fmtShort(p.revenue)}</Text>
                                 </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#0F172A' }}>{u.name || u.email}</Text>
-                                    <Text style={{ fontSize: 11, color: '#94A3B8' }}>{u.email}</Text>
-                                </View>
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#10B981' }}>{fmtShort(u.revenueTotal || 0)}</Text>
-                            </View>
-                        ))}
-                    </View>
-                )}
+                            ))}
+                        </View>
+                    )}
 
-                <View style={{ height: 80 }} />
-            </ScrollView>
-        </TabScreenLayout>
-    );
+                    {isAdmin && leaderboard.length > 0 && (
+                        <View style={A.card}>
+                            <Text style={A.cardTitle}>🏆 Top doanh số</Text>
+                            {leaderboard.map((u, i) => (
+                                <View key={u.email} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#F8FAFC', gap: 10 }}>
+                                    <View style={[{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+                                    i === 0 && { backgroundColor: '#F59E0B' }, i === 1 && { backgroundColor: '#94A3B8' }, i === 2 && { backgroundColor: '#CD7F32' }, i > 2 && { backgroundColor: '#E2E8F0' }]}>
+                                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#fff' }}>{i + 1}</Text>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#0F172A' }}>{u.name || u.email}</Text>
+                                        <Text style={{ fontSize: 11, color: '#94A3B8' }}>{u.email}</Text>
+                                    </View>
+                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#10B981' }}>{fmtShort(u.revenueTotal || 0)}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
+                    <View style={{ height: 80 }} />
+                </ScrollView>
+            </TabScreenLayout>
+        );
 }
 
 const A = StyleSheet.create({

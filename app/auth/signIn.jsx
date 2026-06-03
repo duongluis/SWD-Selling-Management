@@ -5,8 +5,8 @@ import auth, { db } from "@/config/firebaseConfig";
 import Colors from "@/constant/Colors";
 import { UserDetailContext } from "@/context/UserDetailContext";
 import { Ionicons } from "@expo/vector-icons";
-import bcrypt from 'bcryptjs';
 import { signInWithEmailAndPassword, signOut } from "@firebase/auth";
+import bcrypt from 'bcryptjs';
 import { router } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import { useContext, useState } from "react";
@@ -35,16 +35,21 @@ export default function SignIn() {
   };
 
   const signInByClick = async () => {
+    const normalizedGmail = gmail.trim().toLowerCase(); // ← thêm dòng này
+    console.log("Đang đăng nhập với:", gmail);
     try {
-      const res = await signInWithEmailAndPassword(auth, gmail, password);
-      if (res.user) {
-        const result = await getDoc(doc(db, "users", gmail));
-        const userData = result.data();
-        if (userData?.locked) {
-          await signOut(auth);
-        }
-        checkAndEnter(userData);
+      const res = await signInWithEmailAndPassword(auth, normalizedGmail, password);
+      console.log("Auth thành công:", res.user.uid);
+
+      const result = await getDoc(doc(db, "users", normalizedGmail));
+      console.log("Firestore exists:", result.exists());
+      console.log("userData:", result.data());
+      const userData = result.data();
+      if (userData?.locked) {
+        await signOut(auth);
       }
+      checkAndEnter(userData);
+
     } catch (firebaseError) {
       // Fallback: kiểm tra tài khoản/mật khẩu trực tiếp từ Firestore
       try {

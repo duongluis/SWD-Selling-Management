@@ -1,7 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, FlatList, Platform, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-
-const isDesktop = Platform.OS === "web";
+import { ActivityIndicator, Dimensions, FlatList, Platform, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 function getInitials(name) {
     if (!name) return "?";
@@ -17,6 +15,7 @@ const CONSULT_STATUS = {
 };
 
 export function CTVDashboard({ customers, consultMap, loading, refreshing, onRefresh, onAddConsult, onPressCustomer, search, setSearch }) {
+    const { isDesktop } = useLayout();
     const total = customers.length;
     const consulted = customers.filter(c => consultMap[c.docId] && consultMap[c.docId] !== "none").length;
     const success = customers.filter(c => consultMap[c.docId] === "success").length;
@@ -161,20 +160,20 @@ export function CTVDashboard({ customers, consultMap, loading, refreshing, onRef
 
 const C = StyleSheet.create({
     headerWrap: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
-    pageTitle: { fontSize: isDesktop ? 26 : 22, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5 },
+    pageTitle: { fontSize: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 26 : 22, fontWeight: "800", color: "#0F172A", letterSpacing: -0.5 },
     pageDesc: { fontSize: 13, color: "#64748B", marginTop: 3 },
-    addBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#1E3A8A", paddingHorizontal: isDesktop ? 16 : 12, paddingVertical: 10, borderRadius: 10 },
+    addBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#1E3A8A", paddingHorizontal: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 16 : 12, paddingVertical: 10, borderRadius: 10 },
     addBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
     statsRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
     statCard: { flex: 1, backgroundColor: "#fff", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#E2E8F0", minWidth: 0 },
     statTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 },
     statIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-    statLabel: { fontSize: isDesktop ? 12 : 10, color: "#64748B", marginBottom: 4 },
-    statValue: { fontSize: isDesktop ? 28 : 22, fontWeight: "900", letterSpacing: -0.5 },
+    statLabel: { fontSize: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 12 : 10, color: "#64748B", marginBottom: 4 },
+    statValue: { fontSize: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 28 : 22, fontWeight: "900", letterSpacing: -0.5 },
     tableCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0", overflow: "hidden", marginBottom: 16 },
     tableTopBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
     tableTitle: { fontSize: 15, fontWeight: "700", color: "#0F172A" },
-    searchBox: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#F8FAFC", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: "#E2E8F0", minWidth: isDesktop ? 180 : 130 },
+    searchBox: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#F8FAFC", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: "#E2E8F0", minWidth: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 180 : 130 },
     searchInput: { flex: 1, fontSize: 13, color: "#0F172A" },
     colHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "#F8FAFC", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
     colText: { fontSize: 10, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.5 },

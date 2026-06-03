@@ -17,7 +17,7 @@ import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
 
-const width = Dimensions.get('window')
+const width = Dimensions.get('window').width
 function getInitials(name) {
     if (!name) return '?';
     return name.trim().split(/\s+/).filter(n => n.length > 0).map(n => n[0]).join('').toUpperCase().slice(0, 2);

@@ -9,6 +9,8 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useState } from 'react';
 import {
     ActivityIndicator,
+    Dimensions,
+    Platform,
     RefreshControl,
     ScrollView, StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
@@ -16,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fmtPhone } from '../../components/Utils/formatters';
 import { db } from '../../config/firebaseConfig';
 
-const { isDesktop } = useLayout();
+
 
 // Map role hiển thị
 const ROLE_DISPLAY = {
@@ -63,6 +65,7 @@ export default function TeamView() {
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState(null);
     const [selectedMember, setSelectedMember] = useState(null); // state cho panel chi tiết
+    const { isDesktop } = useLayout();
 
     const fetchTeam = useCallback(async () => {
         if (!userDetail?.email) return;
@@ -206,7 +209,7 @@ const styles = StyleSheet.create({
     header: { paddingHorizontal: 20, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     headerTitle: { fontSize: 24, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
     headerSub: { fontSize: 14, color: '#64748B', marginTop: 4 },
-    contentRow: { flex: 1, flexDirection: isDesktop ? 'row' : 'column' },
+    contentRow: { flex: 1, flexDirection: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 'row' : 'column' },
     listContainer: { flex: 1, minWidth: 0 },
     scrollContent: { paddingHorizontal: 16, paddingTop: 12 },
     section: { marginBottom: 24 },

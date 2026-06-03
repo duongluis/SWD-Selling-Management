@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-const { isDesktop } = useLayout();
+
 
 function StatCard({ icon, label, value, color, bg }) {
+    const { isDesktop } = useLayout();
     return (
         <View style={[S.card, isDesktop && S.cardWeb]}>
             <View style={[S.iconWrap, { backgroundColor: bg }]}>
@@ -23,25 +24,25 @@ function StatCard({ icon, label, value, color, bg }) {
  */
 export default function StatBar({ stats = [] }) {
     if (!stats.length) return null;
-
-    if (isDesktop) return (
+    const { isDesktop } = useLayout();
+    return isDesktop ? (
         <View style={S.rowWeb}>
             {stats.map((s, i) => <StatCard key={i} {...s} />)}
         </View>
-    );
+    ) :
 
-    return (
-        // ✅ Bọc thêm View với height cố định để giới hạn
-        <View style={{ height: 72, overflow: 'hidden' }}>
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={S.rowMobile}
-            >
-                {stats.map((s, i) => <StatCard key={i} {...s} />)}
-            </ScrollView>
-        </View>
-    );
+        (
+            // ✅ Bọc thêm View với height cố định để giới hạn
+            <View style={{ height: 72, overflow: 'hidden' }}>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={S.rowMobile}
+                >
+                    {stats.map((s, i) => <StatCard key={i} {...s} />)}
+                </ScrollView>
+            </View>
+        );
 }
 
 const S = StyleSheet.create({

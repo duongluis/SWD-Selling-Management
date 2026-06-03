@@ -22,7 +22,7 @@ import { db } from '../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
 
-const width = Dimensions.get('window')
+const width = Dimensions.get('window').width
 const RANK_COLORS = ['#F59E0B', '#94A3B8', '#CD7F32'];
 const AVATAR_COLORS = ['#2563EB', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444'];
 const RANK_ICONS = ['🥇', '🥈', '🥉'];

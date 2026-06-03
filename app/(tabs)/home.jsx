@@ -10,7 +10,7 @@ import { getRole } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useContext, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
 import {
   ActivityIndicator, Modal,
   ScrollView,
@@ -237,135 +237,125 @@ export default function HomeView() {
     { icon: 'trending-up-outline', label: 'Doanh Thu TB/Đơn', value: totalOrders > 0 ? fmtCurrency(totalRevenue / totalOrders) : '0đ', color: '#F59E0B', bg: '#FFFBEB' },
   ];
 
-  // ─────────────────────────────────────────────────────────
-  // MOBILE LAYOUT
-  // ─────────────────────────────────────────────────────────
-  if (isMobile) {
-    return (
-      <View style={MB.root}>
-        {/* Greeting header với safe area */}
-        <MobileGreeting
-          userDetail={userDetail}
-          role={role}
-          onExport={() => setExportOpen(true)}
-        />
+  return isMobile ? (
+    <View style={MB.root}>
+      {/* Greeting header với safe area */}
+      <MobileGreeting
+        userDetail={userDetail}
+        role={role}
+        onExport={() => setExportOpen(true)}
+      />
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={MB.scroll}
-        >
-          {/* Stat cards — dọc */}
-          <View style={MB.statsSection}>
-            <MobileStatCard
-              icon="cash-outline"
-              label="Doanh thu tháng"
-              value={fmtCurrency(totalRevenue)}
-              color="#10B981"
-              bg="#ECFDF5"
-            />
-            <MobileStatCard
-              icon="receipt-outline"
-              label="Đơn hàng mới"
-              value={String(totalOrders)}
-              color="#3B82F6"
-              bg="#EFF6FF"
-            />
-            <MobileStatCard
-              icon="people-outline"
-              label="Khách hàng"
-              value={String(customerList.length)}
-              color="#8B5CF6"
-              bg="#F5F3FF"
-            />
-            <MobileStatCard
-              icon="trending-up-outline"
-              label="Doanh thu TB/đơn"
-              value={totalOrders > 0 ? fmtCurrency(totalRevenue / totalOrders) : '0đ'}
-              color="#F59E0B"
-              bg="#FFFBEB"
-            />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={MB.scroll}
+      >
+        {/* Stat cards — dọc */}
+        <View style={MB.statsSection}>
+          <MobileStatCard
+            icon="cash-outline"
+            label="Doanh thu tháng"
+            value={fmtCurrency(totalRevenue)}
+            color="#10B981"
+            bg="#ECFDF5"
+          />
+          <MobileStatCard
+            icon="receipt-outline"
+            label="Đơn hàng mới"
+            value={String(totalOrders)}
+            color="#3B82F6"
+            bg="#EFF6FF"
+          />
+          <MobileStatCard
+            icon="people-outline"
+            label="Khách hàng"
+            value={String(customerList.length)}
+            color="#8B5CF6"
+            bg="#F5F3FF"
+          />
+          <MobileStatCard
+            icon="trending-up-outline"
+            label="Doanh thu TB/đơn"
+            value={totalOrders > 0 ? fmtCurrency(totalRevenue / totalOrders) : '0đ'}
+            color="#F59E0B"
+            bg="#FFFBEB"
+          />
+        </View>
+
+        {/* Đơn hàng gần đây */}
+        <View style={MB.section}>
+          <View style={MB.sectionHeader}>
+            <Text style={MB.sectionTitle}>Đơn hàng gần đây</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/order')}>
+              <Text style={MB.sectionLink}>Xem tất cả →</Text>
+            </TouchableOpacity>
           </View>
-
-          {/* Đơn hàng gần đây */}
-          <View style={MB.section}>
-            <View style={MB.sectionHeader}>
-              <Text style={MB.sectionTitle}>Đơn hàng gần đây</Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)/order')}>
-                <Text style={MB.sectionLink}>Xem tất cả →</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={MB.orderCard}>
-              {recentOrders.length === 0 ? (
-                <View style={MB.emptyBox}>
-                  <Ionicons name="receipt-outline" size={28} color="#CBD5E1" />
-                  <Text style={MB.emptyText}>Chưa có đơn hàng</Text>
-                </View>
-              ) : (
-                recentOrders.map(order => (
-                  <MobileOrderRow key={order.id} order={order} />
-                ))
-              )}
-            </View>
+          <View style={MB.orderCard}>
+            {recentOrders.length === 0 ? (
+              <View style={MB.emptyBox}>
+                <Ionicons name="receipt-outline" size={28} color="#CBD5E1" />
+                <Text style={MB.emptyText}>Chưa có đơn hàng</Text>
+              </View>
+            ) : (
+              recentOrders.map(order => (
+                <MobileOrderRow key={order.id} order={order} />
+              ))
+            )}
           </View>
+        </View>
 
-          {/* Khách hàng gần đây */}
-          <View style={MB.section}>
-            <View style={MB.sectionHeader}>
-              <Text style={MB.sectionTitle}>Khách hàng gần đây</Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)/customer')}>
-                <Text style={MB.sectionLink}>Xem tất cả →</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={MB.orderCard}>
-              {customerLoading ? (
-                <ActivityIndicator size="small" color="#2563EB" style={{ padding: 16 }} />
-              ) : customerList.length === 0 ? (
-                <View style={MB.emptyBox}>
-                  <Ionicons name="people-outline" size={28} color="#CBD5E1" />
-                  <Text style={MB.emptyText}>Chưa có khách hàng</Text>
-                </View>
-              ) : (
-                customerList.slice(0, 4).map((c, i) => (
-                  <View key={c.docId || i} style={MB.custRow}>
-                    <View style={[MB.custAvatar, { backgroundColor: ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B'][i % 4] }]}>
-                      <Text style={MB.custAvatarText}>{getInitials(c.name)}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={MB.custName}>{c.name}</Text>
-                      <Text style={MB.custPhone}>{c.phone || 'Chưa có SĐT'}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
+        {/* Khách hàng gần đây */}
+        <View style={MB.section}>
+          <View style={MB.sectionHeader}>
+            <Text style={MB.sectionTitle}>Khách hàng gần đây</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/customer')}>
+              <Text style={MB.sectionLink}>Xem tất cả →</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={MB.orderCard}>
+            {customerLoading ? (
+              <ActivityIndicator size="small" color="#2563EB" style={{ padding: 16 }} />
+            ) : customerList.length === 0 ? (
+              <View style={MB.emptyBox}>
+                <Ionicons name="people-outline" size={28} color="#CBD5E1" />
+                <Text style={MB.emptyText}>Chưa có khách hàng</Text>
+              </View>
+            ) : (
+              customerList.slice(0, 4).map((c, i) => (
+                <View key={c.docId || i} style={MB.custRow}>
+                  <View style={[MB.custAvatar, { backgroundColor: ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B'][i % 4] }]}>
+                    <Text style={MB.custAvatarText}>{getInitials(c.name)}</Text>
                   </View>
-                ))
-              )}
-            </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={MB.custName}>{c.name}</Text>
+                    <Text style={MB.custPhone}>{c.phone || 'Chưa có SĐT'}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
+                </View>
+              ))
+            )}
           </View>
+        </View>
 
-          <View style={{ height: 120 }} />
-        </ScrollView>
+        <View style={{ height: 120 }} />
+      </ScrollView>
 
-        {/* FAB — nút thêm đơn hàng */}
-        {role !== 'ctv' && (
-          <TouchableOpacity
-            style={MB.fab}
-            onPress={() => router.push('/addOrder')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add" size={28} color="#fff" />
-          </TouchableOpacity>
-        )}
+      {/* FAB — nút thêm đơn hàng */}
+      {role !== 'ctv' && (
+        <TouchableOpacity
+          style={MB.fab}
+          onPress={() => router.push('/addOrder')}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={28} color="#fff" />
+        </TouchableOpacity>
+      )}
 
-        {role === 'admin' && (
-          <ExportModal visible={exportOpen} onClose={() => setExportOpen(false)} />
-        )}
-      </View>
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────
-  // WEB LAYOUT (giữ nguyên)
-  // ─────────────────────────────────────────────────────────
-  return (
+      {role === 'admin' && (
+        <ExportModal visible={exportOpen} onClose={() => setExportOpen(false)} />
+      )}
+    </View>
+  ) : (
     <TabScreenLayout>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={H.scroll}>
         <View style={H.webBanner}>
