@@ -15,7 +15,6 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-// ── IMPORT HỆ THỐNG STYLES TIỆN ÍCH MỚI ──
 import { useCardStyles } from '@/components/Styles/cardStyles';
 import { useTableStyles } from '@/components/Styles/tableStyles';
 import { THEME } from '@/components/Styles/theme';
@@ -26,9 +25,44 @@ const TYPE_CFG = {
   buon: { label: 'Đơn buôn', c: '#065F46', bg: '#ECFDF5' },
   le: { label: 'Đơn lẻ', c: '#5B21B6', bg: '#F5F3FF' },
 };
+
 const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899'];
 
-// ── Bảng tiêu đề (Chỉ hiện trên Desktop) ──
+// ── Status color map ─────────────────────────────────────────
+const STATUS_CFG = {
+  'Chờ xác nhận': { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
+  'Chờ lắp đặt': { c: '#2563EB', bg: '#EFF6FF', bd: '#BFDBFE' },
+  'Đang lắp đặt': { c: '#7C3AED', bg: '#F5F3FF', bd: '#DDD6FE' },
+  'Đã thanh toán': { c: '#16A34A', bg: '#DCFCE7', bd: '#86EFAC' },
+  'Đã hủy': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
+  'CANCELLED': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
+};
+const getStatusCfg = (s) => STATUS_CFG[s] || { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' };
+
+const getUserLevel = (userDetail) => {
+  if (!userDetail?.advisor) return 1;
+  if (userDetail?.level) return userDetail.level;
+  return 2; // có advisor → tối thiểu cấp 2
+};
+
+const canShowCost = (userDetail, role) => {
+  if (isAdmin(role)) return true;
+  return getUserLevel(userDetail) === 1;
+};
+
+// ── Giá nhập cho cấp 2/3: lấy theo role của rootAdvisor ─────
+// rootAdvisor là đại lý cấp 1 → luôn dùng price_a
+// Nếu bạn lưu role của rootAdvisor vào userDetail.rootAdvisorRole thì dùng getPriceField(rootAdvisorRole)
+const getCostPriceField = (userDetail, role) => {
+  if (isAdmin(role)) return getPriceField(role);
+  if (getUserLevel(userDetail) === 1) return getPriceField(role);
+  // Cấp 2/3: giá nhập = giá mà rootAdvisor (cấp 1) bán cho họ
+  // rootAdvisor thường là 'daily' → price_a
+  const rootAdvisorRole = userDetail?.rootAdvisorRole || 'daily';
+  return getPriceField(getRole({ role: rootAdvisorRole }));
+};
+
+// ── Bảng tiêu đề ─────────────────────────────────────────────
 function TableHeader({ showCost, tableStyles }) {
   return (
     <View style={tableStyles.head}>
@@ -38,30 +72,42 @@ function TableHeader({ showCost, tableStyles }) {
       <View style={COL.sub}><Text style={tableStyles.th}>Sản phẩm</Text></View>
       {showCost && (
         <View style={COL.cost}>
-          <Text style={[tableStyles.th, tableStyles.thCenter]}>Tiền nhập</Text>
+          <Text style={[tableStyles.th]}>Tiền nhập</Text>
         </View>
       )}
-      <View style={COL.amount}><Text style={[tableStyles.th, tableStyles.thCenter]}>Tổng giá trị</Text></View>
+      {showCost && (
+        <View style={COL.amount}>
+          <Text style={[tableStyles.th]}>Tổng giá trị</Text>
+        </View>
+      )}
       <View style={COL.status}><Text style={[tableStyles.th, tableStyles.thCenter]}>Trạng thái</Text></View>
       <View style={COL.trail} />
     </View>
   );
 }
 
-// ── Dòng dữ liệu đơn hàng ──
+// ── Dòng dữ liệu đơn hàng ────────────────────────────────────
 function OrderRow({ item, index, isActive, onPress, showCost, priceField, tableStyles }) {
   const tcfg = TYPE_CFG[item.orderType];
   const total = (item.items || []).reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
   const pCount = (item.items || []).length;
   const isCancelled = (item.status || '').includes('hủy') || item.status === 'CANCELLED';
   const avatarColor = isCancelled ? '#94A3B8' : AVATAR_COLORS[index % AVATAR_COLORS.length];
+  const scfg = getStatusCfg(item.status);
 
   const date = item.createdAt
     ? new Date(item.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : '—';
 
+  // Tiền nhập: ưu tiên lấy từ rootAdvisorPrice nếu có (lưu khi tạo đơn)
+  // Fallback: tính từ priceField trong productPrice
   const totalCostRow = (item.items || []).reduce((s, p) => {
-    const costPrice = PARSE(p.productPrice?.[priceField] ?? p[priceField] ?? 0);
+    const costPrice = PARSE(
+      p.basePrice ??            // ✅ thêm vào đầu
+      p.rootAdvisorPrice ??
+      p.productPrice?.[priceField] ??
+      p[priceField] ?? 0
+    );
     return s + costPrice * PARSE(p.qty || 1);
   }, 0);
 
@@ -99,6 +145,7 @@ function OrderRow({ item, index, isActive, onPress, showCost, priceField, tableS
         <Text style={tableStyles.cellMuted} numberOfLines={1}>{pCount} sản phẩm</Text>
       </View>
 
+      {/* ✅ Chỉ hiện cho cấp 1 và admin */}
       {showCost && (
         <View style={COL.cost}>
           <Text style={[ROW.cellAmount, isCancelled && ROW.textMuted]} numberOfLines={1}>
@@ -107,15 +154,21 @@ function OrderRow({ item, index, isActive, onPress, showCost, priceField, tableS
         </View>
       )}
 
-      <View style={COL.amount}>
-        <Text style={[ROW.cellAmount, isCancelled && ROW.textMuted]} numberOfLines={1}>
-          {fmtCurrency(total)}
-        </Text>
-      </View>
+      {showCost && (
+        <View style={COL.amount}>
+          <Text style={[ROW.cellAmount, isCancelled && ROW.textMuted]} numberOfLines={1}>
+            {fmtCurrency(total)}
+          </Text>
+        </View>
+      )}
 
+      {/* ✅ Status pill có màu */}
       <View style={COL.status}>
-        <View style={ROW.statusContainer}>
-          <Text style={ROW.statusLabel}>{item.status || 'PENDING'}</Text>
+        <View style={[ROW.statusPill, { backgroundColor: scfg.bg, borderColor: scfg.bd }]}>
+          <View style={[ROW.statusDot, { backgroundColor: scfg.c }]} />
+          <Text style={[ROW.statusLabel, { color: scfg.c }]} numberOfLines={1}>
+            {item.status || 'Chờ xác nhận'}
+          </Text>
         </View>
       </View>
 
@@ -129,14 +182,16 @@ function OrderRow({ item, index, isActive, onPress, showCost, priceField, tableS
 export default function OrderScreen() {
   const router = useRouter();
   const { data, loading, refreshing, refresh, stats, role, userDetail } = useScreenData('orders');
-  const showCostField = role === 'daily' || userDetail?.advisor == null || isAdmin(role);
-  const priceField = getPriceField(role);
+
+  // ✅ Xác định cấp và quyền xem giá
+  const showCostField = canShowCost(userDetail, role);
+  const priceField = getCostPriceField(userDetail, role);
+
   const { query, setQuery } = useSearch(data, ['id', 'customer']);
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selected, setSelected] = useState(null);
 
-  // ── ÁP DỤNG HOOK STYLES ĐỘNG ──
   const { styles: cardStyles, isDesktop } = useCardStyles();
   const { styles: tableStyles } = useTableStyles();
 
@@ -164,25 +219,33 @@ export default function OrderScreen() {
       .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + PARSE(p.price) * PARSE(p.qty || 1), 0), 0)
     , [data]);
 
-  const totalCost = useMemo(() =>
-    data.filter(o => !['Đã hủy', 'CANCELLED'].includes(o.status))
+  // ✅ Tổng tiền nhập: chỉ tính cho cấp 1
+  const totalCost = useMemo(() => {
+    if (!showCostField) return 0;
+    return data
+      .filter(o => !['Đã hủy', 'CANCELLED'].includes(o.status))
       .reduce((sum, o) =>
         sum + (o.items || []).reduce((s, p) => {
-          const costPrice = PARSE(p.productPrice?.[priceField] ?? p[priceField] ?? 0);
+          const costPrice = PARSE(
+            p.basePrice ??        // ✅ field thực tế trong Firestore
+            p.rootAdvisorPrice ??
+            p.productPrice?.[priceField] ??
+            p[priceField] ?? 0
+          );
           return s + costPrice * PARSE(p.qty || 1);
         }, 0)
-        , 0)
-    , [data, priceField]);
+        , 0);
+  }, [data, priceField, showCostField]);
 
   const statCards = [
     { icon: 'receipt-outline', label: 'Đơn hàng', value: String(stats.total || 0), color: THEME.colors.primary, bg: THEME.colors.primaryLight },
     { icon: 'cube-outline', label: 'Đơn buôn', value: String(data.filter(o => o.orderType === 'buon').length), color: THEME.colors.success, bg: THEME.colors.successLight },
     { icon: 'home-outline', label: 'Đơn lẻ', value: String(data.filter(o => o.orderType === 'le').length), color: THEME.colors.purple, bg: THEME.colors.purpleLight },
     { icon: 'cash-outline', label: 'Doanh thu', value: fmtCurrency(totalRevenue), color: THEME.colors.warning, bg: THEME.colors.warningLight },
+    // ✅ Chỉ hiện stat tiền nhập cho cấp 1 / admin
     ...(showCostField ? [{ icon: 'pricetag-outline', label: 'Tiền nhập', value: fmtCurrency(totalCost), color: '#0891B2', bg: '#ECFEFF' }] : []),
   ];
 
-  // ── Xử lý điều hướng Responsive chuẩn hóa ──
   const handlePress = (item) => {
     if (isDesktop) {
       setSelected(p => p?.id === item.id ? null : item);
@@ -271,7 +334,6 @@ export default function OrderScreen() {
   );
 }
 
-// ── Chỉ giữ lại các style đặc thù không thể dùng chung của màn hình này ──
 const COL = {
   lead: { width: 36 },
   order: { flex: 2, minWidth: 160 },
@@ -279,7 +341,7 @@ const COL = {
   sub: { flex: 1, minWidth: 90 },
   amount: { flex: 1, minWidth: 110 },
   cost: { flex: 1, minWidth: 110 },
-  status: { width: 130 },
+  status: { width: 140 },
   trail: { width: 20 },
 };
 
@@ -291,9 +353,13 @@ const ROW = StyleSheet.create({
   customer: { fontSize: 12, color: THEME.colors.textSecondary },
   badge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: THEME.radius.sm },
   badgeText: { fontSize: 10, fontWeight: '700' },
-  cellAmount: { fontSize: 13, fontWeight: '500', color: THEME.colors.textPrimary, textAlign: 'center' },
-  statusContainer: { alignSelf: 'center' },
-  statusLabel: { fontSize: 12, fontWeight: '700', color: THEME.colors.textSecondary },
+  cellAmount: { fontSize: 13, fontWeight: '500', color: THEME.colors.textPrimary, textAlign: 'left' },
+
+  // ✅ Status pill có màu
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 1, alignSelf: 'center' },
+  statusDot: { width: 5, height: 5, borderRadius: 3 },
+  statusLabel: { fontSize: 11, fontWeight: '700' },
+
   textStrike: { textDecorationLine: 'line-through', color: THEME.colors.textMuted },
   textMuted: { color: THEME.colors.textMuted },
 });

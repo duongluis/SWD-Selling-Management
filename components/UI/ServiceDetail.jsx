@@ -127,8 +127,14 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
         showAlert('Cập nhật trạng thái', `Chuyển sang "${newStatus}"?`, async () => {
             setUpdating(true);
             try {
-                await updateDoc(doc(db, 'service', local.docId), { status: newStatus });
+                const updatePayload = {
+                    status: newStatus,
+                    ...(newStatus === 'Hoàn thành' && {
+                        completedDate: new Date().toISOString(),
+                    }),
+                };
 
+                await updateDoc(doc(db, 'service', local.docId), updatePayload);
                 syncOrderStatusFromService(
                     { type: local.type, orderId: local.orderId, phone: local.phone },
                     newStatus
@@ -201,12 +207,22 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                         <Text style={S.subtitle}>{local.customer}</Text>
                     </View>
                 </View>
+
                 <View style={S.actions}>
-                    {admin && (local.status == 'Chờ xử lý' || local.status == 'Đang xử lý') && (
-                        <TouchableOpacity style={S.aBtn}
-                            onPress={() => router.push({ pathname: '/editService/[serviceID]', params: { serviceID: local.docId, serviceParam: JSON.stringify(local) } })}>
+                    {admin && ['Chờ xử lý', 'Đang xử lý'].includes(local.status) && (
+                        <TouchableOpacity style={S.aBtn} onPress={() => router.push(
+                            {
+                                pathname: '/editService/[serviceID]',
+                                params: { serviceID: local.docId, serviceParam: JSON.stringify(local) }
+                            })}>
                             <Ionicons name="create-outline" size={13} color="#2563EB" />
                             <Text style={S.aBtnText}>Chỉnh sửa</Text>
+                        </TouchableOpacity>
+                    )}
+                    {admin && local.status !== 'Đã hủy' && local.status !== 'Hoàn thành' && (
+                        <TouchableOpacity style={S.aDanger} onPress={() => handleStatusChange('Đã hủy')}>
+                            <Ionicons name="ban-outline" size={13} color="#DC2626" />
+                            <Text style={S.aDangerText}>Huỷ dịch vụ</Text>
                         </TouchableOpacity>
                     )}
                 </View>

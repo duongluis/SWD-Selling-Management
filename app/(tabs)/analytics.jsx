@@ -59,26 +59,84 @@ export default function AnalyticsScreen() {
     const fetchData = useCallback(async () => {
         if (!userDetail?.email) return;
         try {
-            const cSnap = isAdmin
-                ? await getDocs(collection(db, 'customers'))
-                : await getDocs(query(collection(db, 'customers'), where('createdBy', '==', userDetail.email)));
-            const phones = cSnap.docs.map(d => d.data().phone).filter(Boolean);
+            // ── Lấy revenueTotal trực tiếp từ user doc ────────
+            const selfRef = doc(db, 'users', userDetail.email);
+            const selfSnap = await getDoc(selfRef);
+            const selfData = selfSnap.data() || {};
+
+            // ── Lấy orders để vẽ chart và lịch sử ────────────
+            // Dùng revenueOrders[] để biết đúng order nào đã tính
+            const trackedOrderIds = new Set(selfData.revenueOrders || []);
+
+            // Lấy customers của bản thân + cấp dưới
+            let targetEmails = [userDetail.email];
+
+            if (!isAdmin) {
+                const lvl2Snap = await getDocs(
+                    query(collection(db, 'users'), where('advisor', '==', userDetail.email))
+                );
+                const lvl2Emails = lvl2Snap.docs.map(d => d.data().email).filter(Boolean);
+
+                let lvl3Emails = [];
+                if (lvl2Emails.length > 0) {
+                    const chunks = [];
+                    for (let i = 0; i < lvl2Emails.length; i += 30)
+                        chunks.push(lvl2Emails.slice(i, i + 30));
+                    await Promise.all(chunks.map(async chunk => {
+                        const s = await getDocs(
+                            query(collection(db, 'users'), where('advisor', 'in', chunk))
+                        );
+                        s.docs.forEach(d => { if (d.data().email) lvl3Emails.push(d.data().email); });
+                    }));
+                }
+                targetEmails = [...new Set([userDetail.email, ...lvl2Emails, ...lvl3Emails])];
+            }
+
+            // Lấy phones của customers
+            let allPhones = [];
+            if (isAdmin) {
+                const snap = await getDocs(collection(db, 'customers'));
+                allPhones = snap.docs.map(d => d.data().phone).filter(Boolean);
+            } else {
+                const chunks = [];
+                for (let i = 0; i < targetEmails.length; i += 30)
+                    chunks.push(targetEmails.slice(i, i + 30));
+                await Promise.all(chunks.map(async chunk => {
+                    const s = await getDocs(
+                        query(collection(db, 'customers'), where('createdBy', 'in', chunk))
+                    );
+                    s.docs.forEach(d => { if (d.data().phone) allPhones.push(d.data().phone); });
+                }));
+                allPhones = [...new Set(allPhones)];
+            }
+
+            // Lấy tất cả orders
             const all = [];
-            await Promise.all(phones.slice(0, 100).map(async phone => {
+            await Promise.all(allPhones.slice(0, 150).map(async phone => {
                 try {
                     const s = await getDoc(doc(db, 'orders', phone));
                     if (s.exists()) (s.data().orders || []).forEach(o => all.push(o));
                 } catch (_) { }
             }));
+
             setOrders(all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
+
+            // Leaderboard
             if (isAdmin) {
                 const snap = await getDocs(query(collection(db, 'users'), where('verified', '==', true)));
-                setLeaderboard(snap.docs.map(d => d.data())
-                    .filter(u => (u.role || u.member || '').toLowerCase() !== 'admin' && (u.revenueTotal || 0) > 0)
-                    .sort((a, b) => (b.revenueTotal || 0) - (a.revenueTotal || 0)).slice(0, 5));
+                setLeaderboard(
+                    snap.docs.map(d => d.data())
+                        .filter(u => (u.role || u.member || '').toLowerCase() !== 'admin' && (u.revenueTotal || 0) > 0)
+                        .sort((a, b) => (b.revenueTotal || 0) - (a.revenueTotal || 0))
+                        .slice(0, 5)
+                );
             }
-        } catch (e) { console.error(e); }
-        finally { setLoading(false); setRefreshing(false); }
+        } catch (e) {
+            console.error('fetchData error:', e);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
     }, [userDetail?.email, isAdmin]);
 
     useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));

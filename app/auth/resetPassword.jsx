@@ -5,28 +5,38 @@ import { sendPasswordResetEmail } from "@firebase/auth";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
-  Alert,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import auth from "../../config/firebaseConfig";
+import { showAlert } from "@/components/Main/showAlert";
+import { showSuccess } from "@/components/Main/showSuccess";
 
 export default function ResetPassword() {
   const [gmail, setGmail] = useState("");
 
   const sendResetLink = async () => {
+    if (!gmail.trim()) {
+      showAlert('Thông báo', 'Vui lòng nhập địa chỉ email');
+      return;
+    }
     try {
-      await sendPasswordResetEmail(auth, gmail);
-      Alert.alert(
-        "Đã gửi",
-        "Vui lòng kiểm tra hộp thư email để lấy link đặt lại mật khẩu.",
+      await sendPasswordResetEmail(auth, gmail.trim().toLowerCase());
+      showSuccess(
+        'Đã gửi',
+        'Vui lòng kiểm tra hộp thư email để lấy link đặt lại mật khẩu.',
+        () => router.replace('/auth/signIn')
       );
     } catch (e) {
       console.log(e);
-      Alert.alert("Lỗi", e.code === 'auth/user-not-found' ? 'Email chưa được đăng ký' : e.message);
+      const msg =
+        e.code === 'auth/user-not-found' ? 'Email chưa được đăng ký' :
+          e.code === 'auth/invalid-email' ? 'Email không hợp lệ' :
+            e.message;
+      showAlert('Lỗi', msg);
     }
   };
 

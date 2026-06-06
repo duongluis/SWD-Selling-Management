@@ -163,7 +163,7 @@ const OrderTypeField = React.memo(({ ws, orderType, lockedType, setOrderType }) 
       <View style={[ws ? W.orderTypeLocked : styles.orderTypeLocked, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
         <Ionicons name={cfg.icon} size={14} color={cfg.color} />
         <Text style={[ws ? W.orderTypeLockedText : styles.orderTypeLockedText, { color: cfg.color }]}>{cfg.label}</Text>
-        <Text style={ws ? W.orderTypeLockedDesc : styles.orderTypeLockedDesc}>· {cfg.desc}</Text>
+        {/* <Text style={ws ? W.orderTypeLockedDesc : styles.orderTypeLockedDesc}>· {cfg.desc}</Text> */}
         <View style={ws ? W.orderTypeLockIcon : styles.orderTypeLockIcon}>
           <Ionicons name="lock-closed-outline" size={11} color={cfg.color} />
         </View>
@@ -242,7 +242,7 @@ const AddProductForm = React.memo(({ ws, orderType, catalog, priceField, priceLa
       name: p.name,
       qty: '1',
       price: String(p[priceField] || p.price || 0),
-      basePrice: p[priceField] || p.price || 0,
+      basePrice: p.price || 0,
       productId: String(p.id || p.docId),
     });
     setShowProductDrop(false);
@@ -798,7 +798,7 @@ export default function AddOrder() {
                 <Ionicons name="cube-outline" size={16} color="#2563EB" />
                 <Text style={W.cardTitle}>Sản phẩm</Text>
                 {products.length > 0 && <View style={W.productCount}><Text style={W.productCountText}>{products.length}</Text></View>}
-                <View style={W.roleBadge}><Ionicons name="pricetag-outline" size={11} color="#059669" /><Text style={W.roleBadgeText}>{priceLabel}</Text></View>
+                {/* <View style={W.roleBadge}><Ionicons name="pricetag-outline" size={11} color="#059669" /><Text style={W.roleBadgeText}>{priceLabel}</Text></View> */}
               </View>
               {products.map(p => (
                 <View key={p.id} style={W.productRow}>

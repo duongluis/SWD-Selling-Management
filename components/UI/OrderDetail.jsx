@@ -11,7 +11,7 @@ import statusConfig from '@/config/status.json';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator, Dimensions, Modal, Platform, ScrollView, StyleSheet,
@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import banksData from '../../config/banks.json';
+import { useLayout } from '../Main/TabScreenLayout';
 import { generateVietQR } from '../Utils/vietQR';
 let QRCodeWeb = null;
 if (Platform.OS === 'web') {
@@ -63,18 +64,37 @@ async function _getAdminInfo() {
     }
 }
 
-async function _getUserByEmail(email) {
-    if (!email) return null;
+// Thay thế hàm _getUserByEmail bằng hàm này
+async function _getLevel1Advisor(createdByEmail) {
+    if (!createdByEmail) return null;
     try {
-        const docRef = doc(db, 'users', email);
-        const snap = await getDoc(docRef);
-        if (snap.exists()) return snap.data();
-        return null;
+        // Lấy thông tin người tạo đơn
+        const userSnap = await getDoc(doc(db, 'users', createdByEmail));
+        if (!userSnap.exists()) return null;
+        const userData = userSnap.data();
+
+        // Cấp 1: advisor === null → chính họ là cấp 1
+        if (!userData.advisor) return userData;
+
+        // Cấp 2: advisor trỏ về cấp 1
+        const lvl1Snap = await getDoc(doc(db, 'users', userData.advisor));
+        if (!lvl1Snap.exists()) return userData; // fallback
+        const lvl1Data = lvl1Snap.data();
+
+        // Nếu cấp 1 không có advisor → đúng rồi
+        if (!lvl1Data.advisor) return lvl1Data;
+
+        // Cấp 3: advisor của lvl1 trỏ về cấp 1 thực sự
+        const lvl0Snap = await getDoc(doc(db, 'users', lvl1Data.advisor));
+        if (!lvl0Snap.exists()) return lvl1Data; // fallback
+        return lvl0Snap.data();
+
     } catch (e) {
-        console.error("Lỗi lấy thông tin user:", e);
+        console.error('_getLevel1Advisor error:', e);
         return null;
     }
 }
+
 function _buildHandoverHtml({ order, seller, services, logoBase64 }) {
     const today = new Date();
     const currentYear = today.getFullYear();
@@ -140,10 +160,11 @@ function _buildHandoverHtml({ order, seller, services, logoBase64 }) {
         
         <div class="header-title">BIÊN BẢN NGHIỆM THU VÀ BÀN GIAO CHẤT LƯỢNG<br/>KHỐI LƯỢNG HẠNG MỤC THI CÔNG</div>
         <div class="sub-title">Ngày bàn giao: ..../..../${currentYear}</div>
+        <div class="sub-title">Ngày lắp đặt: ..../..../${currentYear}</div>
 
-   <p>Hạng mục cung cấp thiết bị và thi công: <strong>"${(order.items || []).map(p => p.name).join(', ')
-        }"</strong></p>
+ <!--  <p>Hạng mục cung cấp thiết bị và thi công: <strong>"${(order.items || []).map(p => p.name).join(', ')} "</strong></p> -->
 
+   <p>Hạng mục cung cấp thiết bị và thi công <strong>"Hệ thống lọc tổng sinh hoạt "</strong></p> 
         <!-- BÊN NHẬN -->
         <table class="info-table">
             <tr>
@@ -452,7 +473,12 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
 
     // Quyền sửa: admin hoặc người tạo đơn, trừ các trạng thái đã khoá
     const isCreator = !!orderCreator && orderCreator === userDetail?.email;
-    const canEditOrder = (admin || isCreator) && localOrder.status in ['Chờ xác nhận', 'PENDING']
+
+    const isLevel1Creator = localOrder.createdBy === userDetail?.email
+        && !userDetail?.advisor;
+
+    const canEditOrder = (admin || isLevel1Creator)
+        && ['Chờ xác nhận', 'PENDING'].includes(localOrder.status);
     // && !LOCKED_STATUSES.includes(localOrder.status);
 
     // Quyền đổi status: chỉ admin
@@ -466,32 +492,27 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
         try {
             const logo = await _getLogo();
 
-            // ── Logic xác định Bên giao (Seller) ──
             let sellerInfo;
-
             if (localOrder.paymentMethod === 'customer') {
-                // 1. Khách hàng thanh toán -> Lấy thông tin ADMIN
+                // Khách hàng thanh toán → dùng thông tin Admin
                 sellerInfo = await _getAdminInfo();
             } else {
-                // 2. Doanh nghiệp thanh toán -> Lấy thông tin NGƯỜI CẤP 1 (Root Advisor)
-                // localOrder.rootAdvisor đã được lưu khi tạo đơn ở file addOrder
-                const rootEmail = localOrder.rootAdvisor || localOrder.createdBy;
-                const rootData = await _getUserByEmail(rootEmail);
-
-                // Nếu tìm thấy rootData thì dùng, không thì fallback về user hiện tại
-                sellerInfo = rootData || userDetail;
+                // Doanh nghiệp thanh toán → leo cây tìm người cấp 1
+                const creatorEmail = localOrder.createdBy;
+                const level1User = await _getLevel1Advisor(creatorEmail);
+                sellerInfo = level1User || userDetail;
             }
 
-            // 3. Lấy danh sách dịch vụ đính kèm
-            const svcSnap = await getDocs(query(collection(db, 'service'), where('orderId', '==', localOrder.id)));
+            const svcSnap = await getDocs(
+                query(collection(db, 'service'), where('orderId', '==', localOrder.id))
+            );
             const linkedServices = svcSnap.docs.map(d => d.data());
 
-            // 4. Build HTML và in
             const html = _buildHandoverHtml({
                 order: localOrder,
                 seller: sellerInfo,
                 services: linkedServices,
-                logoBase64: logo
+                logoBase64: logo,
             });
 
             await _printHtml(html, isDesktop);
@@ -501,15 +522,6 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
         } finally {
             setExporting(false);
         }
-    };
-
-    const openMenu = () => {
-        if (!canChangeStatus || !chipRef.current) return;
-        chipRef.current.measure((_fx, _fy, width, height, pageX, pageY) => {
-            const sw = Dimensions.get('window').width;
-            setMenuPos({ top: pageY + height + 4, right: sw - pageX - width });
-            setMenuOpen(true);
-        });
     };
 
     const handleStatusChange = async (newStatus) => {

@@ -74,11 +74,20 @@ async function compressForWeb(uri) {
 
 // ── Upload Helper cho Native ──
 async function uploadToStorage(localUri, storagePath) {
-    const ext = localUri.match(/\.(\w{2,5})(?:[?#]|$)/)?.[1]?.toLowerCase() || 'jpg';
-    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
     const ref = storageRef(storage, storagePath);
-    const response = await fetch(localUri);
-    const blob = await response.blob();
+
+    let blob;
+    if (localUri.startsWith('data:')) {
+        // Web: data URI → blob trực tiếp
+        const res = await fetch(localUri);
+        blob = await res.blob();
+    } else {
+        const response = await fetch(localUri);
+        blob = await response.blob();
+    }
+
+    const ext = localUri.startsWith('data:image/png') ? 'png' : 'jpg';
+    const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
     await uploadBytes(ref, blob, { contentType: mime });
     return getDownloadURL(ref);
 }
@@ -87,7 +96,8 @@ async function uploadBlocks(blocks, newsId) {
     return Promise.all(blocks.map(async (block, i) => {
         if (block.type !== 'image' || !block.value) return block;
         const uri = block.value;
-        if (uri.startsWith('data:') || uri.startsWith('http')) return block;
+        if (uri.startsWith('http')) return block; // đã upload rồi, giữ nguyên
+        // data: URI (web) hoặc file URI (native) đều upload lên Storage
         const url = await uploadToStorage(uri, `news/${newsId}/block_${i}.jpg`);
         return { ...block, value: url };
     }));
@@ -572,20 +582,21 @@ export default function NewsScreen() {
                 createdAt: serverTimestamp(),
                 authorEmail: userDetail?.email, authorName: userDetail?.name,
             });
-            const imageUrl = await uploadToStorage(imageUri, docRef.id);
+            const imageUrl = imageUri ? await uploadToStorage(imageUri, `news/${docRef.id}/cover.jpg`) : null;
             const uploadedBlocks = await uploadBlocks(blocks, docRef.id);
             await updateDoc(docRef, { imageUrl, blocks: uploadedBlocks, tags, hidden });
             if (notify) {
                 const firstText = blocks.find(b => b.type === 'text')?.value || '';
                 const usersSnap = await getDocs(query(collection(db, 'users')));
-                await Promise.all(usersSnap.docs
-                    .filter(d => d.data().email !== userDetail?.email && d.data().verified)
-                    .map(d => createNotification({
-                        userEmail: d.data().email, type: 'news',
-                        title: `📰 ${title}`,
-                        body: firstText.slice(0, 80),
-                        roomId: null, orderId: null,
-                    }))
+                await Promise.allSettled(
+                    usersSnap.docs
+                        .filter(d => d.data().email !== userDetail?.email && d.data().verified)
+                        .map(d => createNotification({
+                            userEmail: d.data().email, type: 'news',
+                            title: `📰 ${title}`,
+                            body: firstText.slice(0, 80),
+                            roomId: null, orderId: null,
+                        }))
                 );
             }
         }
@@ -594,8 +605,11 @@ export default function NewsScreen() {
 
     const goToDetail = (item) => router.push({ pathname: '/newsDetail/[newsId]', params: { newsId: item.id } });
 
-    const handleDelete = async (item) => {
-        try { await deleteDoc(doc(db, 'news', item.id)); } catch (e) { console.error(e); }
+    const handleDelete = (item) => {
+        showAlert('Xác nhận xóa', `Bạn có chắc muốn xóa "${item.title}"?`, async () => {
+            try { await deleteDoc(doc(db, 'news', item.id)); }
+            catch (e) { console.error(e); }
+        });
     };
 
     return (

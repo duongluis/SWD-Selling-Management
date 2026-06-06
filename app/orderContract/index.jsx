@@ -62,8 +62,8 @@ async function getBase64Logo() {
         return null;
     }
 }
-async function exportPDF(htmlContent) {
-    const { isDesktop } = useLayout();
+async function exportPDF(htmlContent, isDesktop) {
+
     if (isDesktop) {
         const w = window.open('', '_blank');
         w.document.write(htmlContent);
@@ -419,14 +419,14 @@ function Calculator({ items: itemsProp, orderType, disc, setDisc }) {
                 <Text style={S.totalVal}>{fmt(total)}</Text>
             </View>
 
-            <View style={S.commBox}>
+            {/* <View style={S.commBox}>
                 <View>
                     <Text style={S.commLabel}>Hoa hồng dự kiến</Text>
                     <Text style={S.commVal}>{fmt(comm)}</Text>
                     <Text style={S.commSub}>{(commRate * 100).toFixed(0)}% hoa hồng trên đơn</Text>
                 </View>
                 <Ionicons name="gift-outline" size={24} color="rgba(255,255,255,0.3)" />
-            </View>
+            </View> */}
         </View>
     );
 }
@@ -443,7 +443,7 @@ function Contract({ order, seller, items: itemsProp, disc, total, discAmt }) {
             {/* Head */}
             <View style={S.cHead}>
                 <View style={{ flex: 1 }}>
-                    <Text style={S.cTitle}>Hợp đồng mua bán hàng hoá</Text>
+                    <Text style={S.cTitle}>Hợp đồng báo giá sản phẩm</Text>
                     <Text style={S.cNum}>Số HĐ: {hdNum}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
@@ -619,7 +619,7 @@ export default function OrderContractScreen() {
         try {
             const logoBase64 = await getBase64Logo(); // ✅ fetch base64 trước
             const html = buildPDFHtml({ order, seller: userDetail, items: safeCalc, disc, total, discAmt, logoBase64 });
-            await exportPDF(html);
+            await exportPDF(html, isDesktop);
         } catch (e) { console.error(e); }
         finally { setExporting(false); }
     };
@@ -629,7 +629,7 @@ export default function OrderContractScreen() {
             <BgWatermark />
             {/* Header */}
             <View style={S.header}>
-                <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
+                <TouchableOpacity onPress={() => router.replace('(tabs)/home')} style={S.backBtn}>
                     <Ionicons name="arrow-back" size={20} color="#0F172A" />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>

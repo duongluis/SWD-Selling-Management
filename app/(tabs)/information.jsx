@@ -35,12 +35,15 @@ const PRICE_LABELS = {
     price_c: { label: 'Giá CTV', color: '#059669', bg: '#ECFDF5' },
 };
 
-const getPriceFields = (role) => ({
-    admin: ['price', 'price_a', 'price_p', 'price_c'],
-    daily: ['price_a', 'price'],
-    phantan: ['price_p', 'price'],
-    ctv: ['price_c', 'price'],
-}[role] || ['price']);
+const getPriceFields = (role, hasAdvisor = false) => {
+    if (hasAdvisor) return ['price']; // chỉ giá niêm yết
+    return ({
+        admin: ['price', 'price_a', 'price_p', 'price_c'],
+        daily: ['price_a', 'price'],
+        phantan: ['price_p', 'price'],
+        ctv: ['price_c', 'price'],
+    }[role] || ['price']);
+};
 
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 const parseMoney = (s) => parseInt(String(s).replace(/\D/g, '')) || 0;
@@ -851,7 +854,9 @@ export default function InformationScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
     const isAdmin = role === 'admin';
-    const priceFields = getPriceFields(role);
+    const hasAdvisor = userDetail?.advisor != null;
+    const priceFields = getPriceFields(role, hasAdvisor);
+
 
     const [activeTab, setActiveTab] = useState('products');
     const [products, setProducts] = useState([]);

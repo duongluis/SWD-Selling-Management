@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../../components/Main/showAlert';
 import BANKS from '../../config/banks.json';
 import { db } from '../../config/firebaseConfig';
-
+import { clearRegistrationPending, markRegistrationPending } from '../_layout';
 
 const COMMITTED_REVENUE_MIN = 100_000_000;
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
@@ -182,6 +182,7 @@ export default function UserInfoView() {
         setAgreed(false);
         setReferralCodeInput('');
         setReferralError('');
+        setFrozenNeedsBank(false);
     }, [params.email, params.password]));
 
     const [step, setStep] = useState(0);
@@ -222,6 +223,7 @@ export default function UserInfoView() {
     const [referralCodeInput, setReferralCodeInput] = useState('');
     const [referralError, setReferralError] = useState('');
     const [agreed, setAgreed] = useState(false);
+    const [frozenNeedsBank, setFrozenNeedsBank] = useState(false);
 
     const isDaiLy = role === 'daily';
     const needsBank = (role === 'partner' || role === 'ctv') && !referralCodeInput.trim(); // Có mã giới thiệu thì không cần ngân hàng
@@ -239,14 +241,10 @@ export default function UserInfoView() {
 
     // Tạo danh sách step labels động
     const STEP_LABELS = useMemo(() => {
-        if (isDaiLy) {
-            return ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD', 'Cam kết'];
-        } else if (needsBank) {
-            return ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD', 'Ngân hàng'];
-        } else {
-            return ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD'];
-        }
-    }, [isDaiLy, needsBank]);
+        if (isDaiLy) return ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD', 'Cam kết'];
+        else if (frozenNeedsBank) return ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD', 'Ngân hàng'];
+        else return ['Vai trò', 'Mô hình', 'Thông tin chung', 'Thông tin KD'];
+    }, [isDaiLy, frozenNeedsBank]);  // ← không còn phụ thuộc referralCodeInput nữa
 
     const TOTAL_STEPS = STEP_LABELS.length;
 
@@ -325,7 +323,7 @@ export default function UserInfoView() {
                         }
                     }
                     return true;
-                } else if (needsBank) {
+                } else if (frozenNeedsBank) {
                     // Nếu có mã giới thiệu thì không cần bước ngân hàng (step này sẽ không tồn tại)
                     if (!selectedBank) { showAlert('Thông báo', 'Vui lòng chọn ngân hàng'); return false; }
                     if (accountNoErr) { showAlert('Thông báo', accountNoErr); return false; }
@@ -338,7 +336,15 @@ export default function UserInfoView() {
         }
     };
 
-    const goNext = () => { if (!validateStep()) return; if (step < TOTAL_STEPS - 1) setStep(s => s + 1); else handleSubmit(); };
+    const goNext = () => {
+        if (!validateStep()) return;
+        if (step === 1) {
+            // Tại đây referralCodeInput đã nhập xong, freeze luôn
+            setFrozenNeedsBank((role === 'partner' || role === 'ctv') && !referralCodeInput.trim());
+        }
+        if (step < TOTAL_STEPS - 1) setStep(s => s + 1);
+        else handleSubmit();
+    };
     const goBack = () => { if (step > 0) setStep(s => s - 1); };
 
     const handleSubmit = async () => {
@@ -358,6 +364,7 @@ export default function UserInfoView() {
         setSubmitting(true);
         try {
             const auth = getAuth();
+            markRegistrationPending();
             const userCredential = await createUserWithEmailAndPassword(auth, signUpEmail, signUpPassword);
             const uid = userCredential.user.uid;
             const email = userCredential.user.email;
@@ -419,12 +426,15 @@ export default function UserInfoView() {
             await setDoc(doc(db, 'users', email), payload);
             router.replace('/auth/pendingVerification');
         } catch (e) {
+            clearRegistrationPending();
             showAlert('Lỗi đăng ký', e.code === 'auth/email-already-in-use'
                 ? 'Email này đã được đăng ký. Vui lòng dùng email khác hoặc đăng nhập.'
                 : e.message
             );
         } finally { setSubmitting(false); }
     };
+
+
 
     // ── Step renderers ────────────────────────────────────────
     const renderStepRole = () => {
@@ -540,9 +550,9 @@ export default function UserInfoView() {
                 <View style={F.inputBox}><Ionicons name="call-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={phone} onChangeText={setPhone} /></View>
             </View>
             <View style={S.fg}><Text style={S.label}>Email liên hệ <Text style={S.optional}>(tuỳ chọn)</Text></Text>
-                <View style={F.inputBox}><Ionicons name="mail-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="email@example.com" placeholderTextColor="#94A3B8" keyboardType="email-address" autoCapitalize="none" value={emailContact} onChangeText={setEmailContact} /></View>
+                <View style={F.inputBox}><Ionicons name="mail-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="email@example.com" placeholderTextColor="#94A3B8" keyboardType="email-address" autoCapitalize="none" value={signUpEmail} onChangeText={setEmailContact} /></View>
             </View>
-            <View style={S.fg}><Text style={S.label}>Địa chỉ <Text style={S.req}>*</Text></Text>
+            <View style={S.fg}><Text style={S.label}>Địa chỉ giao dịch <Text style={S.req}>*</Text></Text>
                 <View style={[F.inputBox, { alignItems: 'flex-start', minHeight: 80 }]}><Ionicons name="location-outline" size={15} color="#94A3B8" style={{ marginTop: 2 }} /><TextInput style={[F.input, { textAlignVertical: 'top' }]} placeholder="Số nhà, đường, quận/huyện, tỉnh/thành..." placeholderTextColor="#94A3B8" multiline value={address} onChangeText={setAddress} /></View>
             </View>
 
@@ -774,7 +784,7 @@ export default function UserInfoView() {
             case 1: return renderStepBizModel();
             case 2: return renderStepCommon();
             case 3: return renderStepBizInfo();
-            case 4: return isDaiLy ? renderStepCommitment() : (needsBank ? renderStepBank() : null);
+            case 4: return isDaiLy ? renderStepCommitment() : (frozenNeedsBank ? renderStepBank() : null);
             default: return null;
         }
     };
@@ -826,8 +836,7 @@ export default function UserInfoView() {
 }
 
 const S = StyleSheet.create({
-    // ... giữ nguyên toàn bộ style như cũ ...
-    // (các style đã được định nghĩa ở file gốc, chỉ cần giữ nguyên)
+
     root: { flex: 1, backgroundColor: '#F8FAFC' },
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     headerBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },

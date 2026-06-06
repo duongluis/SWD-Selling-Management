@@ -47,7 +47,7 @@ const NAV_SECTIONS = [
       { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'Bảng xếp hạng', icon: 'trophy-outline', activeIcon: 'trophy', visible: () => true },
       { key: 'commission', link: '(tabs)/commission', label: 'Hoa hồng', icon: 'cash-outline', activeIcon: 'cash' },
       { key: 'revenue', link: '(tabs)/analytics', label: 'Báo cáo doanh thu', icon: 'bar-chart-outline', activeIcon: 'bar-chart', visible: () => true },
-      { key: 'region', link: '(tabs)/regionAnalytics', label: 'Báo cáo khu vực', icon: 'map-outline', activeIcon: 'map', visible: () => true },
+      { key: 'region', link: '(tabs)/regionAnalytics', label: 'Báo cáo khu vực', icon: 'map-outline', activeIcon: 'map', visible: (r) => r === 'admin' },
       { key: 'news', link: '(tabs)/news', label: 'Tin tức', icon: 'newspaper-outline', activeIcon: 'newspaper', visible: () => true },
       { key: 'information', link: '(tabs)/information', label: 'Bảng giá', icon: 'pricetag-outline', activeIcon: 'pricetag', visible: () => true },
       { key: 'quotation', link: 'orderContract?mode=template', label: 'Form báo giá', icon: 'document-text-outline', activeIcon: 'document-text', visible: () => true },
@@ -96,9 +96,9 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, ro
   const shouldShowItem = (item) => {
     if (item.visible) return item.visible(role);
     if (item.key === 'commission' || item.key === 'calculator') {
-      if (role === 'admin' || role === 'daily') return true;
-      if ((role === 'phantan' || role === 'ctv') && !userDetail?.advisor) return true;
-      return false;
+      if (userDetail?.advisor) return false;   // có advisor → ẩn
+      if (role === 'daily') return false;       // đại lý → ẩn
+      return role === 'admin' || role === 'phantan' || role === 'ctv';
     }
     return true;
   };

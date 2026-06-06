@@ -110,6 +110,7 @@ export default function RootLayout() {
       'auth/signIn',            // đăng nhập
       'auth/signUp',            // đăng ký
       'auth/userInfo',          // ✅ điền thông tin (chưa tạo account)
+      'auth/resetPassword'
     ];
     const isAllowedUnauthenticated =
       ALLOW_UNAUTHENTICATED.includes(segment) ||
@@ -124,13 +125,17 @@ export default function RootLayout() {
     // ── Có Auth nhưng chưa có DB doc (không còn xảy ra với flow mới) ──
     // Giữ lại để xử lý các account cũ tạo trước khi đổi flow
     if (userDetail._incomplete) {
+      if (isRegistrationPending()) return;
+
       router.replace('/auth/signIn');
       signOut(auth);
+      clearRegistrationPending();
       return;
     }
 
     // ── Chưa xác thực (không phải admin) ────────────────────
     if (!userDetail.verified && !isAdmin) {
+      clearRegistrationPending();
       if (segment !== 'auth') router.replace('/auth/pendingVerification');
       return;
     }

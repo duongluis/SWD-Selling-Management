@@ -5,37 +5,67 @@ const PAID_STATUS = 'Đã thanh toán';
 
 /**
  * Gọi khi admin đổi trạng thái đơn hàng sang "Đã thanh toán".
- * Ghi thẳng vào db/users/{email}, chống double-count qua revenueOrders[].
  */
 export async function trackRevenueOnPaid(userEmail, order, newStatus) {
     if (newStatus !== PAID_STATUS) return false;
     if (!userEmail || !order?.id) return false;
 
-    const orderTotal = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
+    // Fix lỗi operator precedence
+    const orderTotal = (order.items || []).reduce(
+        (s, p) => s + ((p.price || 0) * (p.qty || 1)), 0
+    );
     if (orderTotal <= 0) return false;
 
     try {
         const userRef = doc(db, 'users', userEmail);
         const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) return false;
 
-        if (!userSnap.exists()) return false; // user không tồn tại
-
-        const data = userSnap.data();
-        const revenueOrders = data.revenueOrders || [];
-
-        // Đã tính rồi → bỏ qua
+        const revenueOrders = userSnap.data().revenueOrders || [];
         if (revenueOrders.includes(order.id)) {
             console.log(`[trackRevenue] Order ${order.id} đã được tính, bỏ qua.`);
             return false;
         }
 
-        // Cộng vào user doc
         await updateDoc(userRef, {
             revenueTotal: increment(orderTotal),
             revenueOrders: arrayUnion(order.id),
         });
 
-        console.log(`[trackRevenue] +${orderTotal} cho ${userEmail} (đơn ${order.id})`);
+        // ── Cộng lên advisor cấp 1 nếu có ──────────────────
+        const advisorEmail = userSnap.data().advisor;
+        if (advisorEmail) {
+            const advisorRef = doc(db, 'users', advisorEmail);
+            const advisorSnap = await getDoc(advisorRef);
+            if (advisorSnap.exists()) {
+                const advisorOrders = advisorSnap.data().revenueOrders || [];
+                if (!advisorOrders.includes(order.id)) {
+                    await updateDoc(advisorRef, {
+                        revenueTotal: increment(orderTotal),
+                        revenueOrders: arrayUnion(order.id),
+                    });
+                    console.log(`[trackRevenue] +${orderTotal} cho advisor ${advisorEmail}`);
+
+                    // ── Cộng lên advisor cấp 2 nếu có ──────
+                    const advisor2Email = advisorSnap.data().advisor;
+                    if (advisor2Email) {
+                        const advisor2Ref = doc(db, 'users', advisor2Email);
+                        const advisor2Snap = await getDoc(advisor2Ref);
+                        if (advisor2Snap.exists()) {
+                            const advisor2Orders = advisor2Snap.data().revenueOrders || [];
+                            if (!advisor2Orders.includes(order.id)) {
+                                await updateDoc(advisor2Ref, {
+                                    revenueTotal: increment(orderTotal),
+                                    revenueOrders: arrayUnion(order.id),
+                                });
+                                console.log(`[trackRevenue] +${orderTotal} cho advisor cấp 2 ${advisor2Email}`);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return true;
     } catch (e) {
         console.error('[trackRevenue] Lỗi:', e.message);
