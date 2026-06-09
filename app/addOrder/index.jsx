@@ -243,6 +243,9 @@ const AddProductForm = React.memo(({ ws, orderType, catalog, priceField, priceLa
       qty: '1',
       price: String(p[priceField] || p.price || 0),
       basePrice: p.price || 0,
+      price_a: p.price_a || 0,   // ← thêm
+      price_p: p.price_p || 0,   // ← thêm
+      price_c: p.price_c || 0,   // ← thêm
       productId: String(p.id || p.docId),
     });
     setShowProductDrop(false);
@@ -548,9 +551,16 @@ export default function AddOrder() {
       setCustomerLoading(true);
       try {
         const { collection, getDocs, query, where } = await import('firebase/firestore');
-        const q = userDetail?.advisor
-          ? query(collection(db, 'customers'), where('createdBy', '==', userDetail.email))
-          : collection(db, 'customers');
+
+        let q;
+        if (role === 'admin') {
+          // Admin: lấy tất cả
+          q = collection(db, 'customers');
+        } else {
+          // Tất cả role khác: chỉ lấy khách hàng do mình tạo
+          q = query(collection(db, 'customers'), where('createdBy', '==', userDetail.email));
+        }
+
         const snap = await getDocs(q);
         setCustomerList(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
       } catch (e) {
@@ -560,7 +570,7 @@ export default function AddOrder() {
       }
     };
     fetchCustomers();
-  }, [userDetail?.email]);
+  }, [userDetail?.email, role]);
 
   // ── Fetch catalog (products) ─────────────────────────────────
   useEffect(() => {

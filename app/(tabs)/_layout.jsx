@@ -96,7 +96,7 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, ro
   const shouldShowItem = (item) => {
     if (item.visible) return item.visible(role);
     if (item.key === 'commission' || item.key === 'calculator') {
-      if (userDetail?.advisor) return false;   // có advisor → ẩn
+      if (userDetail?.advisor) return false;
       if (role === 'daily') return false;       // đại lý → ẩn
       return role === 'admin' || role === 'phantan' || role === 'ctv';
     }
@@ -125,7 +125,7 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, ro
         {!collapsed && (
           <View style={S.workspaceName}>
             <Image style={S.icon} source={require('../../assets/images/logo-dark.png')} resizeMode="contain" />
-            <Text style={S.workspaceText}>SWD Seller Manager</Text>
+            <Text style={S.workspaceText}>SWD CRM</Text>
           </View>
         )}
       </View>

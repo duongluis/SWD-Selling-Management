@@ -12,6 +12,7 @@ const tableStylesDesktop = StyleSheet.create({
         paddingVertical: 11,
         borderBottomWidth: 1,
         borderBottomColor: THEME.colors.border,
+        gap: THEME.spacing.sm,
     },
     row: {
         flexDirection: 'row',
@@ -38,6 +39,7 @@ const tableStylesMobile = StyleSheet.create({
         paddingVertical: 11,
         borderBottomWidth: 1,
         borderBottomColor: THEME.colors.border,
+        gap: THEME.spacing.sm,
     },
     row: {
         flexDirection: 'row',

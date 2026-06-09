@@ -303,5 +303,5 @@ export function useScreenData(type) {
         }
     }, [load, type]);
 
-    return { data, loading, refreshing, refresh, stats, error, role, myEmail };
+    return { data, loading, refreshing, refresh, stats, error, role, myEmail, userDetail };
 }

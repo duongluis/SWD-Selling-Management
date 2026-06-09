@@ -5,7 +5,7 @@ import { getRole } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
@@ -56,81 +56,68 @@ export default function AnalyticsScreen() {
     const [leaderboard, setLeaderboard] = useState([]);
     const [period, setPeriod] = useState('quarterly'); // 'quarterly'|'yearly'
     const { isDesktop } = useLayout();
+    const now = new Date();
+    const thisKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const lastKey = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`;
     const fetchData = useCallback(async () => {
         if (!userDetail?.email) return;
         try {
-            // ── Lấy revenueTotal trực tiếp từ user doc ────────
-            const selfRef = doc(db, 'users', userDetail.email);
-            const selfSnap = await getDoc(selfRef);
-            const selfData = selfSnap.data() || {};
-
-            // ── Lấy orders để vẽ chart và lịch sử ────────────
-            // Dùng revenueOrders[] để biết đúng order nào đã tính
-            const trackedOrderIds = new Set(selfData.revenueOrders || []);
-
-            // Lấy customers của bản thân + cấp dưới
-            let targetEmails = [userDetail.email];
-
-            if (!isAdmin) {
+            let ordersSnap;
+            if (isAdmin) {
+                ordersSnap = await getDocs(collection(db, 'orders'));
+            } else {
+                // Lấy team emails
                 const lvl2Snap = await getDocs(
                     query(collection(db, 'users'), where('advisor', '==', userDetail.email))
                 );
                 const lvl2Emails = lvl2Snap.docs.map(d => d.data().email).filter(Boolean);
 
                 let lvl3Emails = [];
-                if (lvl2Emails.length > 0) {
-                    const chunks = [];
-                    for (let i = 0; i < lvl2Emails.length; i += 30)
-                        chunks.push(lvl2Emails.slice(i, i + 30));
-                    await Promise.all(chunks.map(async chunk => {
-                        const s = await getDocs(
-                            query(collection(db, 'users'), where('advisor', 'in', chunk))
-                        );
-                        s.docs.forEach(d => { if (d.data().email) lvl3Emails.push(d.data().email); });
-                    }));
+                for (let i = 0; i < lvl2Emails.length; i += 30) {
+                    const chunk = lvl2Emails.slice(i, i + 30);
+                    const s = await getDocs(query(collection(db, 'users'), where('advisor', 'in', chunk)));
+                    s.docs.forEach(d => { if (d.data().email) lvl3Emails.push(d.data().email); });
                 }
-                targetEmails = [...new Set([userDetail.email, ...lvl2Emails, ...lvl3Emails])];
-            }
 
-            // Lấy phones của customers
-            let allPhones = [];
-            if (isAdmin) {
-                const snap = await getDocs(collection(db, 'customers'));
-                allPhones = snap.docs.map(d => d.data().phone).filter(Boolean);
-            } else {
-                const chunks = [];
-                for (let i = 0; i < targetEmails.length; i += 30)
-                    chunks.push(targetEmails.slice(i, i + 30));
-                await Promise.all(chunks.map(async chunk => {
+                const teamEmails = [...new Set([userDetail.email, ...lvl2Emails, ...lvl3Emails])];
+
+                // Fetch orders theo teamEmails, chia chunk 30
+                const allDocs = [];
+                for (let i = 0; i < teamEmails.length; i += 30) {
+                    const chunk = teamEmails.slice(i, i + 30);
                     const s = await getDocs(
-                        query(collection(db, 'customers'), where('createdBy', 'in', chunk))
+                        query(collection(db, 'orders'), where('createdBy', 'in', chunk))
                     );
-                    s.docs.forEach(d => { if (d.data().phone) allPhones.push(d.data().phone); });
-                }));
-                allPhones = [...new Set(allPhones)];
-            }
-
-            // Lấy tất cả orders
-            const all = [];
-            await Promise.all(allPhones.slice(0, 150).map(async phone => {
-                try {
-                    const s = await getDoc(doc(db, 'orders', phone));
-                    if (s.exists()) (s.data().orders || []).forEach(o => all.push(o));
-                } catch (_) { }
-            }));
-
-            setOrders(all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
-
-            // Leaderboard
-            if (isAdmin) {
-                const snap = await getDocs(query(collection(db, 'users'), where('verified', '==', true)));
-                setLeaderboard(
-                    snap.docs.map(d => d.data())
-                        .filter(u => (u.role || u.member || '').toLowerCase() !== 'admin' && (u.revenueTotal || 0) > 0)
-                        .sort((a, b) => (b.revenueTotal || 0) - (a.revenueTotal || 0))
-                        .slice(0, 5)
+                    s.docs.forEach(d => allDocs.push({ ...d.data(), docId: d.id }));
+                }
+                // Lọc chờ thanh toán + đã thanh toán
+                const filtered = allDocs.filter(o =>
+                    ['Chờ thanh toán', 'Đã thanh toán'].includes(o.status)
                 );
+                setOrders(filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
+
+                // Leaderboard chỉ cho admin → skip
+                setLoading(false);
+                setRefreshing(false);
+                return;
             }
+
+            // Admin: lấy tất cả, lọc status
+            const allDocs = ordersSnap.docs
+                .map(d => ({ ...d.data(), docId: d.id }))
+                .filter(o => ['Chờ thanh toán', 'Đã thanh toán'].includes(o.status));
+
+            setOrders(allDocs.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
+
+            // Leaderboard cho admin
+            const snap = await getDocs(query(collection(db, 'users'), where('verified', '==', true)));
+            setLeaderboard(
+                snap.docs.map(d => d.data())
+                    .filter(u => (u.role || u.member || '').toLowerCase() !== 'admin' && (u.revenueTotal || 0) > 0)
+                    .sort((a, b) => (b.revenueTotal || 0) - (a.revenueTotal || 0))
+                    .slice(0, 5)
+            );
+
         } catch (e) {
             console.error('fetchData error:', e);
         } finally {
@@ -142,15 +129,26 @@ export default function AnalyticsScreen() {
     useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
     const active = orders.filter(o => o.status !== 'Đã hủy');
-    const totalRevenue = active.reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
-    const now = new Date();
-    const thisKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const lastKey = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`;
-    const thisRev = active.filter(o => (o.createdAt || '').startsWith(thisKey)).reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
-    const lastRev = active.filter(o => (o.createdAt || '').startsWith(lastKey)).reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+
+
+
+
+    const totalRevenue = orders.reduce((s, o) =>
+        s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+
+    const thisRev = orders.filter(o => (o.createdAt || '').startsWith(thisKey))
+        .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+
+    const lastRev = orders.filter(o => (o.createdAt || '').startsWith(lastKey))
+        .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+
+    const pending = orders.filter(o => o.status === 'Chờ thanh toán')
+        .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+
+    const paidThis = orders.filter(o => o.status === 'Đã thanh toán' && (o.createdAt || '').startsWith(thisKey))
+        .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+
     const growth = lastRev > 0 ? ((thisRev - lastRev) / lastRev * 100).toFixed(1) : null;
-    const pending = active.filter(o => o.status !== 'Đã thanh toán').reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
-    const paidThis = active.filter(o => o.status === 'Đã thanh toán' && (o.createdAt || '').startsWith(thisKey)).reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
 
     const bars = useMemo(() => {
         if (period === 'quarterly') {

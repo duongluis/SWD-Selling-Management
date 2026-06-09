@@ -98,7 +98,7 @@ async function _getLevel1Advisor(createdByEmail) {
 function _buildHandoverHtml({ order, seller, services, logoBase64 }) {
     const today = new Date();
     const currentYear = today.getFullYear();
-
+    const isCompany = seller.bizModel === 'company' || !!seller.taxCode;
     // Rows Sản phẩm
     const productRows = (order.items || []).map((p, i) => `
         <tr>
@@ -125,7 +125,7 @@ function _buildHandoverHtml({ order, seller, services, logoBase64 }) {
         <style>
         body { font-family: "Times New Roman", Times, serif; font-size: 10pt; line-height: 1.5; color: #000; padding: 10px; }
             .header-title { text-align: center; font-weight: bold; font-size: 13pt; text-transform: uppercase; margin-bottom: 5px; }
-            .sub-title { text-align: center; font-size: 10pt; margin-bottom: 25px; }
+            .sub-title { text-align: center; font-size: 10pt; margin-bottom: 5px; }
             
             .info-table { width: 100%; border: none; margin-bottom: 20px; }
             .info-table td { border: none; padding: 2px 0; vertical-align: top; font-size: 10pt; }
@@ -161,10 +161,11 @@ function _buildHandoverHtml({ order, seller, services, logoBase64 }) {
         <div class="header-title">BIÊN BẢN NGHIỆM THU VÀ BÀN GIAO CHẤT LƯỢNG<br/>KHỐI LƯỢNG HẠNG MỤC THI CÔNG</div>
         <div class="sub-title">Ngày bàn giao: ..../..../${currentYear}</div>
         <div class="sub-title">Ngày lắp đặt: ..../..../${currentYear}</div>
-
+   <br>   <br>
  <!--  <p>Hạng mục cung cấp thiết bị và thi công: <strong>"${(order.items || []).map(p => p.name).join(', ')} "</strong></p> -->
 
    <p>Hạng mục cung cấp thiết bị và thi công <strong>"Hệ thống lọc tổng sinh hoạt "</strong></p> 
+
         <!-- BÊN NHẬN -->
         <table class="info-table">
             <tr>
@@ -199,28 +200,21 @@ function _buildHandoverHtml({ order, seller, services, logoBase64 }) {
                 <td class="label">BÊN BÀN GIAO:</td>
                 <td style="font-weight:bold;">${seller.companyName || seller.name || 'CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VÀ SẢN XUẤT GOLDEN PANTHERA'}</td>
             </tr>
-            ${seller.taxCode && `  <tr>
-                <td>Mã số thuế:</td>
-                <td>${seller.taxCode}</td>
-            </tr>`}
-            <tr>
+         
+
+${isCompany ? `
+  <tr><td>Mã số thuế:</td><td>${seller.taxCode || '—'}</td></tr>
+  <tr><td>Địa chỉ:</td><td>${seller.bizAddress || seller.address || '...........................................................................................'}</td></tr>
+  <tr><td>Người đại diện:</td><td>${seller.contactName || '...........................................................................................'}</td></tr>
+  <tr><td>Chức vụ:</td><td>${seller.title || '...........................................................................................'}</td></tr>
+` : `
+    <tr>
                 <td>Số điện thoại:</td>
                 <td>${seller.phone || '...........................................................................................'}</td>
             </tr>
-            <tr>
-              ${seller.taxCode ? `
-                <td>Địa chỉ:</td>
-                <td>${seller.bizAddress || seller.address || 'Số 4C Đường Tăng Bạt Hổ, Phường Hai Bà Trưng, TP Hà Nội'}</td>
-            </tr>
-           <tr>
-                <td>Người đại diện:</td>
-                <td>${seller.contactName}</td>
-            </tr>
-            <tr>
-                <td>Chức vụ:</td>
-                <td>${seller.title || '...........................................................................................'}</td>
-            </tr> `
-            : ''}
+  <tr><td>Địa chỉ:</td><td>${seller.address || '—'}</td></tr>
+
+`}
             <tr>
                 <td></td>
                 <td style="font-style: italic">(Sau đây gọi tắt là <strong>“Bên B”</strong>)</td>
@@ -331,12 +325,14 @@ const isStatusChangeable = (orderType, currentStatus) => {
 // ── Status Chip ───────────────────────────────────────────────
 export function StatusChip({ status, onPress, dropdown }) {
     const cfg = scfg(status);
+    const pressable = typeof onPress === 'function';  // ← chỉ enable khi là function
+
     return (
         <TouchableOpacity
             style={[SD.chip, { backgroundColor: cfg.bg, borderColor: cfg.bd }]}
-            onPress={onPress}
-            activeOpacity={onPress ? 0.8 : 1}
-            disabled={!onPress}
+            onPress={pressable ? onPress : undefined}
+            activeOpacity={pressable ? 0.8 : 1}
+            disabled={!pressable}
         >
             <View style={[SD.dot, { backgroundColor: cfg.c }]} />
             <Text style={[SD.text, { color: cfg.c }]}>{status || 'PENDING'}</Text>
@@ -398,28 +394,65 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     const [orderCreator, setOrderCreator] = useState(null);
     const [qrString, setQrString] = useState('');
     const [bankInfo, setBankInfo] = useState(null);
+    const [adminBank, setAdminBank] = useState(null);
 
     useEffect(() => {
-        if (localOrder && userDetail?.bank) {
-            const bank = banksData.find(b => b.id === userDetail.bank.id);
-            if (bank?.bin && userDetail.bank.accountNo) {
-                setBankInfo(bank);
-                // Tính tổng tiền ngay tại đây
-                const orderTotal = (localOrder.items || []).reduce(
-                    (s, p) => s + (Number(p.price) || 0) * (Number(p.qty) || 1), 0
-                );
-                const amount = Math.round(orderTotal);
-                const description = `TTDH ${localOrder.id}`;
-                const qr = generateVietQR({
-                    bankBin: bank.bin,
-                    bankNumber: userDetail.bank.accountNo,
-                    amount,
-                    description,
-                });
-                setQrString(qr);
+        if (!localOrder) return;
+
+        const buildQR = async () => {
+            let bankAccountNo, bankAccountName, bankId;
+
+            if (localOrder.paymentMethod === 'customer') {
+                // Lấy thông tin bank của admin
+                try {
+                    const adminSnap = await getDoc(doc(db, 'users', 'admin@swd.vn'));
+                    if (!adminSnap.exists()) return;
+                    const adminData = adminSnap.data();
+                    if (!adminData?.bank?.id || !adminData?.bank?.accountNo) return;
+                    bankId = adminData.bank.id;
+                    bankAccountNo = adminData.bank.accountNo;
+                    bankAccountName = adminData.bank.accountName;
+                } catch { return; }
+            } else {
+                // Doanh nghiệp thanh toán → tìm người tạo đơn không có advisor
+                try {
+                    const creatorSnap = await getDoc(doc(db, 'users', localOrder.createdBy));
+                    if (!creatorSnap.exists()) return;
+                    const creatorData = creatorSnap.data();
+
+                    let targetUser = creatorData;
+
+                    // Nếu người tạo có advisor → leo lên tìm người không có advisor
+                    if (creatorData.advisor) {
+                        const lvl1Snap = await getDoc(doc(db, 'users', creatorData.advisor));
+                        if (lvl1Snap.exists()) targetUser = lvl1Snap.data();
+                    }
+
+                    if (!targetUser?.bank?.id || !targetUser?.bank?.accountNo) return;
+                    bankId = targetUser.bank.id;
+                    bankAccountNo = targetUser.bank.accountNo;
+                    bankAccountName = targetUser.bank.accountName;
+                } catch { return; }
             }
-        }
-    }, [localOrder, userDetail]);
+
+            const bank = banksData.find(b => b.id === bankId);
+            if (!bank?.bin) return;
+
+            setBankInfo({ ...bank, accountNo: bankAccountNo, accountName: bankAccountName });
+
+            const amount = Math.round(
+                (localOrder.items || []).reduce((s, p) => s + (Number(p.price) || 0) * (Number(p.qty) || 1), 0)
+            );
+            setQrString(generateVietQR({
+                bankBin: bank.bin,
+                bankNumber: bankAccountNo,
+                amount,
+                description: `TTDH ${localOrder.id}`,
+            }));
+        };
+
+        buildQR();
+    }, [localOrder]);
 
     // ── Fetch helpers — dùng useCallback để không phụ thuộc closure ──
     const fetchServices = useCallback(async (orderId) => {
@@ -446,6 +479,15 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
             }
         } catch (_) { }
     }, []);
+
+    const openMenu = () => {
+        if (!canChangeStatus || !chipRef.current) return;
+        chipRef.current.measure((_fx, _fy, width, height, pageX, pageY) => {
+            const sw = Dimensions.get('window').width;
+            setMenuPos({ top: pageY + height + 4, right: sw - pageX - width });
+            setMenuOpen(true);
+        });
+    };
 
     // ── Effect — 1 useEffect duy nhất ──
     useEffect(() => {
@@ -782,8 +824,8 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                             </View>
                             <View style={DP.bankInfo}>
                                 <Text style={DP.bankName}>{bankInfo.name}</Text>
-                                <Text style={DP.accountNo}>STK: {userDetail.bank.accountNo}</Text>
-                                <Text style={DP.accountName}>Chủ TK: {userDetail.bank.accountName}</Text>
+                                <Text style={DP.accountNo}>STK: {bankInfo.accountNo}</Text>
+                                <Text style={DP.accountName}>Chủ TK: {bankInfo.accountName}</Text>
                                 <Text style={DP.amount}>Số tiền: {fmtCurrency(total)}</Text>
                                 <Text style={DP.description}>Nội dung: TTDH {localOrder.id}</Text>
                             </View>

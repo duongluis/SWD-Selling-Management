@@ -4,7 +4,7 @@ import { useLayout } from '@/components/Main/TabScreenLayout';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { memo, useContext, useEffect, useState } from 'react';
 import {
     KeyboardAvoidingView, Platform, ScrollView, StatusBar,
@@ -62,6 +62,110 @@ const getIconByName = (name = '') => {
     return 'flash-outline';
 };
 
+// Đặt NGOÀI AddService component
+const OrderPickerDropdown = memo(({
+    orderSearch, setOrderSearch, orderLoading,
+    filteredOrders, selectedOrder, handleSelectOrder
+}) => (
+    <View style={S.pickerDropdown}>
+        <View style={S.pickerSearch}>
+            <Ionicons name="search-outline" size={14} color="#94A3B8" />
+            <TextInput
+                style={S.pickerSearchInput}
+                placeholder="Tìm mã đơn hoặc tên khách..."
+                placeholderTextColor="#94A3B8"
+                value={orderSearch}
+                onChangeText={setOrderSearch}
+                autoFocus
+            />
+            {orderSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setOrderSearch('')}>
+                    <Ionicons name="close-circle" size={14} color="#94A3B8" />
+                </TouchableOpacity>
+            )}
+        </View>
+        <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+            {orderLoading
+                ? <Text style={S.pickerEmpty}>Đang tải đơn hàng...</Text>
+                : filteredOrders.length === 0
+                    ? <Text style={S.pickerEmpty}>{orderSearch ? 'Không tìm thấy' : 'Chưa có đơn hàng nào'}</Text>
+                    : filteredOrders.map((order, i) => {
+                        const total = (order.items || []).reduce(
+                            (s, p) => s + ((p.price || 0) * (p.qty || 1)), 0
+                        );
+                        return (
+                            <TouchableOpacity key={order.id || i}
+                                style={[S.pickerItem, selectedOrder?.id === order.id && S.pickerItemActive]}
+                                onPress={() => handleSelectOrder(order)} activeOpacity={0.7}
+                            >
+                                <View style={S.pickerItemIcon}>
+                                    <Ionicons name="receipt-outline" size={14} color="#2563EB" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={S.pickerItemId}>#{order.id}</Text>
+                                    <Text style={S.pickerItemSub}>{order.customer} · {order.items?.length || 0} sản phẩm</Text>
+                                </View>
+                                <Text style={S.pickerItemAmount}>{fmt(total)}</Text>
+                            </TouchableOpacity>
+                        );
+                    })
+            }
+        </ScrollView>
+    </View>
+));
+
+// Đặt NGOÀI AddService
+const MachinePickerSection = memo(({
+    ws, showMachineSection, selectedOrder,
+    selectedMachine, setSelectedMachine, currentTypeCfg
+}) => {
+    if (!showMachineSection) return null;
+    const machines = selectedOrder?.items || [];
+    return (
+        <View style={ws ? W.machineSection : M.machineSection}>
+            <View style={ws ? W.machineHeader : M.machineHeader}>
+                <Ionicons name="settings-outline" size={14} color={currentTypeCfg?.color || '#2563EB'} />
+                <Text style={[ws ? W.machineHeaderText : M.machineHeaderText, { color: currentTypeCfg?.color }]}>
+                    Chọn máy cần {currentTypeCfg?.label?.toLowerCase()} <Text style={{ color: '#EF4444' }}>*</Text>
+                </Text>
+            </View>
+            <View style={ws ? W.machineGrid : M.machineGrid}>
+                {machines.map((item, i) => {
+                    const active = selectedMachine?.id === (item.id || String(i));
+                    return (
+                        <TouchableOpacity
+                            key={item.id || i}
+                            style={[
+                                ws ? W.machineCard : M.machineCard,
+                                active && { borderColor: currentTypeCfg?.color, backgroundColor: currentTypeCfg?.bg },
+                            ]}
+                            onPress={() => setSelectedMachine(active ? null : { ...item, id: item.id || String(i) })}
+                            activeOpacity={0.8}
+                        >
+                            <View style={[ws ? W.machineIcon : M.machineIcon, { backgroundColor: active ? currentTypeCfg?.color + '22' : '#F1F5F9' }]}>
+                                <Ionicons name="water-outline" size={16} color={active ? currentTypeCfg?.color : '#94A3B8'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[ws ? W.machineName : M.machineName, active && { color: currentTypeCfg?.color }]} numberOfLines={2}>
+                                    {item.name}
+                                </Text>
+                                <Text style={ws ? W.machineMeta : M.machineMeta}>
+                                    x{item.qty} · {fmt(item.price)}
+                                </Text>
+                            </View>
+                            {active && (
+                                <View style={[ws ? W.machineCheck : M.machineCheck, { backgroundColor: currentTypeCfg?.color }]}>
+                                    <Ionicons name="checkmark" size={12} color="#fff" />
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        </View>
+    );
+});
+
 // ── Single export default ────────────────────────────────────
 export default function AddService() {
     const router = useRouter();
@@ -70,6 +174,7 @@ export default function AddService() {
 
     // ✅ useLayout gọi BÊN TRONG component
     const { isDesktop } = useLayout();
+    const isAdmin = userDetail?.role === 'admin';
 
     // ── State ────────────────────────────────────────────────
     const [serviceTypes, setServiceTypes] = useState([]);
@@ -112,29 +217,68 @@ export default function AddService() {
 
     useEffect(() => {
         if (customers.length === 0) return;
+
         const fetchOrders = async () => {
             setOrderLoading(true);
             try {
-                const { getDocs, collection, query, where } = await import('firebase/firestore');
-                const phones = customers.map(c => c.phone).filter(Boolean);
-                const allOrders = [];
+                let allOrders = [];
 
-                // ✅ Query đúng: mỗi order là 1 doc trong collection 'orders'
-                await Promise.all(phones.map(async (phone) => {
-                    try {
-                        const q = query(collection(db, 'orders'), where('phone', '==', phone));
-                        const snap = await getDocs(q);
-                        snap.docs.forEach(d => allOrders.push({ ...d.data(), _phone: phone }));
-                    } catch (_) { }
-                }));
+                if (isAdmin) {
+                    // Admin: lấy toàn bộ đơn hàng
+                    const ordersSnap = await getDocs(collection(db, 'orders'));
+                    ordersSnap.forEach(d => allOrders.push({ id: d.id, ...d.data() }));
+                } else {
+                    // 1. Email bản thân + cấp dưới (từ customers)
+                    const subordinateEmails = customers.map(c => c.email).filter(Boolean);
+
+                    // 2. Leo ngược cây advisor lấy email cấp trên
+                    const superiorEmails = [];
+                    let currentEmail = userDetail?.advisor;
+                    while (currentEmail) {
+                        const userSnap = await getDocs(
+                            query(collection(db, 'users'), where('email', '==', currentEmail))
+                        );
+                        if (userSnap.empty) break;
+                        superiorEmails.push(currentEmail);
+                        const userData = userSnap.docs[0].data();
+                        currentEmail = userData.advisor || null;
+                    }
+
+                    // 3. Gộp + loại trùng
+                    const uniqueEmails = [...new Set([
+                        userDetail?.email,
+                        ...subordinateEmails,
+                        // ...superiorEmails, // bỏ comment nếu muốn thêm cấp trên
+                    ].filter(Boolean))];
+
+                    if (uniqueEmails.length === 0) {
+                        setOrderList([]);
+                        return;
+                    }
+
+                    // 4. Query theo createdBy, chunk 30
+                    const CHUNK_SIZE = 30;
+                    for (let i = 0; i < uniqueEmails.length; i += CHUNK_SIZE) {
+                        const chunk = uniqueEmails.slice(i, i + CHUNK_SIZE);
+                        const ordersSnap = await getDocs(
+                            query(collection(db, 'orders'), where('createdBy', 'in', chunk))
+                        );
+                        ordersSnap.forEach(d => allOrders.push({ id: d.id, ...d.data() }));
+                    }
+                }
 
                 allOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
                 setOrderList(allOrders);
-            } catch (e) { console.error('Lỗi fetch orders:', e); }
-            finally { setOrderLoading(false); }
+
+            } catch (e) {
+                console.error('Lỗi fetch orders:', e);
+            } finally {
+                setOrderLoading(false);
+            }
         };
+
         fetchOrders();
-    }, [customers]);
+    }, [customers, userDetail]);
 
     // ── Handlers ─────────────────────────────────────────────
     const filteredOrders = orderSearch.trim() === ''
@@ -190,98 +334,6 @@ export default function AddService() {
         finally { setSubmitting(false); }
     };
 
-    // ── Sub-components (dùng state từ parent qua closure) ────
-    const OrderPickerDropdown = () => (
-        <View style={S.pickerDropdown}>
-            <View style={S.pickerSearch}>
-                <Ionicons name="search-outline" size={14} color="#94A3B8" />
-                <TextInput
-                    style={S.pickerSearchInput}
-                    placeholder="Tìm mã đơn hoặc tên khách..."
-                    placeholderTextColor="#94A3B8"
-                    value={orderSearch}
-                    onChangeText={setOrderSearch}
-                    autoFocus
-                />
-                {orderSearch.length > 0 && (
-                    <TouchableOpacity onPress={() => setOrderSearch('')}>
-                        <Ionicons name="close-circle" size={14} color="#94A3B8" />
-                    </TouchableOpacity>
-                )}
-            </View>
-            <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
-                {orderLoading
-                    ? <Text style={S.pickerEmpty}>Đang tải đơn hàng...</Text>
-                    : filteredOrders.length === 0
-                        ? <Text style={S.pickerEmpty}>{orderSearch ? 'Không tìm thấy' : 'Chưa có đơn hàng nào'}</Text>
-                        : filteredOrders.map((order, i) => {
-                            const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
-                            return (
-                                <TouchableOpacity key={order.id || i}
-                                    style={[S.pickerItem, selectedOrder?.id === order.id && S.pickerItemActive]}
-                                    onPress={() => handleSelectOrder(order)} activeOpacity={0.7}
-                                >
-                                    <View style={S.pickerItemIcon}>
-                                        <Ionicons name="receipt-outline" size={14} color="#2563EB" />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={S.pickerItemId}>#{order.id}</Text>
-                                        <Text style={S.pickerItemSub}>{order.customer} · {order.items?.length || 0} sản phẩm</Text>
-                                    </View>
-                                    <Text style={S.pickerItemAmount}>{fmt(total)}</Text>
-                                </TouchableOpacity>
-                            );
-                        })
-                }
-            </ScrollView>
-        </View>
-    );
-
-    const MachinePickerSection = ({ ws }) => {
-        if (!showMachineSection) return null;
-        const machines = selectedOrder?.items || [];
-        return (
-            <View style={ws ? W.machineSection : M.machineSection}>
-                <View style={ws ? W.machineHeader : M.machineHeader}>
-                    <Ionicons name="settings-outline" size={14} color={currentTypeCfg?.color || '#2563EB'} />
-                    <Text style={[ws ? W.machineHeaderText : M.machineHeaderText, { color: currentTypeCfg?.color }]}>
-                        Chọn máy cần {currentTypeCfg?.label?.toLowerCase()} <Text style={{ color: '#EF4444' }}>*</Text>
-                    </Text>
-                </View>
-                <View style={ws ? W.machineGrid : M.machineGrid}>
-                    {machines.map((item, i) => {
-                        const active = selectedMachine?.id === (item.id || String(i));
-                        return (
-                            <TouchableOpacity
-                                key={item.id || i}
-                                style={[
-                                    ws ? W.machineCard : M.machineCard,
-                                    active && { borderColor: currentTypeCfg?.color, backgroundColor: currentTypeCfg?.bg },
-                                ]}
-                                onPress={() => setSelectedMachine(active ? null : { ...item, id: item.id || String(i) })}
-                                activeOpacity={0.8}
-                            >
-                                <View style={[ws ? W.machineIcon : M.machineIcon, { backgroundColor: active ? currentTypeCfg?.color + '22' : '#F1F5F9' }]}>
-                                    <Ionicons name="water-outline" size={16} color={active ? currentTypeCfg?.color : '#94A3B8'} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={[ws ? W.machineName : M.machineName, active && { color: currentTypeCfg?.color }]} numberOfLines={2}>
-                                        {item.name}
-                                    </Text>
-                                    <Text style={ws ? W.machineMeta : M.machineMeta}>x{item.qty} · {fmt(item.price)}</Text>
-                                </View>
-                                {active && (
-                                    <View style={[ws ? W.machineCheck : M.machineCheck, { backgroundColor: currentTypeCfg?.color }]}>
-                                        <Ionicons name="checkmark" size={12} color="#fff" />
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-            </View>
-        );
-    };
 
     // ── Render ───────────────────────────────────────────────
     // ✅ isDesktop điều kiện chọn layout
@@ -365,8 +417,24 @@ export default function AddService() {
                                 </>
                             )}
                         </TouchableOpacity>
-                        {showOrderPicker && <OrderPickerDropdown />}
-                        <MachinePickerSection ws />
+                        {showOrderPicker && (
+                            <OrderPickerDropdown
+                                orderSearch={orderSearch}
+                                setOrderSearch={setOrderSearch}
+                                orderLoading={orderLoading}
+                                filteredOrders={filteredOrders}
+                                selectedOrder={selectedOrder}
+                                handleSelectOrder={handleSelectOrder}
+                            />
+                        )}
+                        <MachinePickerSection
+                            ws={true} // hoặc false cho mobile
+                            showMachineSection={showMachineSection}
+                            selectedOrder={selectedOrder}
+                            selectedMachine={selectedMachine}
+                            setSelectedMachine={setSelectedMachine}
+                            currentTypeCfg={currentTypeCfg}
+                        />
                         {selectedOrder?.items?.length > 0 && !showMachineSection && (
                             <View style={W.orderItemsBox}>
                                 <Text style={W.orderItemsTitle}>Sản phẩm trong đơn:</Text>
@@ -532,8 +600,24 @@ export default function AddService() {
                                     </>
                                 )}
                             </TouchableOpacity>
-                            {showOrderPicker && <OrderPickerDropdown />}
-                            <MachinePickerSection ws={false} />
+                            {showOrderPicker && (
+                                <OrderPickerDropdown
+                                    orderSearch={orderSearch}
+                                    setOrderSearch={setOrderSearch}
+                                    orderLoading={orderLoading}
+                                    filteredOrders={filteredOrders}
+                                    selectedOrder={selectedOrder}
+                                    handleSelectOrder={handleSelectOrder}
+                                />
+                            )}
+                            <MachinePickerSection
+                                ws={false} // hoặc false cho mobile
+                                showMachineSection={showMachineSection}
+                                selectedOrder={selectedOrder}
+                                selectedMachine={selectedMachine}
+                                setSelectedMachine={setSelectedMachine}
+                                currentTypeCfg={currentTypeCfg}
+                            />
                             {selectedOrder?.items?.length > 0 && !showMachineSection && (
                                 <View style={M.orderItemsBox}>
                                     {selectedOrder.items.map((item, i) => (

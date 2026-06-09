@@ -9,7 +9,7 @@ import FilterChips from '@/components/UI/FilterChips';
 import OrderDetail from '@/components/UI/OrderDetail';
 import StatBar from '@/components/UI/StatBar';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
-import { getPriceField, isAdmin, isCTV } from '@/components/Utils/roleHelper';
+import { getPriceField, getRole, isAdmin, isCTV } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -18,6 +18,8 @@ import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } fr
 import { useCardStyles } from '@/components/Styles/cardStyles';
 import { useTableStyles } from '@/components/Styles/tableStyles';
 import { THEME } from '@/components/Styles/theme';
+import { db } from '@/config/firebaseConfig';
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 
@@ -28,7 +30,6 @@ const TYPE_CFG = {
 
 const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899'];
 
-// ── Status color map ─────────────────────────────────────────
 const STATUS_CFG = {
   'Chờ xác nhận': { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
   'Chờ lắp đặt': { c: '#2563EB', bg: '#EFF6FF', bd: '#BFDBFE' },
@@ -37,29 +38,54 @@ const STATUS_CFG = {
   'Đã hủy': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
   'CANCELLED': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
 };
-const getStatusCfg = (s) => STATUS_CFG[s] || { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' };
 
-const getUserLevel = (userDetail) => {
-  if (!userDetail?.advisor) return 1;
-  if (userDetail?.level) return userDetail.level;
-  return 2; // có advisor → tối thiểu cấp 2
+// Thêm map hiển thị paymentMethod
+const PAYMENT_CFG = {
+  customer: { label: 'Khách hàng', icon: 'person-outline', c: '#0891B2', bg: '#ECFEFF' },
+  company: { label: 'Doanh nghiệp', icon: 'business-outline', c: '#7C3AED', bg: '#F5F3FF' },
 };
+
+const getStatusCfg = (s) => STATUS_CFG[s] || { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' };
 
 const canShowCost = (userDetail, role) => {
   if (isAdmin(role)) return true;
-  return getUserLevel(userDetail) === 1;
+  return userDetail?.advisor == null;
 };
 
-// ── Giá nhập cho cấp 2/3: lấy theo role của rootAdvisor ─────
-// rootAdvisor là đại lý cấp 1 → luôn dùng price_a
-// Nếu bạn lưu role của rootAdvisor vào userDetail.rootAdvisorRole thì dùng getPriceField(rootAdvisorRole)
-const getCostPriceField = (userDetail, role) => {
-  if (isAdmin(role)) return getPriceField(role);
-  if (getUserLevel(userDetail) === 1) return getPriceField(role);
-  // Cấp 2/3: giá nhập = giá mà rootAdvisor (cấp 1) bán cho họ
-  // rootAdvisor thường là 'daily' → price_a
-  const rootAdvisorRole = userDetail?.rootAdvisorRole || 'daily';
-  return getPriceField(getRole({ role: rootAdvisorRole }));
+const getItemCost = (p, priceField, productPrices) =>
+  PARSE(productPrices[p.name]?.[priceField] ?? 0);
+
+const getCostPriceField = (order, role, advisorRoles) => {
+  if (isAdmin(role)) return 'price';
+  const creatorRole = advisorRoles[order?.createdBy];
+  if (creatorRole) return getPriceField(creatorRole);
+  return getPriceField(role);
+};
+
+// ── Traverse lên advisor cao nhất ────────────────────────────
+const getRootAdvisorRole = async (userEmail) => {
+  let currentEmail = userEmail;
+  let visited = new Set();
+
+  while (currentEmail) {
+    if (visited.has(currentEmail)) break; // tránh vòng lặp
+    visited.add(currentEmail);
+
+    const snap = await getDoc(doc(db, 'users', currentEmail));
+    if (!snap.exists()) break;
+
+    const data = snap.data();
+    const advisor = data?.advisor;
+
+    if (!advisor) {
+      // Đây là người cao nhất, lấy role của họ
+      return getRole(data);
+    }
+
+    currentEmail = advisor;
+  }
+
+  return 'daily'; // fallback
 };
 
 // ── Bảng tiêu đề ─────────────────────────────────────────────
@@ -68,18 +94,10 @@ function TableHeader({ showCost, tableStyles }) {
     <View style={tableStyles.head}>
       <View style={COL.lead} />
       <View style={COL.order}><Text style={tableStyles.th}>Đơn hàng</Text></View>
-      <View style={COL.date}><Text style={tableStyles.th}>Ngày</Text></View>
-      <View style={COL.sub}><Text style={tableStyles.th}>Sản phẩm</Text></View>
-      {showCost && (
-        <View style={COL.cost}>
-          <Text style={[tableStyles.th]}>Tiền nhập</Text>
-        </View>
-      )}
-      {showCost && (
-        <View style={COL.amount}>
-          <Text style={[tableStyles.th]}>Tổng giá trị</Text>
-        </View>
-      )}
+      <View style={COL.date}><Text style={tableStyles.thCenter}>Ngày</Text></View>
+      <View style={COL.sub}><Text style={tableStyles.thCenter}>Hình thức thanh toán</Text></View>
+      {showCost && <View style={COL.cost}><Text style={tableStyles.thCenter}>Tiền nhập</Text></View>}
+      {showCost && <View style={COL.amount}><Text style={tableStyles.thCenter}>Tổng giá trị</Text></View>}
       <View style={COL.status}><Text style={[tableStyles.th, tableStyles.thCenter]}>Trạng thái</Text></View>
       <View style={COL.trail} />
     </View>
@@ -87,10 +105,11 @@ function TableHeader({ showCost, tableStyles }) {
 }
 
 // ── Dòng dữ liệu đơn hàng ────────────────────────────────────
-function OrderRow({ item, index, isActive, onPress, showCost, priceField, tableStyles }) {
+// Sửa OrderRow — đổi phần hiển thị pCount → paymentMethod
+function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles, productPrices, tableStyles }) {
   const tcfg = TYPE_CFG[item.orderType];
+  const pcfg = PAYMENT_CFG[item.paymentMethod] || { label: item.paymentMethod || '—', c: '#64748B', bg: '#F1F5F9' };
   const total = (item.items || []).reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
-  const pCount = (item.items || []).length;
   const isCancelled = (item.status || '').includes('hủy') || item.status === 'CANCELLED';
   const avatarColor = isCancelled ? '#94A3B8' : AVATAR_COLORS[index % AVATAR_COLORS.length];
   const scfg = getStatusCfg(item.status);
@@ -99,17 +118,10 @@ function OrderRow({ item, index, isActive, onPress, showCost, priceField, tableS
     ? new Date(item.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : '—';
 
-  // Tiền nhập: ưu tiên lấy từ rootAdvisorPrice nếu có (lưu khi tạo đơn)
-  // Fallback: tính từ priceField trong productPrice
-  const totalCostRow = (item.items || []).reduce((s, p) => {
-    const costPrice = PARSE(
-      p.basePrice ??            // ✅ thêm vào đầu
-      p.rootAdvisorPrice ??
-      p.productPrice?.[priceField] ??
-      p[priceField] ?? 0
-    );
-    return s + costPrice * PARSE(p.qty || 1);
-  }, 0);
+  const priceField = getCostPriceField(item, role, advisorRoles);
+  const totalCostRow = (item.items || []).reduce((s, p) =>
+    s + getItemCost(p, priceField, productPrices) * PARSE(p.qty || 1), 0
+  );
 
   return (
     <TouchableOpacity
@@ -138,14 +150,16 @@ function OrderRow({ item, index, isActive, onPress, showCost, priceField, tableS
       </View>
 
       <View style={COL.date}>
-        <Text style={tableStyles.cellMuted} numberOfLines={1}>{date}</Text>
+        <Text style={ROW.cellMuted} numberOfLines={1}>{date}</Text>
       </View>
 
+      {/* Cột thanh toán */}
       <View style={COL.sub}>
-        <Text style={tableStyles.cellMuted} numberOfLines={1}>{pCount} sản phẩm</Text>
+        <View style={[ROW.paymentBadge, { backgroundColor: pcfg.bg }]}>
+          <Text style={[ROW.paymentText, { color: pcfg.c }]} numberOfLines={1}>{pcfg.label}</Text>
+        </View>
       </View>
 
-      {/* ✅ Chỉ hiện cho cấp 1 và admin */}
       {showCost && (
         <View style={COL.cost}>
           <Text style={[ROW.cellAmount, isCancelled && ROW.textMuted]} numberOfLines={1}>
@@ -162,7 +176,6 @@ function OrderRow({ item, index, isActive, onPress, showCost, priceField, tableS
         </View>
       )}
 
-      {/* ✅ Status pill có màu */}
       <View style={COL.status}>
         <View style={[ROW.statusPill, { backgroundColor: scfg.bg, borderColor: scfg.bd }]}>
           <View style={[ROW.statusDot, { backgroundColor: scfg.c }]} />
@@ -183,10 +196,6 @@ export default function OrderScreen() {
   const router = useRouter();
   const { data, loading, refreshing, refresh, stats, role, userDetail } = useScreenData('orders');
 
-  // ✅ Xác định cấp và quyền xem giá
-  const showCostField = canShowCost(userDetail, role);
-  const priceField = getCostPriceField(userDetail, role);
-
   const { query, setQuery } = useSearch(data, ['id', 'customer']);
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -194,6 +203,44 @@ export default function OrderScreen() {
 
   const { styles: cardStyles, isDesktop } = useCardStyles();
   const { styles: tableStyles } = useTableStyles();
+
+  const [advisorRoles, setAdvisorRoles] = useState({});
+  const [productPrices, setProductPrices] = useState({});
+
+  const showCostField = useMemo(
+    () => canShowCost(userDetail, role),
+    [userDetail?.advisor, role]
+  );
+
+  useEffect(() => {
+    const fetchProductPrices = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'productPrice'));
+        const map = {};
+        snap.docs.forEach(d => { map[d.id] = d.data(); });
+        setProductPrices(map);
+      } catch (_) { }
+    };
+    fetchProductPrices();
+  }, []);
+
+  // ── Fetch advisor roles (thay useEffect cũ) ──────────────────
+  useEffect(() => {
+    if (!data.length) return;
+
+    const creators = [...new Set(data.map(o => o.createdBy).filter(Boolean))];
+    if (!creators.length) return;
+
+    const fetchAdvisorRoles = async () => {
+      const roles = {};
+      await Promise.all(creators.map(async (email) => {
+        roles[email] = await getRootAdvisorRole(email);
+      }));
+      setAdvisorRoles(roles); // key: createdBy email → root role
+    };
+
+    fetchAdvisorRoles();
+  }, [data]);
 
   useEffect(() => {
     if (selected) {
@@ -215,34 +262,28 @@ export default function OrderScreen() {
   }, [data, query, typeFilter, statusFilter]);
 
   const totalRevenue = useMemo(() =>
-    data.filter(o => o.status === 'Đã thanh toán')
+    data
+      .filter(o => o.status === 'Đã thanh toán')
       .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + PARSE(p.price) * PARSE(p.qty || 1), 0), 0)
     , [data]);
 
-  // ✅ Tổng tiền nhập: chỉ tính cho cấp 1
   const totalCost = useMemo(() => {
     if (!showCostField) return 0;
     return data
       .filter(o => !['Đã hủy', 'CANCELLED'].includes(o.status))
-      .reduce((sum, o) =>
-        sum + (o.items || []).reduce((s, p) => {
-          const costPrice = PARSE(
-            p.basePrice ??        // ✅ field thực tế trong Firestore
-            p.rootAdvisorPrice ??
-            p.productPrice?.[priceField] ??
-            p[priceField] ?? 0
-          );
-          return s + costPrice * PARSE(p.qty || 1);
-        }, 0)
-        , 0);
-  }, [data, priceField, showCostField]);
+      .reduce((sum, o) => {
+        const priceField = getCostPriceField(o, role, advisorRoles);
+        return sum + (o.items || []).reduce((s, p) =>
+          s + getItemCost(p, priceField, productPrices) * PARSE(p.qty || 1), 0
+        );
+      }, 0);
+  }, [data, role, advisorRoles, productPrices]);
 
   const statCards = [
     { icon: 'receipt-outline', label: 'Đơn hàng', value: String(stats.total || 0), color: THEME.colors.primary, bg: THEME.colors.primaryLight },
     { icon: 'cube-outline', label: 'Đơn buôn', value: String(data.filter(o => o.orderType === 'buon').length), color: THEME.colors.success, bg: THEME.colors.successLight },
     { icon: 'home-outline', label: 'Đơn lẻ', value: String(data.filter(o => o.orderType === 'le').length), color: THEME.colors.purple, bg: THEME.colors.purpleLight },
     { icon: 'cash-outline', label: 'Doanh thu', value: fmtCurrency(totalRevenue), color: THEME.colors.warning, bg: THEME.colors.warningLight },
-    // ✅ Chỉ hiện stat tiền nhập cho cấp 1 / admin
     ...(showCostField ? [{ icon: 'pricetag-outline', label: 'Tiền nhập', value: fmtCurrency(totalCost), color: '#0891B2', bg: '#ECFEFF' }] : []),
   ];
 
@@ -254,6 +295,7 @@ export default function OrderScreen() {
     }
   };
 
+  console.log('userDetail.advisor:', userDetail?.advisor, '| showCostField:', showCostField);
   return (
     <TabScreenLayout>
       <ScreenHeader
@@ -292,33 +334,38 @@ export default function OrderScreen() {
         <View style={cardStyles.card}>
           {isDesktop && <TableHeader showCost={showCostField} tableStyles={tableStyles} />}
 
-          {loading && !refreshing ? <EmptyState loading /> :
-            filtered.length === 0 ? (
-              <EmptyState empty icon="receipt-outline"
-                title={query ? 'Không tìm thấy' : 'Chưa có đơn hàng'}
-                actionLabel={!isCTV(role) ? 'Tạo đơn hàng' : undefined}
-                onAction={!isCTV(role) ? () => router.push('/addOrder') : undefined}
-              />
-            ) : (
-              <FlatList
-                data={filtered}
-                keyExtractor={(item, i) => item.id || String(i)}
-                renderItem={({ item, index }) => (
-                  <OrderRow
-                    item={item}
-                    index={index}
-                    isActive={selected?.id === item.id}
-                    onPress={handlePress}
-                    showCost={showCostField}
-                    priceField={priceField}
-                    tableStyles={tableStyles}
-                  />
-                )}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={tableStyles.listContainer}
-              />
-            )}
+          {loading && !refreshing ? (
+            <EmptyState loading />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              empty
+              icon="receipt-outline"
+              title={query ? 'Không tìm thấy' : 'Chưa có đơn hàng'}
+              actionLabel={!isCTV(role) ? 'Tạo đơn hàng' : undefined}
+              onAction={!isCTV(role) ? () => router.push('/addOrder') : undefined}
+            />
+          ) : (
+            <FlatList
+              data={filtered}
+              keyExtractor={(item, i) => item.id || String(i)}
+              renderItem={({ item, index }) => (
+                <OrderRow
+                  item={item}
+                  index={index}
+                  isActive={selected?.id === item.id}
+                  onPress={handlePress}
+                  showCost={showCostField}
+                  role={role}
+                  advisorRoles={advisorRoles}
+                  productPrices={productPrices}
+                  tableStyles={tableStyles}
+                />
+              )}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={tableStyles.listContainer}
+            />
+          )}
         </View>
 
         {isDesktop && selected && (
@@ -338,7 +385,7 @@ const COL = {
   lead: { width: 36 },
   order: { flex: 2, minWidth: 160 },
   date: { flex: 1, minWidth: 90 },
-  sub: { flex: 1, minWidth: 90 },
+  sub: { flex: 1.5, minWidth: 140 },
   amount: { flex: 1, minWidth: 110 },
   cost: { flex: 1, minWidth: 110 },
   status: { width: 140 },
@@ -353,13 +400,13 @@ const ROW = StyleSheet.create({
   customer: { fontSize: 12, color: THEME.colors.textSecondary },
   badge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: THEME.radius.sm },
   badgeText: { fontSize: 10, fontWeight: '700' },
-  cellAmount: { fontSize: 13, fontWeight: '500', color: THEME.colors.textPrimary, textAlign: 'left' },
-
-  // ✅ Status pill có màu
+  cellAmount: { fontSize: 13, fontWeight: '500', color: THEME.colors.textPrimary, textAlign: 'center' },
   statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 1, alignSelf: 'center' },
   statusDot: { width: 5, height: 5, borderRadius: 3 },
   statusLabel: { fontSize: 11, fontWeight: '700' },
-
   textStrike: { textDecorationLine: 'line-through', color: THEME.colors.textMuted },
   textMuted: { color: THEME.colors.textMuted },
+  paymentBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, alignSelf: 'center' },
+  paymentText: { fontSize: 11, fontWeight: '600' },
+  cellMuted: { fontSize: 11, color: THEME.colors.textMuted, alignSelf: 'center' }
 });

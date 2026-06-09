@@ -104,27 +104,31 @@ export default function RegionReportScreen() {
 
     const fetchData = useCallback(async () => {
         try {
-            // Fetch users with region
-            const uSnap = await getDocs(query(collection(db, 'users'), where('verified', '==', true)));
-            setUsers(uSnap.docs.map(d => d.data()));
-
-            // Fetch customers + orders
+            // Fetch customers
             const cSnap = isAdmin
                 ? await getDocs(collection(db, 'customers'))
                 : await getDocs(query(collection(db, 'customers'), where('createdBy', '==', userDetail.email)));
             const custData = cSnap.docs.map(d => d.data());
             setCustomers(custData);
 
-            const phones = custData.map(c => c.phone).filter(Boolean);
-            const orders = [];
-            await Promise.all(phones.slice(0, 100).map(async phone => {
-                try {
-                    const { getDoc, doc: firestoreDoc } = await import('firebase/firestore');
-                    const s = await getDoc(firestoreDoc(db, 'orders', phone));
-                    if (s.exists()) (s.data().orders || []).forEach(o => orders.push({ ...o, customerPhone: phone }));
-                } catch (_) { }
-            }));
-            setAllOrders(orders.filter(o => o.status === 'Đã thanh toán'));
+            // Fetch orders flat từ collection 'orders'
+            let ordersSnap;
+            if (isAdmin) {
+                ordersSnap = await getDocs(collection(db, 'orders'));
+            } else {
+                ordersSnap = await getDocs(
+                    query(collection(db, 'orders'), where('createdBy', '==', userDetail.email))
+                );
+            }
+            const orders = ordersSnap.docs
+                .map(d => ({ ...d.data(), docId: d.id }))
+                .filter(o => o.status === 'Đã thanh toán');
+            setAllOrders(orders);
+
+            // Fetch users
+            const uSnap = await getDocs(query(collection(db, 'users'), where('verified', '==', true)));
+            setUsers(uSnap.docs.map(d => d.data()));
+
         } catch (e) { console.error(e); }
         finally { setLoading(false); setRefreshing(false); }
     }, [userDetail?.email, isAdmin]);
@@ -137,22 +141,26 @@ export default function RegionReportScreen() {
         REGIONS.forEach(r => { map[r] = { revenue: 0, orders: 0, customerCount: 0, users: [], products: {} }; });
         map['Khác'] = { revenue: 0, orders: 0, customerCount: 0, users: [], products: {} };
 
-        // Đếm khách hàng theo địa chỉ đăng ký
+        // Build phone→address từ customers làm fallback
+        const phoneToAddr = {};
+        customers.forEach(c => { if (c.phone) phoneToAddr[c.phone] = c.address; });
+
+        // Đếm khách hàng theo địa chỉ
         customers.forEach(c => {
             const region = getRegion(c.address);
             if (!map[region]) map[region] = { revenue: 0, orders: 0, customerCount: 0, users: [], products: {} };
             map[region].customerCount += 1;
         });
 
-        // Build phone→customer map to use customer address for region lookup
-        const phoneToAddr = {};
-        customers.forEach(c => { if (c.phone) phoneToAddr[c.phone] = c.address; });
-
+        // Tính doanh thu theo địa chỉ đơn hàng
         allOrders.forEach(o => {
-            const addr = phoneToAddr[o.customerPhone] || o.address;
+            // Ưu tiên địa chỉ của đơn, fallback về địa chỉ khách hàng
+            const addr = o.address || phoneToAddr[o.customerId] || phoneToAddr[o.customerPhone] || '';
             const region = getRegion(addr);
             if (!map[region]) map[region] = { revenue: 0, orders: 0, customerCount: 0, users: [], products: {} };
-            const val = (o.items || []).reduce((s, p) => s + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0);
+
+            const val = (o.items || []).reduce((s, p) =>
+                s + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0);
             map[region].revenue += val;
             map[region].orders += 1;
             (o.items || []).forEach(p => {
@@ -160,10 +168,12 @@ export default function RegionReportScreen() {
                 map[region].products[p.name] += parseFloat(p.qty || 1);
             });
         });
+
         users.forEach(u => {
             const region = u.regionName || u.region || 'Khác';
             if (map[region]) map[region].users.push(u);
         });
+
         return map;
     }, [allOrders, users, customers]);
 

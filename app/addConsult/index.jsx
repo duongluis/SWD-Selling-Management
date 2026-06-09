@@ -55,8 +55,6 @@ export default function AddConsultScreen() {
     const [address, setAddress] = useState('');
     const [age, setAge] = useState('');
     const [products, setProducts] = useState([]);    // multi-select
-    const [status, setStatus] = useState('');
-    const [reason, setReason] = useState('');
     const [note, setNote] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
@@ -76,20 +74,15 @@ export default function AddConsultScreen() {
             .finally(() => setCatalogLoad(false));
     }, []);
 
-    const STATUS_OPTIONS = [
-        { key: 'pending', label: 'Đang tư vấn', icon: 'time-outline', color: '#2563EB', bg: '#EFF6FF' },
-        { key: 'success', label: 'Thành công', icon: 'checkmark-circle-outline', color: '#059669', bg: '#ECFDF5' },
-        { key: 'failed', label: 'Thất bại', icon: 'close-circle-outline', color: '#EF4444', bg: '#FEF2F2' },
-    ];
-
+    // const STATUS_OPTIONS = [
+    //     { key: 'pending', label: 'Đang tư vấn', icon: 'time-outline', color: '#2563EB', bg: '#EFF6FF' },
+    //     { key: 'success', label: 'Thành công', icon: 'checkmark-circle-outline', color: '#059669', bg: '#ECFDF5' },
+    //     { key: 'failed', label: 'Thất bại', icon: 'close-circle-outline', color: '#EF4444', bg: '#FEF2F2' },
+    // ];
 
     const handleSubmit = async () => {
         if (!name.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên khách hàng'); return; }
         if (!phone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại'); return; }
-        if (!status) { showAlert('Thông báo', 'Vui lòng chọn trạng thái tư vấn'); return; }
-        if (status === 'failed' && !reason.trim()) {
-            showAlert('Thông báo', 'Vui lòng nhập lý do thất bại'); return;
-        }
 
         setSubmitting(true);
         try {
@@ -102,8 +95,8 @@ export default function AddConsultScreen() {
                 productNames: catalog
                     .filter(p => products.includes(String(p.id || p.docId)))
                     .map(p => p.name),
-                status,
-                reason: status === 'failed' ? reason.trim() : '',
+                status: 'pending',          // ← mặc định luôn là đang tư vấn
+                reason: '',
                 note: note.trim(),
                 createdBy: userDetail?.email || '',
                 createdAt: new Date().toISOString(),
@@ -211,52 +204,7 @@ export default function AddConsultScreen() {
                                 )}
                             </View>
 
-                            {/* Trạng thái tư vấn */}
-                            <View style={styles.section}>
-                                <View style={styles.sectionHeader}>
-                                    <Ionicons name="git-branch-outline" size={15} color="#F59E0B" />
-                                    <Text style={[styles.sectionTitle, { color: '#F59E0B' }]}>Kết quả tư vấn <Text style={styles.req}>*</Text></Text>
-                                </View>
-                                <View style={{ gap: 8 }}>
-                                    {STATUS_OPTIONS.map(opt => {
-                                        const active = status === opt.key;
-                                        return (
-                                            <TouchableOpacity
-                                                key={opt.key}
-                                                style={[styles.statusOpt, active && { borderColor: opt.color, backgroundColor: opt.bg }]}
-                                                onPress={() => setStatus(opt.key)}
-                                                activeOpacity={0.8}
-                                            >
-                                                <Ionicons name={opt.icon} size={18} color={active ? opt.color : '#94A3B8'} />
-                                                <Text style={[styles.statusOptText, active && { color: opt.color, fontWeight: '700' }]}>
-                                                    {opt.label}
-                                                </Text>
-                                                {active && <Ionicons name="checkmark-circle" size={18} color={opt.color} />}
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </View>
 
-                                {/* Lý do thất bại */}
-                                {status === 'failed' && (
-                                    <View style={{ marginTop: 12 }}>
-                                        <View style={styles.sectionHeader}>
-                                            <Ionicons name="alert-circle-outline" size={14} color="#EF4444" />
-                                            <Text style={[styles.sectionTitle, { color: '#EF4444', fontSize: 12 }]}>Lý do thất bại <Text style={styles.req}>*</Text></Text>
-                                        </View>
-                                        <View style={[styles.inputBox, { alignItems: 'flex-start', minHeight: 80, borderColor: '#FECACA' }]}>
-                                            <TextInput
-                                                style={[styles.input, { textAlignVertical: 'top' }]}
-                                                value={reason}
-                                                onChangeText={setReason}
-                                                multiline
-                                                placeholder="Khách chưa có nhu cầu, giá cao, đã mua chỗ khác..."
-                                                placeholderTextColor="#94A3B8"
-                                            />
-                                        </View>
-                                    </View>
-                                )}
-                            </View>
 
                         </View>
                     </View>
