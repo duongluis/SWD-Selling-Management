@@ -5,7 +5,6 @@ import { useSearch } from '@/components/Hooks/useSearch';
 import EmptyState from '@/components/Main/EmptyState';
 import ScreenHeader from '@/components/Main/ScreenHeader';
 import TabScreenLayout from '@/components/Main/TabScreenLayout';
-import FilterChips from '@/components/UI/FilterChips';
 import OrderDetail from '@/components/UI/OrderDetail';
 import StatBar from '@/components/UI/StatBar';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
@@ -13,7 +12,7 @@ import { getPriceField, getRole, isAdmin, isCTV } from '@/components/Utils/roleH
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { useCardStyles } from '@/components/Styles/cardStyles';
 import { useTableStyles } from '@/components/Styles/tableStyles';
@@ -89,12 +88,13 @@ const getRootAdvisorRole = async (userEmail) => {
 };
 
 // ── Bảng tiêu đề ─────────────────────────────────────────────
-function TableHeader({ showCost, tableStyles }) {
+function TableHeader({ showCost, showCreator, tableStyles }) {
   return (
     <View style={tableStyles.head}>
       <View style={COL.lead} />
       <View style={COL.order}><Text style={tableStyles.th}>Đơn hàng</Text></View>
       <View style={COL.date}><Text style={tableStyles.thCenter}>Ngày</Text></View>
+      {showCreator && <View style={COL.creator}><Text style={tableStyles.thCenter}>Người tạo</Text></View>}
       <View style={COL.sub}><Text style={tableStyles.thCenter}>Hình thức thanh toán</Text></View>
       {showCost && <View style={COL.cost}><Text style={tableStyles.thCenter}>Tiền nhập</Text></View>}
       {showCost && <View style={COL.amount}><Text style={tableStyles.thCenter}>Tổng giá trị</Text></View>}
@@ -106,7 +106,7 @@ function TableHeader({ showCost, tableStyles }) {
 
 // ── Dòng dữ liệu đơn hàng ────────────────────────────────────
 // Sửa OrderRow — đổi phần hiển thị pCount → paymentMethod
-function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles, productPrices, tableStyles }) {
+function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles, productPrices, tableStyles, showCreator, creatorNames }) {
   const tcfg = TYPE_CFG[item.orderType];
   const pcfg = PAYMENT_CFG[item.paymentMethod] || { label: item.paymentMethod || '—', c: '#64748B', bg: '#F1F5F9' };
   const total = (item.items || []).reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
@@ -152,6 +152,14 @@ function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles
       <View style={COL.date}>
         <Text style={ROW.cellMuted} numberOfLines={1}>{date}</Text>
       </View>
+
+      {showCreator && (
+        <View style={COL.creator}>
+          <Text style={ROW.cellMuted} numberOfLines={1}>
+            {creatorNames[item.createdBy] || item.createdBy?.split('@')[0] || '—'}
+          </Text>
+        </View>
+      )}
 
       {/* Cột thanh toán */}
       <View style={COL.sub}>
@@ -207,6 +215,28 @@ export default function OrderScreen() {
   const [advisorRoles, setAdvisorRoles] = useState({});
   const [productPrices, setProductPrices] = useState({});
 
+  const [creatorNames, setCreatorNames] = useState({});
+  const showCreator = isAdmin(role);
+
+  const [monthFilter, setMonthFilter] = useState('all');
+  const [yearFilter, setYearFilter] = useState(String(new Date().getFullYear()));
+
+  // Tạo danh sách năm từ data
+  const yearOptions = useMemo(() => {
+    const years = [...new Set(
+      data.map(o => o.createdAt?.slice(0, 4)).filter(Boolean)
+    )].sort((a, b) => b - a);
+    return [{ key: 'all', label: 'Tất cả năm' }, ...years.map(y => ({ key: y, label: y }))];
+  }, [data]);
+
+  const monthOptions = [
+    { key: 'all', label: 'Tất cả tháng' },
+    ...Array.from({ length: 12 }, (_, i) => ({
+      key: String(i + 1).padStart(2, '0'),
+      label: `Tháng ${i + 1}`,
+    })),
+  ];
+
   const showCostField = useMemo(
     () => canShowCost(userDetail, role),
     [userDetail?.advisor, role]
@@ -223,6 +253,29 @@ export default function OrderScreen() {
     };
     fetchProductPrices();
   }, []);
+
+
+  // Thêm vào useEffect fetch advisorRoles, bổ sung fetch tên người tạo
+  useEffect(() => {
+    if (!data.length || !isAdmin(role)) return;
+    const creators = [...new Set(data.map(o => o.createdBy).filter(Boolean))];
+    if (!creators.length) return;
+
+    const fetchCreatorNames = async () => {
+      const names = {};
+      await Promise.all(creators.map(async (email) => {
+        try {
+          const snap = await getDoc(doc(db, 'users', email));
+          if (snap.exists()) {
+            const u = snap.data();
+            names[email] = u.nickname || u.name || email;
+          }
+        } catch (_) { }
+      }));
+      setCreatorNames(names);
+    };
+    fetchCreatorNames();
+  }, [data, role]);
 
   // ── Fetch advisor roles (thay useEffect cũ) ──────────────────
   useEffect(() => {
@@ -257,9 +310,14 @@ export default function OrderScreen() {
       let mst = true;
       if (statusFilter === 'processing') mst = ['Chờ lắp đặt', 'Đang lắp đặt'].includes(o.status);
       else if (statusFilter !== 'all') mst = o.status === statusFilter;
-      return ms && mt && mst;
+
+      const createdAt = o.createdAt || '';
+      const my = yearFilter === 'all' || createdAt.startsWith(yearFilter);
+      const mm = monthFilter === 'all' || createdAt.slice(5, 7) === monthFilter;
+
+      return ms && mt && mst && my && mm;
     });
-  }, [data, query, typeFilter, statusFilter]);
+  }, [data, query, typeFilter, statusFilter, yearFilter, monthFilter]);
 
   const totalRevenue = useMemo(() =>
     data
@@ -308,31 +366,88 @@ export default function OrderScreen() {
         actionIcon="add"
         onAction={!isCTV(role) ? () => router.push('/addOrder') : undefined}
       />
-      <StatBar stats={statCards} />
-      <FilterChips
-        options={[
-          { key: 'all', label: 'Tất cả' },
-          { key: 'buon', label: 'Đơn buôn' },
-          { key: 'le', label: 'Đơn lẻ' },
-        ]}
-        value={typeFilter}
-        onChange={t => { setTypeFilter(t); setSelected(null); }}
-      />
-      <FilterChips
-        options={[
-          { key: 'all', label: 'Tất cả trạng thái' },
-          { key: 'Chờ xác nhận', label: 'Chờ xác nhận' },
-          { key: 'processing', label: 'Đang xử lý' },
-          { key: 'Đã thanh toán', label: 'Đã thanh toán' },
-          { key: 'Đã hủy', label: 'Đã hủy' },
-        ]}
-        value={statusFilter}
-        onChange={s => { setStatusFilter(s); setSelected(null); }}
-      />
 
+      {/* ── StatBar: luôn full width, không nằm trong ScrollView ── */}
+      <StatBar stats={statCards} />
+
+      {/* ── Hàng filter type + status ── */}
+      <View style={FF.filterBlock}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={FF.chipRow}>
+            {[
+              { key: 'all', label: 'Tất cả' },
+              { key: 'buon', label: 'Đơn buôn' },
+              { key: 'le', label: 'Đơn lẻ' },
+            ].map(opt => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[YF.chip, typeFilter === opt.key && YF.chipActive]}
+                onPress={() => { setTypeFilter(opt.key); setSelected(null); }}
+              >
+                <Text style={[YF.chipText, typeFilter === opt.key && YF.chipTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <View style={FF.sep} />
+
+            {[
+              { key: 'all', label: 'Tất cả trạng thái' },
+              { key: 'Chờ xác nhận', label: 'Chờ xác nhận' },
+              { key: 'processing', label: 'Đang xử lý' },
+              { key: 'Đã thanh toán', label: 'Đã thanh toán' },
+              { key: 'Đã hủy', label: 'Đã hủy' },
+            ].map(opt => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[YF.chip, statusFilter === opt.key && YF.chipActive]}
+                onPress={() => { setStatusFilter(opt.key); setSelected(null); }}
+              >
+                <Text style={[YF.chipText, statusFilter === opt.key && YF.chipTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* ── Hàng filter năm + tháng ── */}
+      <View style={FF.filterBlock}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={FF.chipRow}>
+            {yearOptions.map(opt => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[YF.chip, yearFilter === opt.key && YF.chipActive]}
+                onPress={() => { setYearFilter(opt.key); setSelected(null); }}
+              >
+                <Text style={[YF.chipText, yearFilter === opt.key && YF.chipTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <View style={FF.sep} />
+
+            {monthOptions.map(opt => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[YF.chip, monthFilter === opt.key && YF.chipActive]}
+                onPress={() => { setMonthFilter(opt.key); setSelected(null); }}
+              >
+                <Text style={[YF.chipText, monthFilter === opt.key && YF.chipTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
       <View style={cardStyles.splitLayout}>
         <View style={cardStyles.card}>
-          {isDesktop && <TableHeader showCost={showCostField} tableStyles={tableStyles} />}
+          {isDesktop && <TableHeader showCost={showCostField} showCreator={showCreator} tableStyles={tableStyles} />}
 
           {loading && !refreshing ? (
             <EmptyState loading />
@@ -359,6 +474,8 @@ export default function OrderScreen() {
                   advisorRoles={advisorRoles}
                   productPrices={productPrices}
                   tableStyles={tableStyles}
+                  showCreator={showCreator}
+                  creatorNames={creatorNames}
                 />
               )}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -377,19 +494,20 @@ export default function OrderScreen() {
           />
         )}
       </View>
-    </TabScreenLayout>
+    </TabScreenLayout >
   );
 }
 
 const COL = {
-  lead: { width: 36 },
+  lead: { width: 36 },          // +4px để có khoảng thở
   order: { flex: 2, minWidth: 160 },
   date: { flex: 1, minWidth: 90 },
   sub: { flex: 1.5, minWidth: 140 },
-  amount: { flex: 1, minWidth: 110 },
-  cost: { flex: 1, minWidth: 110 },
-  status: { width: 140 },
+  cost: { width: 105, flexShrink: 0, alignItems: 'flex-end', paddingRight: 8 },
+  amount: { width: 115, flexShrink: 0, alignItems: 'flex-end', paddingRight: 8 },
+  status: { width: 135, flexShrink: 0 },
   trail: { width: 20 },
+  creator: { width: 100, flexShrink: 0 },
 };
 
 const ROW = StyleSheet.create({
@@ -400,13 +518,57 @@ const ROW = StyleSheet.create({
   customer: { fontSize: 12, color: THEME.colors.textSecondary },
   badge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: THEME.radius.sm },
   badgeText: { fontSize: 10, fontWeight: '700' },
-  cellAmount: { fontSize: 13, fontWeight: '500', color: THEME.colors.textPrimary, textAlign: 'center' },
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 1, alignSelf: 'center' },
+  cellAmount: {
+    fontSize: 13, fontWeight: '500',
+    color: THEME.colors.textPrimary,
+    textAlign: 'right',   // ← đổi từ 'center' → 'right'
+  },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 1, textAlign: 'center' },
   statusDot: { width: 5, height: 5, borderRadius: 3 },
   statusLabel: { fontSize: 11, fontWeight: '700' },
   textStrike: { textDecorationLine: 'line-through', color: THEME.colors.textMuted },
   textMuted: { color: THEME.colors.textMuted },
-  paymentBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, alignSelf: 'center' },
+  paymentBadge: {
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: 'center',  // ← căn giữa trong cột
+  },
   paymentText: { fontSize: 11, fontWeight: '600' },
-  cellMuted: { fontSize: 11, color: THEME.colors.textMuted, alignSelf: 'center' }
+  cellMuted: {
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    textAlign: 'center',
+    width: '100%',        // ← đảm bảo textAlign có tác dụng
+  },
+});
+// Thêm StyleSheet YF
+const YF = StyleSheet.create({
+  chip: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 20, backgroundColor: '#F1F5F9',
+    borderWidth: 1, borderColor: '#E2E8F0',
+  },
+  chipActive: {
+    backgroundColor: '#1E3A8A', borderColor: '#1E3A8A',
+  },
+  chipText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+  chipTextActive: { color: '#fff' },
+});
+
+const FF = StyleSheet.create({
+  filterBlock: {
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sep: {
+    width: 1,
+    height: 18,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 4,
+  },
 });

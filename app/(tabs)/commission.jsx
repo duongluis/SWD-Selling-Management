@@ -2,7 +2,7 @@
 
 import ScreenHeader from '@/components/Main/ScreenHeader';
 import { showAlert } from '@/components/Main/showAlert';
-import TabScreenLayout from '@/components/Main/TabScreenLayout';
+import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import FilterChips from '@/components/UI/FilterChips';
 import { createNotification } from '@/components/Utils/chatService';
 import { getRole } from '@/components/Utils/roleHelper';
@@ -12,18 +12,14 @@ import { useFocusEffect } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    Platform,
-    RefreshControl,
-    ScrollView, StyleSheet, Text, TouchableOpacity,
-    View
+    ActivityIndicator, Dimensions, Platform,
+    RefreshControl, ScrollView, StyleSheet,
+    Text, TouchableOpacity, View,
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
 
-import { useLayout } from '@/components/Main/TabScreenLayout';
-
 const width = Dimensions.get('window').width;
+const IS_DESKTOP = Platform.OS === 'web' && width >= 768;
 
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtShort = n => {
@@ -34,9 +30,7 @@ const fmtShort = n => {
     return String(n);
 };
 
-const COMM_RATE = { admin: 0, daily: 0.03, phantan: 0.05, ctv: 0.08, other: 0 };
-
-// ── Stat / Chart / Badge components (giữ nguyên) ──────────────
+// ── StatCard ──────────────────────────────────────────────────
 function StatCard({ label, value, sub, color, borderColor }) {
     return (
         <View style={[SC.card, { borderTopColor: borderColor || color, borderTopWidth: 3 }]}>
@@ -47,12 +41,13 @@ function StatCard({ label, value, sub, color, borderColor }) {
     );
 }
 const SC = StyleSheet.create({
-    card: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: !(Platform.OS === 'web' && width >= 768) ? 12 : 16, borderWidth: 1, borderColor: '#E2E8F0', minWidth: !(Platform.OS === 'web' && width >= 768) ? 90 : 130 },
-    label: { fontSize: !(Platform.OS === 'web' && width >= 768) ? 9 : 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 6 },
-    value: { fontSize: !(Platform.OS === 'web' && width >= 768) ? 18 : 24, fontWeight: '900', letterSpacing: -0.5, marginBottom: 2 },
-    sub: { fontSize: !(Platform.OS === 'web' && width >= 768) ? 10 : 11, color: '#64748B' },
+    card: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: IS_DESKTOP ? 16 : 12, borderWidth: 1, borderColor: '#E2E8F0', minWidth: IS_DESKTOP ? 130 : 90 },
+    label: { fontSize: IS_DESKTOP ? 11 : 9, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 6 },
+    value: { fontSize: IS_DESKTOP ? 24 : 18, fontWeight: '900', letterSpacing: -0.5, marginBottom: 2 },
+    sub: { fontSize: IS_DESKTOP ? 11 : 10, color: '#64748B' },
 });
 
+// ── MiniBarChart ──────────────────────────────────────────────
 function MiniBarChart({ bars }) {
     if (!bars?.length) return null;
     const max = Math.max(...bars.map(b => b.v), 1);
@@ -83,11 +78,10 @@ const BC = StyleSheet.create({
     lbl: { fontSize: 10, color: '#94A3B8', marginTop: 4, fontWeight: '600' },
 });
 
+// ── StatusBadge ───────────────────────────────────────────────
 const STAT_CFG = {
     pending: { label: 'Chờ trả', c: '#D97706', bg: '#FFFBEB' },
     paid: { label: 'Đã trả', c: '#16A34A', bg: '#DCFCE7' },
-    approved: { label: 'Đã quyết toán', c: '#2563EB', bg: '#EFF6FF' },
-    rejected: { label: 'Từ chối', c: '#DC2626', bg: '#FEF2F2' },
 };
 function StatusBadge({ status }) {
     const cfg = STAT_CFG[status] || { label: status, c: '#64748B', bg: '#F1F5F9' };
@@ -104,7 +98,7 @@ const SB = StyleSheet.create({
     text: { fontSize: 11, fontWeight: '700' },
 });
 
-// ── Mobile commission card (giữ nguyên) ───────────────────────
+// ── Mobile Card ───────────────────────────────────────────────
 function CommCardMobile({ r, isAdmin, onApprove }) {
     return (
         <View style={MR.card}>
@@ -125,9 +119,7 @@ function CommCardMobile({ r, isAdmin, onApprove }) {
                     <Text style={MR.infoValue}>{fmtShort(r.totalValue)}</Text>
                 </View>
                 <View style={[MR.infoCol, { alignItems: 'flex-end' }]}>
-                    <Text style={MR.infoLabel}>
-                        {isAdmin ? `HH (${((r.sellerRate || 0) * 100).toFixed(0)}%)` : 'Hoa hồng'}
-                    </Text>
+                    <Text style={MR.infoLabel}>Hoa hồng</Text>
                     <Text style={[MR.infoValue, { color: '#2563EB', fontWeight: '800' }]}>
                         {fmt(r.commission)}
                     </Text>
@@ -159,12 +151,8 @@ const MR = StyleSheet.create({
     approveBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563EB', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14, marginTop: 12, alignSelf: 'flex-end' },
 });
 
-const WRAP_BASE = {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-};
+// ── Desktop Table ─────────────────────────────────────────────
+const WRAP_BASE = { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 };
 
 const COL_BASE = {
     order: { flex: 1.4, minWidth: 140 },
@@ -213,9 +201,6 @@ function CommRowDesktop({ r, isAdmin, onApprove, odd }) {
             {isAdmin && (
                 <View style={COL.seller}>
                     <Text style={DT.td} numberOfLines={1}>{r.sellerEmail || '—'}</Text>
-                    {/* <Text style={DT.sub}>
-                        Tỷ lệ: {((r.sellerRate || 0) * 100).toFixed(0)}%
-                    </Text> */}
                 </View>
             )}
             <View style={COL.value}>
@@ -225,11 +210,6 @@ function CommRowDesktop({ r, isAdmin, onApprove, odd }) {
                 <Text style={[DT.td, { fontWeight: '800', color: '#2563EB' }]} numberOfLines={1}>
                     {fmt(r.commission)}
                 </Text>
-                {/* {isAdmin && (
-                    <Text style={DT.sub} numberOfLines={1}>
-                        Cho: {r.sellerEmail?.split('@')[0] || '—'}
-                    </Text>
-                )} */}
             </View>
             <View style={COL.status}>
                 <StatusBadge status={r.status} />
@@ -255,7 +235,6 @@ function CommRowDesktop({ r, isAdmin, onApprove, odd }) {
         </View>
     );
 }
-
 const DT = StyleSheet.create({
     head: { backgroundColor: '#F8FAFC', paddingVertical: 10, borderRadius: 10, marginTop: 10, marginBottom: 2 },
     th: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -269,13 +248,13 @@ const DT = StyleSheet.create({
     btnTextDone: { fontSize: 11, color: '#16A34A', fontWeight: '700' },
 });
 
+// ── Screen ────────────────────────────────────────────────────
 export default function CommissionScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
     const isAdmin = role === 'admin';
-    const myRate = COMM_RATE[role] || 0;
-
     const { isMobile } = useLayout();
+
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [orders, setOrders] = useState([]);
@@ -286,92 +265,77 @@ export default function CommissionScreen() {
     const fetchData = useCallback(async () => {
         if (!userDetail?.email) return;
         try {
-            // Lấy khách hàng theo quyền: admin xem tất, còn lại chỉ xem do mình tạo
-            const cSnap = isAdmin
-                ? await getDocs(collection(db, 'customers'))
-                : await getDocs(query(collection(db, 'customers'), where('createdBy', '==', userDetail.email)));
+            let rawOrders = [];
 
-            // Map phone → createdBy của khách hàng (docId = phone)
-            const phoneToCreatedBy = {};
-            cSnap.docs.forEach(d => {
-                const ph = d.data().phone;
-                if (ph) phoneToCreatedBy[ph] = d.data().createdBy;
-            });
+            if (isAdmin) {
+                const snap = await getDocs(collection(db, 'orders'));
+                rawOrders = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
+            } else {
+                const lvl2Snap = await getDocs(
+                    query(collection(db, 'users'), where('advisor', '==', userDetail.email))
+                );
+                const lvl2Emails = lvl2Snap.docs.map(d => d.data().email).filter(Boolean);
 
-            const phones = [...new Set(cSnap.docs.map(d => d.data().phone).filter(Boolean))];
-            const rawOrders = [];
+                let lvl3Emails = [];
+                for (let i = 0; i < lvl2Emails.length; i += 30) {
+                    const chunk = lvl2Emails.slice(i, i + 30);
+                    const s = await getDocs(query(collection(db, 'users'), where('advisor', 'in', chunk)));
+                    s.docs.forEach(d => { if (d.data().email) lvl3Emails.push(d.data().email); });
+                }
+                const teamEmails = [...new Set([userDetail.email, ...lvl2Emails, ...lvl3Emails])];
 
-            // Lấy orders → chỉ giữ lại đơn "Đã thanh toán"
-            await Promise.all(phones.slice(0, 100).map(async phone => {
+                for (let i = 0; i < teamEmails.length; i += 30) {
+                    const chunk = teamEmails.slice(i, i + 30);
+                    const s = await getDocs(
+                        query(collection(db, 'orders'), where('createdBy', 'in', chunk))
+                    );
+                    s.docs.forEach(d => rawOrders.push({ ...d.data(), docId: d.id }));
+                }
+            }
+
+            // Lọc sơ bộ: đã thanh toán + khách hàng thanh toán
+            const preFiltered = rawOrders.filter(o =>
+                o.status === 'Đã thanh toán' &&
+                o.paymentMethod === 'customer'
+            );
+
+            // Kiểm tra điều kiện người tạo đơn
+            const eligibleEmails = new Set();
+            const allCreatorEmails = [...new Set(preFiltered.map(o => o.createdBy).filter(Boolean))];
+
+            await Promise.all(allCreatorEmails.map(async email => {
                 try {
-                    const s = await getDoc(doc(db, 'orders', phone));
-                    if (!s.exists()) return;
-                    (s.data().orders || [])
-                        .filter(o => o.status === 'Đã thanh toán' || o.status === 'Chờ thanh toán')
-                        .forEach(o => {
-                            // Ưu tiên người tạo khách hàng, fallback người tạo đơn
-                            const sellerEmail = phoneToCreatedBy[phone] || o.createdBy || o.sellerEmail || userDetail.email;
-                            rawOrders.push({ ...o, phone, sellerEmail });
-                        });
+                    const uSnap = await getDoc(doc(db, 'users', email));
+                    if (!uSnap.exists()) return;
+                    const u = uSnap.data();
+                    const r = getRole(u);
+                    const hasAdvisor = u.advisor != null && u.advisor !== '';
+                    if (!hasAdvisor && r !== 'daily') eligibleEmails.add(email);
                 } catch (_) { }
             }));
 
-            // Lookup role cho các sellerEmail (chỉ cần khi admin muốn hiển thị rate riêng)
-            let emailToRole = {};
-            if (isAdmin) {
-                const uniqueEmails = [...new Set(rawOrders.map(o => o.sellerEmail).filter(Boolean))];
-                await Promise.all(uniqueEmails.map(async email => {
-                    try {
-                        const uSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
-                        if (!uSnap.empty) emailToRole[email] = uSnap.docs[0].data().role || 'other';
-                    } catch (_) { }
-                }));
-            }
-
-            const allOrders = rawOrders.map(o => {
-                const sellerRole = emailToRole[o.sellerEmail] || 'other';
-                const sellerRate = isAdmin
-                    ? ((sellerRole === 'admin' || sellerRole === 'other') ? 0.05 : (COMM_RATE[sellerRole] ?? 0.05))
-                    : myRate;
-                return { ...o, sellerRole, sellerRate };
-            });
+            const allOrders = preFiltered
+                .filter(o => eligibleEmails.has(o.createdBy))
+                .map(o => ({ ...o, sellerEmail: o.createdBy || userDetail.email }));
 
             setOrders(allOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
         } catch (e) { console.error(e); }
         finally { setLoading(false); setRefreshing(false); }
-    }, [userDetail?.email, isAdmin, myRate]);
+    }, [userDetail?.email, isAdmin]);
 
     useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
     const handleApprove = useCallback((r) => {
         if (r.status === 'paid') return;
-
         showAlert(
             'Xác nhận thanh toán hoa hồng',
             `Trả ${fmt(r.commission)} hoa hồng cho ${r.sellerEmail || 'người tạo đơn'}?\n\nĐơn: #${r.id}\nKhách hàng: ${r.customer || '—'}`,
             async () => {
                 try {
-                    const phone = r.phone || r.customerPhone;
-                    if (!phone) {
-                        console.warn('Không tìm thấy phone cho đơn', r.id);
-                        return;
-                    }
-
-                    const ref = doc(db, 'orders', phone);
-                    const snap = await getDoc(ref);
-                    if (!snap.exists()) return;
-
-                    const updated = (snap.data().orders || []).map(o =>
-                        o.id === r.id ? { ...o, commissionStatus: 'paid' } : o
-                    );
-                    await updateDoc(ref, { orders: updated });
-
-                    // ✅ Optimistic update — đổi state ngay, không chờ fetchData
+                    await updateDoc(doc(db, 'orders', r.id), { commissionStatus: 'paid' });
                     setOrders(prev => prev.map(o =>
                         o.id === r.id ? { ...o, commissionStatus: 'paid' } : o
                     ));
-
-                    // Thông báo cho seller
                     if (r.sellerEmail && r.sellerEmail !== userDetail?.email) {
                         await createNotification({
                             userEmail: r.sellerEmail,
@@ -380,72 +344,62 @@ export default function CommissionScreen() {
                             body: `Hoa hồng ${fmt(r.commission)} cho đơn #${r.id} (KH: ${r.customer || '—'}) đã được trả.`,
                             orderId: r.id,
                             roomId: `order_${r.id}`,
-                            path: '/(tabs)/commission',        // ← màn commission
+                            path: '/(tabs)/commission',
                         });
                     }
                 } catch (e) {
                     console.error('handleApprove error:', e);
-                    // Rollback nếu lỗi
                     fetchData();
                 }
             }
         );
     }, [userDetail?.email, fetchData]);
 
-    // ── Tính commRecords từ orders ──
-    const commRecords = useMemo(() => {
-        return orders.filter(o => o.status !== 'Đã hủy').map(o => {
-            const total = (o.items || []).reduce((s, p) => s + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0);
-            const rate = isAdmin ? (o.sellerRate ?? 0) : myRate;
-            const comm = total * rate;
-            const status = o.commissionStatus || 'pending';
-            return { ...o, totalValue: total, commission: comm, status };
-        });
-    }, [orders, myRate, isAdmin]);
+    const commRecords = useMemo(() =>
+        orders.map(o => {
+            const totalValue = (o.items || []).reduce((s, p) =>
+                s + parseFloat(p.price || 0) * parseFloat(p.qty || 1), 0);
+            const commission = Math.max(
+                (o.items || []).reduce((s, p) =>
+                    s + (parseFloat(p.price || 0) - parseFloat(p.basePrice || 0)) * parseFloat(p.qty || 1), 0),
+                0
+            );
+            return { ...o, totalValue, commission, status: o.commissionStatus || 'pending' };
+        })
+        , [orders]);
 
-    // ── Lọc theo search + statusFilter ──
     const filteredRecords = useMemo(() => {
         const q = search.trim().toLowerCase();
         return commRecords.filter(r => {
             const ms = !q || (
                 String(r.id || '').toLowerCase().includes(q) ||
                 String(r.customer || '').toLowerCase().includes(q) ||
-                String(r.sellerEmail || '').toLowerCase().includes(q) ||
-                String(r.phone || r.customerPhone || '').toLowerCase().includes(q)
+                String(r.sellerEmail || '').toLowerCase().includes(q)
             );
-            const mst = statusFilter === 'all' || r.status === statusFilter;
-            return ms && mst;
+            return ms && (statusFilter === 'all' || r.status === statusFilter);
         });
     }, [commRecords, search, statusFilter]);
 
     const pending = commRecords.filter(r => r.status === 'pending').reduce((s, r) => s + r.commission, 0);
     const paid = commRecords.filter(r => r.status === 'paid').reduce((s, r) => s + r.commission, 0);
-    const total = pending + paid;
-
-    const now = new Date();
-    const bars = useMemo(() => {
-        if (period === 'quarterly') {
-            return ['T1', 'T2', 'T3'].map((l, i) => {
-                const m = now.getMonth() - 2 + i;
-                const key = `${now.getFullYear()}-${String(m < 0 ? m + 12 : m + 1).padStart(2, '0')}`;
-                const v = commRecords.filter(r => (r.createdAt || '').startsWith(key)).reduce((s, r) => s + r.commission, 0);
-                return { l, v };
-            });
-        }
-        return Array.from({ length: 6 }, (_, i) => {
-            const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            const v = commRecords.filter(r => (r.createdAt || '').startsWith(key)).reduce((s, r) => s + r.commission, 0);
-            return { l: `T${d.getMonth() + 1}`, v };
-        });
-    }, [commRecords, period]);
-
-    const thisMonth = commRecords.filter(r => (r.createdAt || '').startsWith(
-        `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-    )).reduce((s, r) => s + r.commission, 0);
-
     const pendingCount = commRecords.filter(r => r.status === 'pending').length;
     const paidCount = commRecords.filter(r => r.status === 'paid').length;
+
+    const now = new Date();
+    const bars = useMemo(() => Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const v = commRecords
+            .filter(r => (r.createdAt || '').startsWith(key))
+            .reduce((s, r) => s + r.commission, 0);
+        return { l: `T${d.getMonth() + 1}`, v };
+    }), [commRecords]);
+
+    const thisMonth = commRecords
+        .filter(r => (r.createdAt || '').startsWith(
+            `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        ))
+        .reduce((s, r) => s + r.commission, 0);
 
     if (loading) return (
         <TabScreenLayout>
@@ -457,10 +411,9 @@ export default function CommissionScreen() {
 
     return (
         <TabScreenLayout>
-            {/* ── Header dùng chung với màn order ── */}
             <ScreenHeader
                 title="Báo cáo Hoa hồng"
-                subtitle={isAdmin ? 'Quản lý hoa hồng toàn hệ thống' : `Tỷ lệ hoa hồng của bạn: ${(myRate * 100).toFixed(0)}%`}
+                subtitle={isAdmin ? 'Quản lý hoa hồng toàn hệ thống' : 'Hoa hồng = Giá bán − Giá nhập'}
                 searchValue={search}
                 onSearchChange={setSearch}
                 searchPlaceholder="Tìm theo mã đơn, khách hàng, nhân viên..."
@@ -474,25 +427,14 @@ export default function CommissionScreen() {
                 <View style={S.statsRow}>
                     <StatCard label="Chờ giải ngân" value={fmtShort(pending)} sub={`${pendingCount} khoản`} color="#D97706" borderColor="#FDE68A" />
                     <StatCard label="Đã thanh toán" value={fmtShort(paid)} sub={`${paidCount} khoản`} color="#16A34A" borderColor="#86EFAC" />
-                    <StatCard label="Tổng cộng" value={fmtShort(total)} sub="tất cả khoản" color="#2563EB" borderColor="#BFDBFE" />
+                    <StatCard label="Tổng cộng" value={fmtShort(pending + paid)} sub="tất cả khoản" color="#2563EB" borderColor="#BFDBFE" />
                 </View>
 
                 <View style={S.card}>
                     <View style={S.cardHeader}>
-                        <View style={{ flex: 1, marginRight: 8 }}>
+                        <View style={{ flex: 1 }}>
                             <Text style={S.cardTitle}>Xu hướng thu nhập</Text>
                             <Text style={S.cardSub}>Tăng trưởng hoa hồng 6 tháng gần nhất</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 6 }}>
-                            {['quarterly', 'yearly'].map(p => (
-                                <TouchableOpacity key={p}
-                                    style={[S.periodBtn, period === p && S.periodBtnActive]}
-                                    onPress={() => setPeriod(p)}>
-                                    <Text style={[S.periodBtnText, period === p && S.periodBtnTextActive]}>
-                                        {p === 'quarterly' ? 'Quý này' : 'Năm nay'}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
                         </View>
                     </View>
                     <MiniBarChart bars={bars} />
@@ -501,8 +443,8 @@ export default function CommissionScreen() {
                 <FilterChips
                     options={[
                         { key: 'all', label: 'Tất cả', count: commRecords.length },
-                        { key: 'pending', label: 'Chờ trả', count: commRecords.filter(r => r.status === 'pending').length },
-                        { key: 'paid', label: 'Đã trả', count: commRecords.filter(r => r.status === 'paid').length },
+                        { key: 'pending', label: 'Chờ trả', count: pendingCount },
+                        { key: 'paid', label: 'Đã trả', count: paidCount },
                     ]}
                     value={statusFilter}
                     onChange={setStatusFilter}
@@ -535,13 +477,7 @@ export default function CommissionScreen() {
                         <>
                             <TableHeader isAdmin={isAdmin} />
                             {filteredRecords.slice(0, 20).map((r, i) => (
-                                <CommRowDesktop
-                                    key={r.id || i}
-                                    r={r}
-                                    isAdmin={isAdmin}
-                                    onApprove={handleApprove}
-                                    odd={i % 2 === 1}
-                                />
+                                <CommRowDesktop key={r.id || i} r={r} isAdmin={isAdmin} onApprove={handleApprove} odd={i % 2 === 1} />
                             ))}
                         </>
                     )}
@@ -551,7 +487,7 @@ export default function CommissionScreen() {
                     <View style={[S.card, S.bonusCard]}>
                         <Text style={S.bonusLabel}>THƯỞNG THÁNG</Text>
                         <Text style={S.bonusAmount}>Thu nhập tháng này: {fmt(thisMonth)}</Text>
-                        <Text style={S.bonusRate}>Tỷ lệ hoa hồng: {(myRate * 100).toFixed(0)}% trên mỗi đơn hàng hoàn thành</Text>
+                        <Text style={S.bonusRate}>Hoa hồng tính theo chênh lệch giá bán và giá nhập</Text>
                         <View style={S.progressTrack}>
                             <View style={[S.progressFill, { width: `${Math.min((thisMonth / 5_000_000) * 100, 100)}%` }]} />
                         </View>
@@ -569,24 +505,19 @@ export default function CommissionScreen() {
 }
 
 const S = StyleSheet.create({
-    // ScreenHeader đã có padding ngang → ScrollView dùng padding ngắn hơn
-    scroll: { padding: Platform.OS === 'web' && width >= 768 ? 32 : 16, paddingTop: Platform.OS === 'web' && width >= 768 ? 16 : 12 },
-    statsRow: { flexDirection: 'row', gap: !(Platform.OS === 'web' && width >= 768) ? 8 : 12, marginBottom: 14 },
-    card: { backgroundColor: '#fff', borderRadius: 16, padding: !(Platform.OS === 'web' && width >= 768) ? 16 : 20, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+    scroll: { padding: IS_DESKTOP ? 32 : 16, paddingTop: IS_DESKTOP ? 16 : 12 },
+    statsRow: { flexDirection: 'row', gap: IS_DESKTOP ? 12 : 8, marginBottom: 14 },
+    card: { backgroundColor: '#fff', borderRadius: 16, padding: IS_DESKTOP ? 20 : 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 },
-    cardTitle: { fontSize: !(Platform.OS === 'web' && width >= 768) ? 14 : 15, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 },
+    cardTitle: { fontSize: IS_DESKTOP ? 15 : 14, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 },
     cardSub: { fontSize: 11, color: '#64748B', marginTop: 2 },
-    periodBtn: { paddingHorizontal: !(Platform.OS === 'web' && width >= 768) ? 10 : 12, paddingVertical: 5, borderRadius: 20, backgroundColor: '#F1F5F9' },
-    periodBtnActive: { backgroundColor: '#1E3A8A' },
-    periodBtnText: { fontSize: 11, fontWeight: '600', color: '#64748B' },
-    periodBtnTextActive: { color: '#fff' },
     countBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
     countText: { fontSize: 12, color: '#64748B', fontWeight: '600' },
     emptyWrap: { alignItems: 'center', paddingVertical: 32, gap: 8 },
     emptyText: { fontSize: 14, color: '#94A3B8' },
     bonusCard: { backgroundColor: '#1E3A5F', borderColor: '#2C5282' },
     bonusLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
-    bonusAmount: { color: '#fff', fontSize: !(Platform.OS === 'web' && width >= 768) ? 14 : 15, fontWeight: '700', marginBottom: 4 },
+    bonusAmount: { color: '#fff', fontSize: IS_DESKTOP ? 15 : 14, fontWeight: '700', marginBottom: 4 },
     bonusRate: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 12 },
     progressTrack: { height: 6, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 3, overflow: 'hidden' },
     progressFill: { height: '100%', backgroundColor: '#60A5FA', borderRadius: 3 },

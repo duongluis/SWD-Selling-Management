@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { Dimensions, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-
+const IS_WEB_DESKTOP = Platform.OS === 'web' && Dimensions.get('window').width >= 768;
+const STATUS_BAR_HEIGHT = Platform.OS !== 'web' ? (Constants.statusBarHeight || 0) : 0;
 
 export default function ScreenHeader({
     title,
@@ -64,9 +66,20 @@ export default function ScreenHeader({
 }
 
 const S = StyleSheet.create({
-    wrap: { paddingHorizontal: Platform.OS == 'web' && Dimensions.get('window').width ? 32 : 16, paddingTop: Platform.OS == 'web' && Dimensions.get('window').width ? 20 : 16, paddingBottom: 12, backgroundColor: '#FFFFFF', zIndex: 1 },
+    wrap: {
+        paddingHorizontal: IS_WEB_DESKTOP ? 32 : 16,
+        paddingTop: IS_WEB_DESKTOP ? 20 : STATUS_BAR_HEIGHT + 16,
+        paddingBottom: 12,
+        backgroundColor: '#FFFFFF',
+        zIndex: 1,
+    },
+    title: {
+        fontSize: IS_WEB_DESKTOP ? 24 : 20,
+        fontWeight: '800',
+        color: '#0F172A',
+        letterSpacing: -0.5,
+    },
     titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
-    title: { fontSize: Platform.OS == 'web' && Dimensions.get('window').width ? 24 : 20, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
     subtitle: { fontSize: 13, color: '#64748B', marginTop: 3 },
     leftSlot: { marginRight: 8 },
     actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },

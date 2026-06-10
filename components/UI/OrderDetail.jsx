@@ -200,21 +200,19 @@ function _buildHandoverHtml({ order, seller, services, logoBase64 }) {
                 <td class="label">BÊN BÀN GIAO:</td>
                 <td style="font-weight:bold;">${seller.companyName || seller.name || 'CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VÀ SẢN XUẤT GOLDEN PANTHERA'}</td>
             </tr>
-         
+            ${isCompany ? `
+                <tr><td>Mã số thuế:</td><td>${seller.taxCode || '—'}</td></tr>
+                <tr><td>Địa chỉ:</td><td>${seller.bizAddress || seller.address || '...........................................................................................'}</td></tr>
+                <tr><td>Người đại diện:</td><td>${seller.contactName || '...........................................................................................'}</td></tr>
+                <tr><td>Chức vụ:</td><td>${seller.title || '...........................................................................................'}</td></tr>
+            ` : `
+                <tr>
+                    <td>Số điện thoại:</td>
+                    <td>${seller.phone || '...........................................................................................'}</td>
+                </tr>
+                <tr><td>Địa chỉ:</td><td>${seller.address || '—'}</td></tr>
 
-${isCompany ? `
-  <tr><td>Mã số thuế:</td><td>${seller.taxCode || '—'}</td></tr>
-  <tr><td>Địa chỉ:</td><td>${seller.bizAddress || seller.address || '...........................................................................................'}</td></tr>
-  <tr><td>Người đại diện:</td><td>${seller.contactName || '...........................................................................................'}</td></tr>
-  <tr><td>Chức vụ:</td><td>${seller.title || '...........................................................................................'}</td></tr>
-` : `
-    <tr>
-                <td>Số điện thoại:</td>
-                <td>${seller.phone || '...........................................................................................'}</td>
-            </tr>
-  <tr><td>Địa chỉ:</td><td>${seller.address || '—'}</td></tr>
-
-`}
+            `}
             <tr>
                 <td></td>
                 <td style="font-style: italic">(Sau đây gọi tắt là <strong>“Bên B”</strong>)</td>

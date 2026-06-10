@@ -173,25 +173,22 @@ export default function EditUserScreen() {
                                 <Field label="Họ và tên" value={name} onChange={setName} required />
                                 <Field label="Số điện thoại" value={phone} onChange={setPhone} required keyboard="phone-pad" />
                                 <Field label="Địa chỉ" value={address} onChange={setAddress} multiline />
+                                {/* Email chỉ hiện, không sửa */}
                                 <Field label="Email tài khoản" value={user.email} readOnly />
-                                {user.emailContact && <Field label="Email liên hệ" value={user.emailContact} readOnly />}
-                                <Field label="Ngày đăng ký" value={user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : '—'} readOnly />
                             </Section>
 
-                            {/* Doanh nghiệp */}
                             {isCompany && (
                                 <Section icon="business-outline" title="Thông tin doanh nghiệp" color="#7C3AED">
                                     <Field label="Tên công ty / HKD" value={companyName} onChange={setCompanyName} required />
-                                    <Field label="Mã số thuế" value={taxCode} onChange={setTaxCode} required keyboard="numeric" />
-                                    <Field label="Địa chỉ đăng ký kinh doanh" value={bizAddress} onChange={setBizAddress} multiline required />
+                                    <Field label="Mã số thuế" value={taxCode} onChange={setTaxCode} keyboard="numeric" />
+                                    <Field label="Địa chỉ đăng ký kinh doanh" value={bizAddress} onChange={setBizAddress} multiline />
                                 </Section>
                             )}
 
                             {/* Cá nhân */}
                             {isIndiv && (
                                 <Section icon="card-outline" title="Thông tin cá nhân" color="#7C3AED">
-                                    <Field label="Số CCCD / CMND" value={cccd} onChange={setCccd} keyboard="numeric"
-                                        hint="(9 hoặc 12 chữ số)" />
+                                    <Field label="Số CCCD / CMND" value={user.cccd} readOnly />
                                     {user.dob && <Field label="Ngày sinh" value={user.dob} readOnly />}
                                 </Section>
                             )}
@@ -224,13 +221,16 @@ export default function EditUserScreen() {
                             )}
 
                             {/* Ngân hàng */}
+
                             {needsBank && user.bank && (
-                                <Section icon="card-outline" title="Thông tin ngân hàng" color="#059669">
+                                <Section icon="card-outline" title="Ngân hàng" color="#059669">
                                     <Field label="Ngân hàng" value={`${user.bank.name} (${user.bank.id})`} readOnly />
                                     <Field label="Số tài khoản" value={user.bank.accountNo} readOnly />
                                     <Field label="Tên chủ tài khoản" value={accountName} onChange={setAccountName} />
                                 </Section>
                             )}
+
+
 
                             {/* Trạng thái */}
                             <Section icon="shield-checkmark-outline" title="Trạng thái tài khoản" color="#64748B">
@@ -246,6 +246,7 @@ export default function EditUserScreen() {
                             </Section>
 
                             {/* Admin note */}
+
                             <Section icon="create-outline" title="Ghi chú admin" color="#94A3B8">
                                 <Field label="Ghi chú nội bộ" value={adminNote} onChange={setAdminNote} multiline
                                     hint="(Không hiển thị cho người dùng)" />

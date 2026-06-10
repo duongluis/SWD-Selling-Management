@@ -12,8 +12,9 @@ import { useContext, useEffect, useState } from 'react';
 import {
     Dimensions,
     Platform,
-    ScrollView, StyleSheet, Text, TouchableOpacity, View
+    ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
+import { getRole } from '../Utils/roleHelper';
 
 const AVATAR_COLORS = ['#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2'];
 const hashColor = s => AVATAR_COLORS[(s || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
@@ -42,11 +43,58 @@ function Section({ title, children }) {
     );
 }
 
+function NicknameTab({ user, onSaved }) {
+    const [nickname, setNickname] = useState(user.nickname || '');
+    const [saving, setSaving] = useState(false);
+
+    const handleSave = async () => {
+        if (!nickname.trim()) return;
+        setSaving(true);
+        try {
+            await updateDoc(doc(db, 'users', user.email), { nickname: nickname.trim() });
+            onSaved?.({ ...user, nickname: nickname.trim() });
+        } catch (e) { showAlert('Lỗi', e.message); }
+        finally { setSaving(false); }
+    };
+
+    return (
+        <View style={{ padding: 16 }}>
+            <Text style={NT.label}>Biệt danh</Text>
+            <Text style={NT.hint}>Tên hiển thị nội bộ, chỉ admin thấy</Text>
+            <View style={NT.inputBox}>
+                <TextInput
+                    style={NT.input}
+                    value={nickname}
+                    onChangeText={setNickname}
+                    placeholder="Nhập biệt danh..."
+                    placeholderTextColor="#94A3B8"
+                />
+            </View>
+            <TouchableOpacity
+                style={[NT.saveBtn, saving && { opacity: 0.6 }]}
+                onPress={handleSave}
+                disabled={saving}
+            >
+                <Ionicons name="save-outline" size={14} color="#fff" />
+                <Text style={NT.saveBtnText}>{saving ? 'Đang lưu...' : 'Lưu biệt danh'}</Text>
+            </TouchableOpacity>
+            {user.nickname && (
+                <View style={NT.currentWrap}>
+                    <Text style={NT.currentLabel}>Biệt danh hiện tại:</Text>
+                    <Text style={NT.currentValue}>{user.nickname}</Text>
+                </View>
+            )}
+        </View>
+    );
+}
+
 export default function UserDetail({ user, onClose, onUpdated }) {
     const router = useRouter();
     const { userDetail } = useContext(UserDetailContext);
+    const isAdminUser = getRole(userDetail) === 'admin'; // ← dùng prop role
     const [local, setLocal] = useState(null);
     const [approving, setApproving] = useState(false);
+    const [tab, setTab] = useState('info');
 
     useEffect(() => { if (user) setLocal(user); }, [user]);
     if (!user || !local) return null;
@@ -130,72 +178,110 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                         <Ionicons name={locked ? 'lock-open-outline' : 'lock-closed-outline'} size={13} color={locked ? '#059669' : '#DC2626'} />
                         <Text style={[S.aBtnText, { color: locked ? '#059669' : '#DC2626' }]}>{locked ? 'Mở khóa' : 'Khóa TK'}</Text>
                     </TouchableOpacity>
-                    {userDetail.role == "admin" && (<TouchableOpacity style={S.aBtn}
+                    {isAdminUser && (<TouchableOpacity style={S.aBtn}
                         onPress={() => router.push({ pathname: '/editUser/[userEmail]', params: { userEmail: local.email, userParam: JSON.stringify(local) } })}>
                         <Ionicons name="create-outline" size={13} color="#2563EB" />
                         <Text style={S.aBtnText}>Chỉnh sửa</Text>
                     </TouchableOpacity>
                     )}
+
                 </View>
             </View>
+            {isAdminUser && (
+                <View style={S.tabs}>
+                    {[
+                        { key: 'info', label: 'Thông tin', icon: 'person-outline' },
+                        { key: 'nickname', label: 'Biệt danh', icon: 'pricetag-outline' },
+                    ].map(t => (
+                        <TouchableOpacity
+                            key={t.key}
+                            style={[S.tab, tab === t.key && S.tabActive]}
+                            onPress={() => setTab(t.key)}
+                        >
+                            <Ionicons name={t.icon} size={13} color={tab === t.key ? '#2563EB' : '#94A3B8'} />
+                            <Text style={[S.tabText, tab === t.key && S.tabTextActive]}>{t.label}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
 
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                <Section title="Thông tin tài khoản">
-                    <InfoRow icon="mail-outline" label="Email" value={local.email} />
-                    <InfoRow icon="call-outline" label="Điện thoại" value={fmtPhone(local.phone)} />
-                    <InfoRow icon="location-outline" label="Địa chỉ" value={local.address} />
-                    <InfoRow icon="briefcase-outline" label="Vai trò" value={roleLabel} />
-                    {/* Thêm mã giới thiệu nếu có */}
-                    {local.referralCode && (
-                        <InfoRow icon="pricetag-outline" label="Mã giới thiệu" value={local.referralCode} />
-                    )}
-                    {local.advisor && (
-                        <InfoRow icon="person-add-outline" label="Người giới thiệu" value={local.advisor} />
-                    )}
-                    <InfoRow icon="calendar-outline" label="Ngày tạo" value={fmtDate(local.createdAt)} />
-                </Section>
-
-                {isCompany && (
-                    <Section title="Thông tin doanh nghiệp">
-                        <InfoRow icon="business-outline" label="Công ty" value={local.companyName} />
-                        <InfoRow icon="document-text-outline" label="MST" value={local.taxCode} />
-                        <InfoRow icon="location-outline" label="Địa chỉ KD" value={local.bizAddress} />
-                        {local.contactName && (
-                            <InfoRow icon="person-outline" label="Người LH"
-                                value={`${local.contactName} · ${fmtPhone(local.contactPhone)}`} />
+            {/* Content theo tab */}
+            {tab === 'nickname' ? (
+                <NicknameTab
+                    user={local}
+                    onSaved={next => { setLocal(next); onUpdated?.(next); }}
+                />
+            ) : (
+                <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                    <Section title="Thông tin tài khoản">
+                        <InfoRow icon="mail-outline" label="Email" value={local.email} />
+                        <InfoRow icon="call-outline" label="Điện thoại" value={fmtPhone(local.phone)} />
+                        <InfoRow icon="location-outline" label="Địa chỉ" value={local.address} />
+                        <InfoRow icon="briefcase-outline" label="Vai trò" value={roleLabel} />
+                        {/* Thêm mã giới thiệu nếu có */}
+                        {local.referralCode && (
+                            <InfoRow icon="pricetag-outline" label="Mã giới thiệu" value={local.referralCode} />
                         )}
+                        {local.advisor && (
+                            <InfoRow icon="person-add-outline" label="Người giới thiệu" value={local.advisor} />
+                        )}
+                        <InfoRow icon="calendar-outline" label="Ngày tạo" value={fmtDate(local.createdAt)} />
                     </Section>
-                )}
 
-                {local.committedRevenue > 0 && (
-                    <Section title="Cam kết kinh doanh">
-                        <InfoRow icon="trending-up-outline" label="Cam kết/năm" value={fmtCurrency(local.committedRevenue)} />
-                        <InfoRow icon="git-branch-outline" label="Phân phối"
-                            value={local.distributionType === 'exclusive' ? 'Độc quyền' : 'Không độc quyền'} />
-                        <InfoRow icon="map-outline" label="Khu vực" value={local.regionName || local.region} />
-                    </Section>
-                )}
+                    {isCompany && (
+                        <Section title="Thông tin doanh nghiệp">
+                            <InfoRow icon="business-outline" label="Công ty" value={local.companyName} />
+                            <InfoRow icon="document-text-outline" label="MST" value={local.taxCode} />
+                            <InfoRow icon="location-outline" label="Địa chỉ KD" value={local.bizAddress} />
+                            {local.contactName && (
+                                <InfoRow icon="person-outline" label="Người LH"
+                                    value={`${local.contactName} · ${fmtPhone(local.contactPhone)}`} />
+                            )}
+                        </Section>
+                    )}
 
-                {local.bank && (
-                    <Section title="Ngân hàng">
-                        <InfoRow icon="card-outline" label="Ngân hàng" value={local.bank.name} />
-                        <InfoRow icon="keypad-outline" label="Số TK" value={local.bank.accountNo} />
-                        <InfoRow icon="person-outline" label="Chủ TK" value={local.bank.accountName} />
-                    </Section>
-                )}
+                    {local.committedRevenue > 0 && (
+                        <Section title="Cam kết kinh doanh">
+                            <InfoRow icon="trending-up-outline" label="Cam kết/năm" value={fmtCurrency(local.committedRevenue)} />
+                            <InfoRow icon="git-branch-outline" label="Phân phối"
+                                value={local.distributionType === 'exclusive' ? 'Độc quyền' : 'Không độc quyền'} />
+                            <InfoRow icon="map-outline" label="Khu vực" value={local.regionName || local.region} />
+                        </Section>
+                    )}
 
-                {local.revenueTotal > 0 && (
-                    <View style={S.totalBar}>
-                        <Text style={S.totalLabel}>Tổng doanh số</Text>
-                        <Text style={S.totalValue}>{fmtCurrency(local.revenueTotal)}</Text>
-                    </View>
-                )}
+                    {local.bank && (
+                        <Section title="Ngân hàng">
+                            <InfoRow icon="card-outline" label="Ngân hàng" value={local.bank.name} />
+                            <InfoRow icon="keypad-outline" label="Số TK" value={local.bank.accountNo} />
+                            <InfoRow icon="person-outline" label="Chủ TK" value={local.bank.accountName} />
+                        </Section>
+                    )}
 
-                <View style={{ height: 40 }} />
-            </ScrollView>
+                    {local.revenueTotal > 0 && (
+                        <View style={S.totalBar}>
+                            <Text style={S.totalLabel}>Tổng doanh số</Text>
+                            <Text style={S.totalValue}>{fmtCurrency(local.revenueTotal)}</Text>
+                        </View>
+                    )}
+
+                    <View style={{ height: 40 }} />
+                </ScrollView>
+            )}
         </View>
     );
 }
+const NT = StyleSheet.create({
+    label: { fontSize: 13, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
+    hint: { fontSize: 11, color: '#94A3B8', marginBottom: 12 },
+    inputBox: { backgroundColor: '#F8FAFC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, borderWidth: 1.5, borderColor: '#E2E8F0', marginBottom: 12 },
+    input: { fontSize: 14, color: '#0F172A' },
+    saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 11 },
+    saveBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+    currentWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, padding: 12, backgroundColor: '#EFF6FF', borderRadius: 10 },
+    currentLabel: { fontSize: 12, color: '#64748B' },
+    currentValue: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
+});
+
 
 const S = StyleSheet.create({
     panel: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', flexDirection: 'column', borderRadius: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
@@ -220,4 +306,9 @@ const S = StyleSheet.create({
     totalBar: { margin: 16, borderRadius: 12, backgroundColor: '#1E3A5F', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16 },
     totalLabel: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.75)' },
     totalValue: { fontSize: 18, fontWeight: '800', color: '#fff' },
+    tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10 },
+    tabActive: { borderBottomWidth: 2, borderBottomColor: '#2563EB' },
+    tabText: { fontSize: 12, fontWeight: '600', color: '#94A3B8' },
+    tabTextActive: { color: '#2563EB' },
 });

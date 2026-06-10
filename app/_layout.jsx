@@ -1,3 +1,4 @@
+import { useIdleReload } from '@/components/Hooks/useIdleReload';
 import auth, { db } from "@/config/firebaseConfig";
 import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments } from "expo-router";
@@ -69,6 +70,10 @@ export default function RootLayout() {
     "outfit-bold": require("./../assets/fonts/Oswald-Bold.ttf"),
     "outfit-light": require("./../assets/fonts/Oswald-Bold.ttf"),
   });
+
+  if (Platform.OS === 'web') {
+    useIdleReload(); // chỉ chạy trên web
+  }
 
   // ── Auth state listener ───────────────────────────────────
   useEffect(() => {
