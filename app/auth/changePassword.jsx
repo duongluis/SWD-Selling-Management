@@ -71,7 +71,7 @@ export default function ChangePassword() {
             const passwordHash = await bcrypt.hash(newPw, 10);
             await updateDoc(doc(db, 'users', user.email), { passwordHash });
             showAlert('Thành công', 'Mật khẩu đã được cập nhật thành công');
-            router.back();
+            router.replace('tab/editProfile');
         } catch (e) {
             const isWrongPw = e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential';
             showAlert('Lỗi', isWrongPw ? 'Mật khẩu hiện tại không đúng' : e.message);
@@ -83,7 +83,7 @@ export default function ChangePassword() {
     return (
         <View style={S.root}>
             <BgWatermark />
-            <TouchableOpacity style={S.backBtn} onPress={() => router.back()}>
+            <TouchableOpacity style={S.backBtn} onPress={() => router.replace('tab/editProfile')}>
                 <Ionicons name="chevron-back-circle-outline" size={28} color={Colors.TextPrimary} />
             </TouchableOpacity>
 

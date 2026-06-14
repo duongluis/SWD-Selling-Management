@@ -101,7 +101,7 @@ export default function AddConsultScreen() {
                 createdBy: userDetail?.email || '',
                 createdAt: new Date().toISOString(),
             });
-            showSuccess('Đã tạo!', `Đã ghi nhận khách hàng "${name.trim()}"`, () => router.back());
+            showSuccess('Đã tạo!', `Đã ghi nhận khách hàng "${name.trim()}"`, () => router.replace('(tabs)/customerctv'));
             getDocs(query(collection(db, 'users'), where('role', '==', 'admin'))).then(adminSnap => {
                 adminSnap.docs.forEach(d => {
                     const adminEmail = d.data().email;
@@ -125,7 +125,7 @@ export default function AddConsultScreen() {
             <BgWatermark />
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => router.replace('(tabs)/customerctv')} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={20} color="#0F172A" />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
@@ -215,7 +215,7 @@ export default function AddConsultScreen() {
 
             {/* Bottom bar */}
             <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()} activeOpacity={0.8}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => router.replace('(tabs)/customerctv')} activeOpacity={0.8}>
                     <Text style={styles.cancelBtnText}>Huỷ</Text>
                 </TouchableOpacity>
                 <TouchableOpacity

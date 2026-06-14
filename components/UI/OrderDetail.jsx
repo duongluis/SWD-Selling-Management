@@ -17,7 +17,6 @@ import {
     ActivityIndicator, Dimensions, Modal, Platform, ScrollView, StyleSheet,
     Text, TouchableOpacity, View,
 } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
 import banksData from '../../config/banks.json';
 import { useLayout } from '../Main/TabScreenLayout';
 import { generateVietQR } from '../Utils/vietQR';
@@ -806,7 +805,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                     )}
                 </View>
 
-                {bankInfo && qrString && (
+                {/* {bankInfo && qrString && (
                     <View style={DP.qrSection}>
                         <View style={DP.qrHeader}>
                             <Ionicons name="qr-code-outline" size={18} color="#2563EB" />
@@ -830,7 +829,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         </View>
                         <Text style={DP.qrNote}>Quét mã QR bằng ứng dụng ngân hàng để thanh toán</Text>
                     </View>
-                )}
+                )} */}
 
                 {/* Total bar */}
                 <View style={DP.totalBar}>

@@ -97,8 +97,35 @@ function TableHeader({ showCost, showCreator, tableStyles }) {
       {showCreator && <View style={COL.creator}><Text style={tableStyles.thCenter}>Người tạo</Text></View>}
       <View style={COL.sub}><Text style={tableStyles.thCenter}>Hình thức thanh toán</Text></View>
       {showCost && <View style={COL.cost}><Text style={tableStyles.thCenter}>Tiền nhập</Text></View>}
-      {showCost && <View style={COL.amount}><Text style={tableStyles.thCenter}>Tổng giá trị</Text></View>}
+      <View style={COL.amount}><Text style={tableStyles.thCenter}>Tổng giá trị</Text></View>
       <View style={COL.status}><Text style={[tableStyles.th, tableStyles.thCenter]}>Trạng thái</Text></View>
+      <View style={COL.trail} />
+    </View>
+  );
+}
+
+function TotalRow({ totalCost, totalRevenue, showCost, showCreator, tableStyles }) {
+  if (!showCost) return null;
+  return (
+    <View style={[tableStyles.head, { backgroundColor: '#F0F9FF', borderBottomWidth: 1, borderBottomColor: '#BFDBFE', marginBottom: 0, borderRadius: 0 }]}>
+      <View style={COL.lead} />
+      <View style={COL.order}>
+        <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563EB' }}>Tổng cộng</Text>
+      </View>
+      <View style={COL.date} />
+      {showCreator && <View style={COL.creator} />}
+      <View style={COL.sub} />
+      <View style={COL.cost}>
+        <Text style={{ fontSize: 12, fontWeight: '800', color: '#0891B2', textAlign: 'right' }}>
+          {fmtCurrency(totalCost)}
+        </Text>
+      </View>
+      <View style={COL.amount}>
+        <Text style={{ fontSize: 12, fontWeight: '800', color: '#2563EB', textAlign: 'right' }}>
+          {fmtCurrency(totalRevenue)}
+        </Text>
+      </View>
+      <View style={COL.status} />
       <View style={COL.trail} />
     </View>
   );
@@ -176,13 +203,13 @@ function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles
         </View>
       )}
 
-      {showCost && (
-        <View style={COL.amount}>
-          <Text style={[ROW.cellAmount, isCancelled && ROW.textMuted]} numberOfLines={1}>
-            {fmtCurrency(total)}
-          </Text>
-        </View>
-      )}
+
+      <View style={COL.amount}>
+        <Text style={[ROW.cellAmount, isCancelled && ROW.textMuted]} numberOfLines={1}>
+          {fmtCurrency(total)}
+        </Text>
+      </View>
+
 
       <View style={COL.status}>
         <View style={[ROW.statusPill, { backgroundColor: scfg.bg, borderColor: scfg.bd }]}>
@@ -208,6 +235,7 @@ export default function OrderScreen() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selected, setSelected] = useState(null);
+  const [paymentFilter, setPaymentFilter] = useState('all');
 
   const { styles: cardStyles, isDesktop } = useCardStyles();
   const { styles: tableStyles } = useTableStyles();
@@ -242,6 +270,9 @@ export default function OrderScreen() {
     [userDetail?.advisor, role]
   );
 
+
+
+
   useEffect(() => {
     const fetchProductPrices = async () => {
       try {
@@ -254,6 +285,43 @@ export default function OrderScreen() {
     fetchProductPrices();
   }, []);
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return data.filter(o => {
+      const creatorName = (creatorNames[o.createdBy] || '').toLowerCase();
+      // const creatorEmail = (o.createdBy || '').toLowerCase();
+
+      const ms = !q ||
+        (o.customer || '').toLowerCase().includes(q) ||
+        (o.id || '').toLowerCase().includes(q) ||
+        // creatorEmail.includes(q) ||          // ✅ tìm theo email người tạo
+        creatorName.includes(q);             // ✅ tìm theo tên/nickname người tạo
+
+      const mt = typeFilter === 'all' || o.orderType === typeFilter;
+      let mst = true;
+      if (statusFilter === 'processing') mst = ['Chờ lắp đặt', 'Đang lắp đặt'].includes(o.status);
+      else if (statusFilter !== 'all') mst = o.status === statusFilter;
+
+      const createdAt = o.createdAt || '';
+      const my = yearFilter === 'all' || createdAt.startsWith(yearFilter);
+      const mm = monthFilter === 'all' || createdAt.slice(5, 7) === monthFilter;
+
+      return ms && mt && mst && my && mm;
+    });
+  }, [data, query, typeFilter, statusFilter, yearFilter, monthFilter, creatorNames]);
+
+
+  const totalCostFiltered = useMemo(() => {
+    if (!showCostField) return 0;
+    return filtered
+      .filter(o => !['Đã hủy', 'CANCELLED'].includes(o.status))
+      .reduce((sum, o) => {
+        const priceField = getCostPriceField(o, role, advisorRoles);
+        return sum + (o.items || []).reduce((s, p) =>
+          s + getItemCost(p, priceField, productPrices) * PARSE(p.qty || 1), 0
+        );
+      }, 0);
+  }, [filtered, role, advisorRoles, productPrices, showCostField]);
 
   // Thêm vào useEffect fetch advisorRoles, bổ sung fetch tên người tạo
   useEffect(() => {
@@ -276,6 +344,11 @@ export default function OrderScreen() {
     };
     fetchCreatorNames();
   }, [data, role]);
+
+  const totalRevenueFiltered = useMemo(() =>
+    filtered.reduce((s, o) =>
+      s + (o.items || []).reduce((ss, p) => ss + PARSE(p.price) * PARSE(p.qty || 1), 0), 0)
+    , [filtered]);
 
   // ── Fetch advisor roles (thay useEffect cũ) ──────────────────
   useEffect(() => {
@@ -302,22 +375,7 @@ export default function OrderScreen() {
     }
   }, [data]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return data.filter(o => {
-      const ms = !q || (o.customer || '').toLowerCase().includes(q) || (o.id || '').toLowerCase().includes(q);
-      const mt = typeFilter === 'all' || o.orderType === typeFilter;
-      let mst = true;
-      if (statusFilter === 'processing') mst = ['Chờ lắp đặt', 'Đang lắp đặt'].includes(o.status);
-      else if (statusFilter !== 'all') mst = o.status === statusFilter;
 
-      const createdAt = o.createdAt || '';
-      const my = yearFilter === 'all' || createdAt.startsWith(yearFilter);
-      const mm = monthFilter === 'all' || createdAt.slice(5, 7) === monthFilter;
-
-      return ms && mt && mst && my && mm;
-    });
-  }, [data, query, typeFilter, statusFilter, yearFilter, monthFilter]);
 
   const totalRevenue = useMemo(() =>
     data
@@ -370,85 +428,117 @@ export default function OrderScreen() {
       {/* ── StatBar: luôn full width, không nằm trong ScrollView ── */}
       <StatBar stats={statCards} />
 
-      {/* ── Hàng filter type + status ── */}
+      {/* ── Filter ── */}
       <View style={FF.filterBlock}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={FF.chipRow}>
-            {[
-              { key: 'all', label: 'Tất cả' },
-              { key: 'buon', label: 'Đơn buôn' },
-              { key: 'le', label: 'Đơn lẻ' },
-            ].map(opt => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[YF.chip, typeFilter === opt.key && YF.chipActive]}
-                onPress={() => { setTypeFilter(opt.key); setSelected(null); }}
-              >
-                <Text style={[YF.chipText, typeFilter === opt.key && YF.chipTextActive]}>
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={FF.chipRow}>
+          {[
+            { key: 'all', label: 'Tất cả hình thức' },
+            { key: 'customer', label: 'Khách hàng thanh toán' },
+            { key: 'company', label: 'Doanh nghiệp thanh toán' },
+          ].map(opt => (
+            <TouchableOpacity
+              key={opt.key}
+              style={[YF.chip, paymentFilter === opt.key && YF.chipActive]}
+              onPress={() => { setPaymentFilter(opt.key); setSelected(null); }}
+            >
+              <Text style={[YF.chipText, paymentFilter === opt.key && YF.chipTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-            <View style={FF.sep} />
+        {/* Hàng 1: Loại đơn */}
+        {/* <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={FF.chipRow}>
+          {[
+            { key: 'all', label: 'Tất cả' },
+            { key: 'buon', label: 'Đơn buôn' },
+            { key: 'le', label: 'Đơn lẻ' },
+          ].map(opt => (
+            <TouchableOpacity
+              key={opt.key}
+              style={[YF.chip, typeFilter === opt.key && YF.chipActive]}
+              onPress={() => { setTypeFilter(opt.key); setSelected(null); }}
+            >
+              <Text style={[YF.chipText, typeFilter === opt.key && YF.chipTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView> */}
 
-            {[
-              { key: 'all', label: 'Tất cả trạng thái' },
-              { key: 'Chờ xác nhận', label: 'Chờ xác nhận' },
-              { key: 'processing', label: 'Đang xử lý' },
-              { key: 'Đã thanh toán', label: 'Đã thanh toán' },
-              { key: 'Đã hủy', label: 'Đã hủy' },
-            ].map(opt => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[YF.chip, statusFilter === opt.key && YF.chipActive]}
-                onPress={() => { setStatusFilter(opt.key); setSelected(null); }}
-              >
-                <Text style={[YF.chipText, statusFilter === opt.key && YF.chipTextActive]}>
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        {/* Hàng 2: Trạng thái */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={FF.chipRow}>
+          {[
+            { key: 'all', label: 'Tất cả trạng thái' },
+            { key: 'Chờ xác nhận', label: 'Chờ xác nhận' },
+            { key: 'processing', label: 'Đang xử lý' },
+            { key: 'Đã thanh toán', label: 'Đã thanh toán' },
+            { key: 'Đã hủy', label: 'Đã hủy' },
+          ].map(opt => (
+            <TouchableOpacity
+              key={opt.key}
+              style={[YF.chip, statusFilter === opt.key && YF.chipActive]}
+              onPress={() => { setStatusFilter(opt.key); setSelected(null); }}
+            >
+              <Text style={[YF.chipText, statusFilter === opt.key && YF.chipTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Hàng 3: Năm */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={FF.chipRow}>
+          {yearOptions.map(opt => (
+            <TouchableOpacity
+              key={opt.key}
+              style={[YF.chip, yearFilter === opt.key && YF.chipActive]}
+              onPress={() => { setYearFilter(opt.key); setSelected(null); }}
+            >
+              <Text style={[YF.chipText, yearFilter === opt.key && YF.chipTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Hàng 4: Tháng */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={FF.chipRow}>
+          {monthOptions.map(opt => (
+            <TouchableOpacity
+              key={opt.key}
+              style={[YF.chip, monthFilter === opt.key && YF.chipActive]}
+              onPress={() => { setMonthFilter(opt.key); setSelected(null); }}
+            >
+              <Text style={[YF.chipText, monthFilter === opt.key && YF.chipTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
       </View>
 
-      {/* ── Hàng filter năm + tháng ── */}
-      <View style={FF.filterBlock}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={FF.chipRow}>
-            {yearOptions.map(opt => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[YF.chip, yearFilter === opt.key && YF.chipActive]}
-                onPress={() => { setYearFilter(opt.key); setSelected(null); }}
-              >
-                <Text style={[YF.chipText, yearFilter === opt.key && YF.chipTextActive]}>
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-
-            <View style={FF.sep} />
-
-            {monthOptions.map(opt => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[YF.chip, monthFilter === opt.key && YF.chipActive]}
-                onPress={() => { setMonthFilter(opt.key); setSelected(null); }}
-              >
-                <Text style={[YF.chipText, monthFilter === opt.key && YF.chipTextActive]}>
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-      </View>
       <View style={cardStyles.splitLayout}>
         <View style={cardStyles.card}>
-          {isDesktop && <TableHeader showCost={showCostField} showCreator={showCreator} tableStyles={tableStyles} />}
+          {isDesktop && (
+            <>
+              <TableHeader showCost={showCostField} showCreator={showCreator} tableStyles={tableStyles} />
+              <TotalRow
+                totalCost={totalCostFiltered}
+                totalRevenue={totalRevenueFiltered}
+                showCost={showCostField}
+                showCreator={showCreator}
+                tableStyles={tableStyles}
+              />
 
+            </>
+          )}
           {loading && !refreshing ? (
             <EmptyState loading />
           ) : filtered.length === 0 ? (
@@ -499,7 +589,7 @@ export default function OrderScreen() {
 }
 
 const COL = {
-  lead: { width: 36 },          // +4px để có khoảng thở
+  lead: { width: 36 },
   order: { flex: 2, minWidth: 160 },
   date: { flex: 1, minWidth: 90 },
   sub: { flex: 1.5, minWidth: 140 },
@@ -558,17 +648,14 @@ const YF = StyleSheet.create({
 const FF = StyleSheet.create({
   filterBlock: {
     paddingHorizontal: 16,
-    paddingBottom: 6,
+    paddingTop: 4,
+    paddingBottom: 8,
+    gap: 8,          // khoảng cách đều giữa các hàng
   },
   chipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  sep: {
-    width: 1,
-    height: 18,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: 4,
+    paddingVertical: 2,
   },
 });

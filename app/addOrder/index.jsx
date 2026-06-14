@@ -24,6 +24,13 @@ import { db } from '../../config/firebaseConfig';
 
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 
+const PRICE_FIELD_TO_LABEL = {
+  'price': 'Giá niêm yết',
+  'price_a': 'Giá đại lý',
+  'price_p': 'Giá đối tác',
+  'price_c': 'Giá CTV',
+};
+
 // ── Date helpers ─────────────────────────────────────────────
 const toDateStr = (d) => {
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
@@ -454,12 +461,13 @@ export default function AddOrder() {
   const [customerList, setCustomerList] = useState([]);
   const [customerLoading, setCustomerLoading] = useState(true);
   const [catalog, setCatalog] = useState([]);
+  const [resolvedPriceField, setResolvedPriceField] = useState(getRolePriceField(role));
 
   // --- 2. CÁC BIẾN TÍNH TOÁN (DÙNG STATE ĐÃ KHAI BÁO) ---
   const [orderId] = useState('ORD-' + Date.now().toString().slice(-6));
   const hasAdvisor = !!userDetail?.advisor;
   const isDaily = role === 'daily';
-  const useFixedPrice = hasAdvisor || isDaily;
+  const useFixedPrice = isDaily;
   const fixedPayment = 'company';
   const isLevel1 = !userDetail?.advisor;
   const [paymentMethod, setPaymentMethod] = useState(orderType === 'buon' ? 'company' : 'customer');
@@ -474,10 +482,10 @@ export default function AddOrder() {
   }, [serviceTypesList, orderType]);
 
   const effectivePaymentMethod = useFixedPrice ? fixedPayment : paymentMethod;
-  const priceField = effectivePaymentMethod === 'customer' || role === 'admin'
-    ? 'price'
-    : getRolePriceField(role);
-  const priceLabel = effectivePaymentMethod === 'customer' ? 'Giá niêm yết' : ROLE_LABEL[role];
+  const priceField = resolvedPriceField;
+  const priceLabel = effectivePaymentMethod === 'customer' ? 'Giá sản phẩm' : 'Giá sản phẩm';
+  // ? 'Giá sản phẩm'
+  // : PRICE_FIELD_TO_LABEL[resolvedPriceField] ?? 'Giá niêm yết';
 
   const lockedType = ROLE_ORDER_TYPE[role] !== null;
   const handleSetOrderType = useCallback((type) => {
@@ -545,6 +553,19 @@ export default function AddOrder() {
   const handleCancelAddProduct = useCallback(() => { setShowAddProduct(false); setNewProduct({ name: '', qty: '1', price: '', productId: '' }); }, []);
   const handleServiceNoteChange = useCallback((v) => setServiceNote(v), []);
 
+  const handleSetPaymentMethod = useCallback((method) => {
+    if (products.length > 0) {
+      showAlert(
+        'Thay đổi hình thức thanh toán',
+        'Giá sản phẩm sẽ thay đổi. Vui lòng thêm lại sản phẩm.',
+        () => { setProducts([]); setPaymentMethod(method); }
+      );
+      return;
+    }
+    setPaymentMethod(method);
+  }, [products.length]);
+
+
   // ── Fetch customers ──────────────────────────────────────────
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -571,6 +592,45 @@ export default function AddOrder() {
     };
     fetchCustomers();
   }, [userDetail?.email, role]);
+
+  useEffect(() => {
+    const resolve = async () => {
+      if (effectivePaymentMethod === 'customer') {
+        setResolvedPriceField('price'); // niêm yết
+        return;
+      }
+      // Doanh nghiệp thanh toán → xét advisor
+      if (!userDetail?.advisor) {
+        // Không có advisor → dùng role của chính mình
+        setResolvedPriceField(getRolePriceField(role));
+        return;
+      }
+      // Có advisor → tìm advisor cấp 1 (người không có advisor trên họ)
+      try {
+        let currentEmail = userDetail.advisor;
+        let visited = new Set();
+        while (currentEmail) {
+          if (visited.has(currentEmail)) break;
+          visited.add(currentEmail);
+          const snap = await getDoc(doc(db, 'users', currentEmail));
+          if (!snap.exists()) break;
+          const data = snap.data();
+          if (!data.advisor) {
+            // Đây là advisor cấp 1 — lấy role của họ
+            setResolvedPriceField(getRolePriceField(getRole(data)));
+            return;
+          }
+          currentEmail = data.advisor;
+        }
+      } catch (e) {
+        console.warn('resolve advisor price error:', e);
+      }
+      setResolvedPriceField(getRolePriceField(role)); // fallback
+
+      setPaymentMethod = { handleSetPaymentMethod }
+    };
+    resolve();
+  }, [effectivePaymentMethod, userDetail?.advisor, role, paymentMethod]);
 
   // ── Fetch catalog (products) ─────────────────────────────────
   useEffect(() => {
@@ -858,7 +918,8 @@ export default function AddOrder() {
             />
 
             {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
-            {isLevel1 && (
+            {/* {isLevel1 && ( */}
+            {userDetail?.role != "daily" && (
               <PaymentMethodField
                 ws={isDesktop}
                 orderType={orderType}
@@ -1001,7 +1062,8 @@ export default function AddOrder() {
               />
 
               {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
-              {isLevel1 && (
+              {/* {isLevel1 && ( */}
+              {userDetail?.role !== 'daily' && (
                 <PaymentMethodField
                   ws={isDesktop}
                   orderType={orderType}

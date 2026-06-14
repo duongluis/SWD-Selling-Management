@@ -131,7 +131,7 @@ export default function EditUserScreen() {
             }
 
             await updateDoc(doc(db, 'users', user.email), payload);
-            showSuccess('Đã lưu', 'Thông tin tài khoản đã được cập nhật.', () => router.back());
+            showSuccess('Đã lưu', 'Thông tin tài khoản đã được cập nhật.', () => router.replace('(tabs)/user'));
         } catch (e) {
             showAlert('Lỗi', e.message);
         } finally {
@@ -261,7 +261,7 @@ export default function EditUserScreen() {
 
             {/* Bottom save bar */}
             <View style={[S.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-                <TouchableOpacity style={S.cancelBtn} onPress={() => router.back()} activeOpacity={0.8}>
+                <TouchableOpacity style={S.cancelBtn} onPress={() => router.replace('(tabs)/user')} activeOpacity={0.8}>
                     <Text style={S.cancelBtnText}>Huỷ</Text>
                 </TouchableOpacity>
                 <TouchableOpacity

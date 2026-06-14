@@ -119,14 +119,15 @@ export const checkRoomExists = async (roomId) => {
 // ─────────────────────────────────────────────────────────────
 // 5. Send normal message
 // ─────────────────────────────────────────────────────────────
-export const sendMessage = async ({ roomId, text, senderEmail, senderName }) => {
+export const sendMessage = async ({ roomId, text, type = 'text', orderData, senderEmail, senderName }) => {
     if (!text.trim()) return;
 
     const msgRef = await addDoc(collection(db, 'chatRooms', roomId, 'messages'), {
         text: text.trim(),
         sender: senderEmail,
         senderName: senderName || senderEmail,
-        type: 'text',
+        type,
+        ...(orderData ? { orderData } : {}),
         createdAt: serverTimestamp(),
         readBy: [senderEmail],
     });

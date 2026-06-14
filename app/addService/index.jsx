@@ -539,7 +539,7 @@ export default function AddService() {
                 <BgWatermark />
                 <StatusBar barStyle="dark-content" backgroundColor="#fff" />
                 <View style={M.header}>
-                    <TouchableOpacity onPress={() => router.back()} style={M.backBtn}>
+                    <TouchableOpacity onPress={() => router.replace('(tabs)/service')} style={M.backBtn}>
                         <Ionicons name="arrow-back" size={22} color="#0F172A" />
                     </TouchableOpacity>
                     <Text style={M.headerTitle}>Thêm dịch vụ</Text>

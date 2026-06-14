@@ -361,7 +361,7 @@ export default function CommissionScreen() {
                 s + parseFloat(p.price || 0) * parseFloat(p.qty || 1), 0);
             const commission = Math.max(
                 (o.items || []).reduce((s, p) =>
-                    s + (parseFloat(p.price || 0) - parseFloat(p.basePrice || 0)) * parseFloat(p.qty || 1), 0),
+                    s + (parseFloat(p.basePrice || 0) - parseFloat(p.price || 0)) * parseFloat(p.qty || 1), 0),
                 0
             );
             return { ...o, totalValue, commission, status: o.commissionStatus || 'pending' };
@@ -413,7 +413,7 @@ export default function CommissionScreen() {
         <TabScreenLayout>
             <ScreenHeader
                 title="Báo cáo Hoa hồng"
-                subtitle={isAdmin ? 'Quản lý hoa hồng toàn hệ thống' : 'Hoa hồng = Giá bán − Giá nhập'}
+                subtitle={isAdmin ? 'Quản lý hoa hồng toàn hệ thống' : 'Hoa hồng với những đơn hàng'}
                 searchValue={search}
                 onSearchChange={setSearch}
                 searchPlaceholder="Tìm theo mã đơn, khách hàng, nhân viên..."
@@ -425,9 +425,15 @@ export default function CommissionScreen() {
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}
             >
                 <View style={S.statsRow}>
-                    <StatCard label="Chờ giải ngân" value={fmtShort(pending)} sub={`${pendingCount} khoản`} color="#D97706" borderColor="#FDE68A" />
-                    <StatCard label="Đã thanh toán" value={fmtShort(paid)} sub={`${paidCount} khoản`} color="#16A34A" borderColor="#86EFAC" />
-                    <StatCard label="Tổng cộng" value={fmtShort(pending + paid)} sub="tất cả khoản" color="#2563EB" borderColor="#BFDBFE" />
+                    <StatCard label="Chờ giải ngân" value={fmtShort(pendingCount)}
+                        // sub={`${pendingCount} khoản`}
+                        color="#D97706" borderColor="#FDE68A" />
+                    <StatCard label="Đã thanh toán" value={fmtShort(paidCount)}
+                        // sub={`${paidCount} khoản`}
+                        color="#16A34A" borderColor="#86EFAC" />
+                    <StatCard label="Tổng cộng" value={fmtShort(pendingCount + paidCount)}
+                        // sub="tất cả khoản"
+                        color="#2563EB" borderColor="#BFDBFE" />
                 </View>
 
                 <View style={S.card}>
@@ -483,7 +489,7 @@ export default function CommissionScreen() {
                     )}
                 </View>
 
-                {!isAdmin && (
+                {/* {!isAdmin && (
                     <View style={[S.card, S.bonusCard]}>
                         <Text style={S.bonusLabel}>THƯỞNG THÁNG</Text>
                         <Text style={S.bonusAmount}>Thu nhập tháng này: {fmt(thisMonth)}</Text>
@@ -496,7 +502,7 @@ export default function CommissionScreen() {
                             <Text style={S.progressHint}>5.000.000đ</Text>
                         </View>
                     </View>
-                )}
+                )} */}
 
                 <View style={{ height: 80 }} />
             </ScrollView>
