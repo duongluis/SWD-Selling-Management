@@ -76,13 +76,20 @@ async function fetchUsers(myEmail, role) {
 }
 
 async function fetchConsults(myEmail, role) {
-    const q = role === 'admin'
-        ? query(collection(db, 'consult'))
-        : query(collection(db, 'consult'), where('createdBy', '==', myEmail));
-    const snap = await getDocs(q);
-    return snap.docs
-        .map(d => ({ ...d.data(), docId: d.id }))
-        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    if (role === 'admin') {
+        const snap = await getDocs(query(collection(db, 'consult')));
+        return snap.docs.map(d => ({ ...d.data(), docId: d.id }))
+            .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    }
+    const teamEmails = await getTeamEmails(myEmail, role);
+    if (teamEmails.length === 0) return [];
+    const all = [];
+    for (let i = 0; i < teamEmails.length; i += 30) {
+        const chunk = teamEmails.slice(i, i + 30);
+        const snap = await getDocs(query(collection(db, 'consult'), where('createdBy', 'in', chunk)));
+        snap.docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
+    }
+    return all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
 
 function computeStats(type, data) {
@@ -197,7 +204,10 @@ export function useScreenData(type) {
                     if (role === 'admin') {
                         q = collection(db, 'consult');
                     } else {
-                        q = query(collection(db, 'consult'), where('createdBy', '==', myEmail));
+                        // Lấy team emails (bao gồm cả người mình là advisor)
+                        const teamEmails = await getTeamEmails(myEmail, role);
+                        if (teamEmails.length === 0) { setData([]); setLoading(false); return; }
+                        q = query(collection(db, 'consult'), where('createdBy', 'in', teamEmails));
                     }
                 }
 

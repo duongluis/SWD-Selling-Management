@@ -152,16 +152,37 @@ export default function AnalyticsScreen() {
 
     const bars = useMemo(() => {
         if (period === 'quarterly') {
-            return Array.from({ length: 6 }, (_, i) => {
-                const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                const v = active.filter(o => (o.createdAt || '').startsWith(key)).reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
-                return { l: `T${d.getMonth() + 1}`, v };
+            // 4 quý của năm hiện tại, mỗi quý = 3 tháng
+            return Array.from({ length: 4 }, (_, i) => {
+                const quarterMonths = [
+                    [1, 2, 3],   // Q1
+                    [4, 5, 6],   // Q2
+                    [7, 8, 9],   // Q3
+                    [10, 11, 12] // Q4
+                ][i];
+
+                const v = active
+                    .filter(o => {
+                        if (!(o.createdAt || '').startsWith(String(now.getFullYear()))) return false;
+                        const month = parseInt((o.createdAt || '').slice(5, 7), 10);
+                        return quarterMonths.includes(month);
+                    })
+                    .reduce((s, o) =>
+                        s + (o.items || []).reduce((ss, p) =>
+                            ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+
+                return { l: `Q${i + 1}`, v };
             });
         }
+
+        // yearly: 4 năm gần nhất
         return Array.from({ length: 4 }, (_, i) => {
             const yr = now.getFullYear() - 3 + i;
-            const v = active.filter(o => (o.createdAt || '').startsWith(String(yr))).reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+            const v = active
+                .filter(o => (o.createdAt || '').startsWith(String(yr)))
+                .reduce((s, o) =>
+                    s + (o.items || []).reduce((ss, p) =>
+                        ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
             return { l: String(yr), v };
         });
     }, [active, period, now]);
@@ -228,12 +249,12 @@ export default function AnalyticsScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                             <View>
                                 <Text style={A.cardTitle}>Xu hướng thu nhập</Text>
-                                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>Biểu đồ tăng trưởng 6 tháng gần nhất</Text>
+                                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>Biểu đồ tăng trưởng</Text>
                             </View>
                             <View style={{ flexDirection: 'row', gap: 8 }}>
                                 {['quarterly', 'yearly'].map(p => (
                                     <TouchableOpacity key={p} style={[A.pBtn, period === p && A.pBtnActive]} onPress={() => setPeriod(p)}>
-                                        <Text style={[A.pBtnText, period === p && A.pBtnTextActive]}>{p === 'quarterly' ? 'Quý này' : 'Năm nay'}</Text>
+                                        <Text style={[A.pBtnText, period === p && A.pBtnTextActive]}>{p === 'quarterly' ? 'Theo quý' : 'Theo năm'}</Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>

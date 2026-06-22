@@ -71,12 +71,29 @@ export default function TeamView() {
         if (!userDetail?.email) return;
         setError(null);
         try {
-            const q = query(collection(db, 'users'), where('advisor', '==', userDetail.email));
-            const snap = await getDocs(q);
-            const data = snap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            // Sắp xếp theo role
-            data.sort((a, b) => (ROLE_ORDER[a.role] || 99) - (ROLE_ORDER[b.role] || 99));
-            setMembers(data);
+            // Lấy L2 — những người có advisor trực tiếp là mình
+            const l2Snap = await getDocs(
+                query(collection(db, 'users'), where('advisor', '==', userDetail.email))
+            );
+            const l2 = l2Snap.docs.map(doc => ({
+                ...doc.data(), id: doc.id, _level: 'L2'
+            }));
+
+            // Lấy L3 — những người có advisor là một trong các L2
+            let l3 = [];
+            for (const l2Member of l2) {
+                if (!l2Member.email) continue;
+                const l3Snap = await getDocs(
+                    query(collection(db, 'users'), where('advisor', '==', l2Member.email))
+                );
+                l3.push(...l3Snap.docs.map(doc => ({
+                    ...doc.data(), id: doc.id, _level: 'L3'
+                })));
+            }
+
+            const all = [...l2, ...l3];
+            all.sort((a, b) => (ROLE_ORDER[a.role] || 99) - (ROLE_ORDER[b.role] || 99));
+            setMembers(all);
         } catch (err) {
             console.error(err);
             setError('Không thể tải danh sách');

@@ -467,9 +467,10 @@ export default function AddOrder() {
   const [orderId] = useState('ORD-' + Date.now().toString().slice(-6));
   const hasAdvisor = !!userDetail?.advisor;
   const isDaily = role === 'daily';
-  const useFixedPrice = isDaily;
-  const fixedPayment = 'company';
   const isLevel1 = !userDetail?.advisor;
+  const useFixedPrice = isDaily || !isLevel1;
+  const fixedPayment = 'company';
+
   const [paymentMethod, setPaymentMethod] = useState(orderType === 'buon' ? 'company' : 'customer');
 
   const filteredServiceTypes = React.useMemo(() => {
@@ -918,8 +919,8 @@ export default function AddOrder() {
             />
 
             {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
-            {/* {isLevel1 && ( */}
-            {userDetail?.role != "daily" && (
+            {isLevel1 && (
+              // {userDetail?.role != "daily" && (
               <PaymentMethodField
                 ws={isDesktop}
                 orderType={orderType}

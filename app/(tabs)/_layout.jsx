@@ -4,20 +4,21 @@ import NotificationPanel from '@/components/Main/notificationPanel';
 import { showAlert } from '@/components/Main/showAlert';
 import { showInfo } from '@/components/Main/showInfo';
 import { useLayout } from '@/components/Main/TabScreenLayout';
-import { getRole, getRoleLabel } from '@/components/Utils/roleHelper';
+import { getRole, getRoleLabel, isAdmin } from '@/components/Utils/roleHelper';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter, useSegments } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { useContext, useState } from 'react';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { useContext, useEffect, useState } from 'react';
 import {
   Dimensions,
   Image, Platform, Pressable, ScrollView,
   StyleSheet, Text, TouchableOpacity,
   View
 } from 'react-native';
-import auth from '../../config/firebaseConfig';
+import auth, { db } from '../../config/firebaseConfig';
 
 
 const BANNER_IMAGE = require('../../assets/images/layout-img.png');
@@ -35,10 +36,10 @@ const NAV_SECTIONS = [
     items: [
       { key: 'home', link: '(tabs)/home', label: 'Trang chủ', icon: 'home-outline', activeIcon: 'home', visible: () => true },
       { key: 'customer', link: '(tabs)/customer', label: 'Khách hàng', icon: 'people-outline', activeIcon: 'people', visible: (r) => r !== 'ctv' },
-      { key: 'consult', link: '(tabs)/customerctv', label: 'Giới thiệu khách', icon: 'person-add-outline', activeIcon: 'person-add', visible: (r) => r === 'ctv' || r === 'admin' },
+      { key: 'consult', link: '(tabs)/customerctv', label: 'Giới thiệu khách', icon: 'person-add-outline', activeIcon: 'person-add', },
       { key: 'order', link: '(tabs)/order', label: 'Đơn hàng', icon: 'receipt-outline', activeIcon: 'receipt', visible: () => true },
       { key: 'service', link: '(tabs)/service', label: 'Dịch vụ', icon: 'build-outline', activeIcon: 'build', visible: (r) => r !== 'ctv' },
-      { key: 'team', link: '(tabs)/team', label: 'Đội ngũ', icon: 'people-outline', activeIcon: 'people', visible: () => true },
+      { key: 'team', link: '(tabs)/team', label: 'Đội ngũ', icon: 'people-outline', activeIcon: 'people', },
     ],
   },
   {
@@ -89,7 +90,7 @@ function NavItem({ item, isActive, collapsed, onPress }) {
 }
 
 // ── Shared sidebar content ────────────────────────────────────
-function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, router, onClose }) {
+function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, isAdvisor, router, onClose }) {
   const [showLogout, setShowLogout] = useState(false);
   const roleLabel = getRoleLabel(role);
 
@@ -97,10 +98,22 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, ro
     if (item.visible) return item.visible(role);
     if (item.key === 'commission' || item.key === 'calculator') {
       if (userDetail?.advisor) return false;
-      if (role === 'daily') return false;       // đại lý → ẩn
+      if (role === 'daily') return false;
       return role === 'admin' || role === 'phantan' || role === 'ctv';
     }
-    return true;
+    if (item.key === 'team') {
+      if (userDetail?.advisor) return true; // có advisor
+      if (isAdvisor) return true;            // là advisor của người khác
+
+      return false;                          // không liên quan
+    }
+    if (item.key === 'consult') {
+      if (userDetail?.advisor) return true; // có advisor
+      if (isAdvisor) return true;            // là advisor của người khác
+      if (isAdmin) return true;
+      return false;
+    }
+    return role === 'admin';
   };
 
   const handleNav = (item) => {
@@ -111,7 +124,7 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, ro
   };
 
   const handleLogout = () => {
-    showAlert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', async () => {
+    showAlert('Đăng xuất', 'Bạn có chắc muốn đăng xuất ?', async () => {
       try { await signOut(auth); router.replace('/auth/signIn'); }
       catch (e) { showInfo('Lỗi', e.message); }
     });
@@ -192,7 +205,7 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, ro
                 <Text style={S.userName} numberOfLines={1}>{userDetail?.name || 'User'}</Text>
                 <Text style={S.userRoleText} numberOfLines={1}>{roleLabel}</Text>
               </View>
-              <Ionicons name={showLogout ? 'chevron-up' : 'ellipsis-horizontal'} size={14} color="rgba(255,255,255,0.5)" />
+              <Ionicons name={showLogout ? 'chevron-up' : 'arrow-forward'} size={14} color="rgba(255,255,255,0.5)" />
             </>
           )}
         </Pressable>
@@ -202,7 +215,7 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, ro
 }
 
 // ── Desktop Sidebar ───────────────────────────────────────────
-function DesktopSidebar({ activeTab, role, userDetail, collapsed, onToggle, onNavigate, router }) {
+function DesktopSidebar({ activeTab, role, userDetail, collapsed, onToggle, isAdvisor, onNavigate, router }) {
   return (
     <View style={[S.sidebar, collapsed && S.sidebarCollapsed]}>
       {/* Collapse button */}
@@ -216,6 +229,7 @@ function DesktopSidebar({ activeTab, role, userDetail, collapsed, onToggle, onNa
         userDetail={userDetail}
         collapsed={collapsed}
         onNavigate={onNavigate}
+        isAdvisor={isAdvisor}
         router={router}
       />
     </View>
@@ -223,7 +237,7 @@ function DesktopSidebar({ activeTab, role, userDetail, collapsed, onToggle, onNa
 }
 
 // ── Mobile Drawer Sidebar ─────────────────────────────────────
-function MobileDrawer({ visible, activeTab, role, userDetail, onNavigate, router, onClose }) {
+function MobileDrawer({ visible, activeTab, role, userDetail, onNavigate, isAdvisor, router, onClose }) {
   if (!visible) return null;
   return (
     <View style={[StyleSheet.absoluteFillObject, { zIndex: 100, flexDirection: 'row' }]}>
@@ -238,6 +252,7 @@ function MobileDrawer({ visible, activeTab, role, userDetail, onNavigate, router
           userDetail={userDetail}
           collapsed={false}
           onNavigate={onNavigate}
+          isAdvisor={isAdvisor}
           router={router}
           onClose={onClose}
         />
@@ -404,10 +419,10 @@ export default function TabLayout() {
   const { isDesktop } = useLayout();
   const role = getRole(userDetail);
 
-
   const rawTab = segments[segments.length - 1] || 'home';
   const activeTab = SEGMENT_KEY_MAP[rawTab] || rawTab;
   const pageLabel = NAV_SECTIONS.flatMap(s => s.items).find(n => n.key === activeTab)?.label || 'Tổng quan';
+  const [isAdvisor, setIsAdvisor] = useState(false);
 
   const handleNavigate = (link) => router.push(`/${link}`);
 
@@ -415,9 +430,19 @@ export default function TabLayout() {
     <Tabs.Screen key={name} name={name} />
   ));
 
+  useEffect(() => {
+    if (!userDetail?.email) return;
+    // Check xem có ai đang dùng email này làm advisor không
+    const q = query(
+      collection(db, 'users'),
+      where('advisor', '==', userDetail.email)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setIsAdvisor(!snap.empty);
+    });
+    return () => unsub();
+  }, [userDetail?.email]);
   // ── Desktop Web ──────────────────────────────────────────────
-
-
 
   return (
     <View style={isDesktop ? S.root : { flex: 1 }}>
@@ -431,6 +456,7 @@ export default function TabLayout() {
           collapsed={collapsed}
           onToggle={() => setCollapsed(c => !c)}
           onNavigate={handleNavigate}
+          isAdvisor={isAdvisor}
           router={router}
         />
       )}
@@ -442,7 +468,7 @@ export default function TabLayout() {
           <View style={S.topBar}>
             <Image source={BANNER_IMAGE} style={[S.topBarBanner, { width }]} resizeMode="cover" />
             <View style={S.breadcrumb}>
-              <Text style={S.breadcrumbRoot}>SWD Seller</Text>
+              <Text style={S.breadcrumbRoot}> SWD CRM</Text>
               <Ionicons name="chevron-forward" size={12} color="#fff" />
               <Text style={S.breadcrumbCurrent}>{pageLabel}</Text>
             </View>
@@ -470,6 +496,7 @@ export default function TabLayout() {
             role={role}
             userDetail={userDetail}
             onNavigate={handleNavigate}
+            isAdvisor={isAdvisor}
             router={router}
             onClose={() => setDrawerOpen(false)}
           />

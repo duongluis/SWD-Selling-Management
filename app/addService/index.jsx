@@ -4,7 +4,7 @@ import { useLayout } from '@/components/Main/TabScreenLayout';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { memo, useContext, useEffect, useState } from 'react';
 import {
     KeyboardAvoidingView, Platform, ScrollView, StatusBar,
@@ -197,6 +197,14 @@ export default function AddService() {
     const currentTypeCfg = serviceTypes.find(t => t.key === serviceType);
     const showMachineSection = currentTypeCfg?.hasMachine && selectedOrder?.items?.length > 0;
     const [serviceId] = useState('SV-' + Date.now().toString().slice(-6));
+    // Sau dòng const [updating, setUpdating] = useState(false);
+    const [saveAsCustomer, setSaveAsCustomer] = useState(false);
+    const [savingCustomer, setSavingCustomer] = useState(false);
+    const [customerSaved, setCustomerSaved] = useState(false);
+    const [wantSaveCustomer, setWantSaveCustomer] = useState(false);
+
+    const normalizePhone = (phone) => (phone || '').replace(/\s+/g, '').trim();
+
 
     // ── Effects ──────────────────────────────────────────────
     useEffect(() => {
@@ -311,6 +319,37 @@ export default function AddService() {
         }
         setSubmitting(true);
         try {
+            // ── Lưu khách hàng nếu được tick ─────────────────────
+            if (wantSaveCustomer) {
+                const phone = customerPhone.replace(/\s+/g, '').trim();
+                const dup = await getDocs(
+                    query(collection(db, 'customers'), where('phone', '==', phone))
+                );
+                if (dup.empty) {
+                    let rootAdvisor = userDetail.email, level = 1, cur = userDetail;
+                    while (cur?.advisor) {
+                        level++; rootAdvisor = cur.advisor;
+                        try {
+                            const snap = await getDoc(doc(db, 'users', cur.advisor));
+                            cur = snap.exists() ? snap.data() : null;
+                        } catch { break; }
+                    }
+                    await setDoc(doc(db, 'customers', phone), {
+                        id: Date.now().toString(),
+                        createdAt: new Date().toISOString(),
+                        name: customerName.trim(),
+                        phone,
+                        email: '',
+                        address: address.trim(),
+                        note: note.trim(),
+                        rootAdvisor, level,
+                        createdBy: userDetail?.email || '',
+                    }, { merge: true });
+                }
+                // Nếu đã tồn tại thì bỏ qua, vẫn tiếp tục tạo dịch vụ
+            }
+
+            // ── Tạo dịch vụ (giữ nguyên logic cũ) ───────────────
             const category = SERVICE_TYPE_TO_CATEGORY[serviceType] || 'other';
             const statusList = await fetchStatusList(category);
             const initialStatus = statusList[0]?.name || 'Chờ xử lý';
@@ -321,7 +360,7 @@ export default function AddService() {
                 orderItems: selectedOrder?.items || [],
                 machineItem: selectedMachine || null,
                 customer: customerName.trim(),
-                phone: customerPhone.trim(),
+                phone: customerPhone.replace(/\s+/g, '').trim(),
                 address: address.trim(),
                 note: note.trim(),
                 status: initialStatus,
@@ -333,7 +372,6 @@ export default function AddService() {
         } catch (e) { showAlert('Lỗi', e.message); }
         finally { setSubmitting(false); }
     };
-
 
     // ── Render ───────────────────────────────────────────────
     // ✅ isDesktop điều kiện chọn layout
@@ -481,7 +519,24 @@ export default function AddService() {
                                 <TextInput style={W.input} placeholder="Quận/Huyện, TP..." placeholderTextColor="#94A3B8" value={address} onChangeText={setAddress} />
                             </View>
                         </View>
+
+                        <TouchableOpacity
+                            style={[W.inputGroup, W.toggleRow]}
+                            onPress={() => setWantSaveCustomer(v => !v)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[W.toggleBox, wantSaveCustomer && W.toggleBoxOn]}>
+                                {wantSaveCustomer && <Ionicons name="checkmark" size={12} color="#fff" />}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={W.toggleLabel}>Lưu làm khách hàng</Text>
+                                {/* <Text style={W.toggleSub}>Tự động thêm vào danh sách khách hàng khi tạo dịch vụ</Text> */}
+                            </View>
+                        </TouchableOpacity>
+
                         <NotesInput value={note} onChange={setNote} label="Ghi chú" />
+
+
                     </View>
 
                     {/* Preview */}
@@ -650,7 +705,24 @@ export default function AddService() {
                                 <TextInput style={M.input} placeholder="Quận/Huyện, TP..." placeholderTextColor="#94A3B8" value={address} onChangeText={setAddress} />
                             </View>
                             <NotesInputMobile value={note} onChange={setNote} />
+
+                            <TouchableOpacity
+                                style={M.toggleRow}
+                                onPress={() => setWantSaveCustomer(v => !v)}
+                                activeOpacity={0.7}
+                            >
+                                <View style={[M.toggleBox, wantSaveCustomer && M.toggleBoxOn]}>
+                                    {wantSaveCustomer && <Ionicons name="checkmark" size={11} color="#fff" />}
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={M.toggleLabel}>Lưu làm khách hàng</Text>
+                                    <Text style={M.toggleSub}>Tự động thêm vào danh sách khi tạo dịch vụ</Text>
+                                </View>
+                            </TouchableOpacity>
+
                         </View>
+
+
 
                         <View style={{ height: insets.bottom + 100 }} />
                     </ScrollView>
@@ -737,6 +809,11 @@ const W = StyleSheet.create({
     previewCustomerText: { fontSize: 12, color: '#64748B' },
     submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 14, shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
     submitBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+    toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC', marginBottom: 14 },
+    toggleBox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: '#CBD5E1', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+    toggleBoxOn: { backgroundColor: '#059669', borderColor: '#059669' },
+    toggleLabel: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
+    toggleSub: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
 });
 
 const M = StyleSheet.create({
@@ -776,4 +853,9 @@ const M = StyleSheet.create({
     bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
     submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#2563EB', borderRadius: 16, paddingVertical: 17, shadowColor: '#2563EB', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
     submitBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', letterSpacing: 0.2 },
+    toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC', marginBottom: 8, marginTop: 4 },
+    toggleBox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: '#CBD5E1', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+    toggleBoxOn: { backgroundColor: '#059669', borderColor: '#059669' },
+    toggleLabel: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
+    toggleSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
 });

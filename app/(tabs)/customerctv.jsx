@@ -7,6 +7,7 @@ import ScreenHeader from '@/components/Main/ScreenHeader';
 import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import StatBar from '@/components/UI/StatBar';
 import { getInitials } from '@/components/Utils/formatters';
+import { getRole } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -55,6 +56,8 @@ export default function CustomerCTVScreen() {
     const { query, setQuery, result } = useSearch(consultList, ['name', 'phone']);
     const { isDesktop } = useLayout();
 
+    const role = getRole(userDetail);
+    const canAccess = role !== 'admin' && role !== 'daily' && isDesktop;
     // map docId → status
     const consultMap = Object.fromEntries(consultList.map(c => [c.docId, c.status || 'none']));
 
@@ -79,7 +82,7 @@ export default function CustomerCTVScreen() {
                 searchValue={query}
                 onSearchChange={setQuery}
                 searchPlaceholder="Tìm tên, SĐT..."
-                actionLabel={isDesktop ? 'Thêm tư vấn' : undefined}
+                actionLabel={canAccess ? 'Thêm tư vấn' : undefined}
                 actionIcon="add"
                 onAction={() => router.push('/addConsult')}
             />

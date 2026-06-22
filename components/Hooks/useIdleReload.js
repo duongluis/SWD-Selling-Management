@@ -5,33 +5,64 @@ const IDLE_MS = 5 * 60 * 1000; // 5 phút
 
 export function useIdleReload() {
     const timer = useRef(null);
+    const idleSince = useRef(null); // thời điểm bắt đầu idle
 
     useEffect(() => {
-        const reset = () => {
-            clearTimeout(timer.current);
-            timer.current = setTimeout(() => {
-                // Đánh dấu cần reload, không reload ngay
-                sessionStorage.setItem('needsReload', '1');
-            }, IDLE_MS);
+        const markIdle = () => {
+            idleSince.current = Date.now();
         };
 
-        const onActivity = () => {
-            // Nếu đã idle đủ 5p → reload khi user quay lại
-            if (sessionStorage.getItem('needsReload') === '1') {
-                sessionStorage.removeItem('needsReload');
+        const checkAndReload = () => {
+            if (idleSince.current && Date.now() - idleSince.current >= IDLE_MS) {
+                idleSince.current = null;
                 window.location.reload();
                 return;
             }
-            reset();
         };
 
-        const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
-        events.forEach(e => window.addEventListener(e, onActivity, { passive: true }));
-        reset(); // bắt đầu đếm
+        const resetIdle = () => {
+            idleSince.current = null;
+            startTimer();
+        };
+
+        const startTimer = () => {
+            clearTimeout(timer.current);
+            timer.current = setTimeout(markIdle, IDLE_MS);
+        };
+
+        // ── Reload ngay khi focus/visible trở lại ────────────
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                checkAndReload();
+            } else {
+                // Tab bị ẩn → bắt đầu tính giờ idle
+                startTimer();
+            }
+        };
+
+        const onFocus = () => checkAndReload();
+        const onBlur = () => startTimer();
+
+        // ── Reset idle khi user còn đang dùng ────────────────
+        const onActivity = () => {
+            if (!idleSince.current) resetIdle();
+        };
+
+        const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+        activityEvents.forEach(e => window.addEventListener(e, onActivity, { passive: true }));
+
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        window.addEventListener('focus', onFocus);
+        window.addEventListener('blur', onBlur);
+
+        startTimer(); // bắt đầu đếm
 
         return () => {
             clearTimeout(timer.current);
-            events.forEach(e => window.removeEventListener(e, onActivity));
+            activityEvents.forEach(e => window.removeEventListener(e, onActivity));
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+            window.removeEventListener('focus', onFocus);
+            window.removeEventListener('blur', onBlur);
         };
     }, []);
 }

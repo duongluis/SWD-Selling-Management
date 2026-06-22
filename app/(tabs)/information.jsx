@@ -288,7 +288,7 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
     const { isDesktop } = useLayout();
     const isEdit = !!editData;
     const [name, setName] = useState('');
-    const [price, setPrice] = useState('');
+    // const [price, setPrice] = useState('');
     const [color, setColor] = useState(COLOR_OPTIONS[0]);
     const [hasMachine, setHasMachine] = useState(false);
     const [canAddInOrder, setCanAddInOrder] = useState(true);
@@ -297,18 +297,22 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
     useEffect(() => {
         if (editData) {
             setName(editData.name || '');
-            setPrice(editData.price ? String(editData.price) : '');
+            // setPrice(editData.price ? String(editData.price) : '');
             setColor(editData.color || COLOR_OPTIONS[0]);
             setHasMachine(editData.hasMachine || false);
             setCanAddInOrder(editData.canAddInOrder !== false);
         } else {
-            setName(''); setPrice(''); setColor(COLOR_OPTIONS[0]);
+            setName('');
+            // setPrice('');
+            setColor(COLOR_OPTIONS[0]);
             setHasMachine(false); setCanAddInOrder(true);
         }
     }, [editData, visible]);
 
     const resetForm = () => {
-        setName(''); setPrice(''); setColor(COLOR_OPTIONS[0]);
+        setName('');
+        // setPrice('');
+        setColor(COLOR_OPTIONS[0]);
         setHasMachine(false); setCanAddInOrder(true);
     };
 
@@ -316,13 +320,13 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
 
     const handleSave = async () => {
         if (!name.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên dịch vụ'); return; }
-        if (!price) { showAlert('Thông báo', 'Vui lòng nhập giá dịch vụ'); return; }
+        // if (!price) { showAlert('Thông báo', 'Vui lòng nhập giá dịch vụ'); return; }
         setSaving(true);
         try {
             const payload = {
                 id: isEdit ? editData.id : existingCount + 1,
                 name: name.trim(),
-                price: parseMoney(price),
+                // price: parseMoney(price),    
                 color,
                 hasMachine,
                 canAddInOrder,
@@ -382,7 +386,7 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
                     {isEdit && <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Tên dịch vụ không thể thay đổi sau khi tạo</Text>}
                 </FormRow>
 
-                <FormRow label="Giá dịch vụ" required>
+                {/* <FormRow label="Giá dịch vụ" required>
                     <View style={[F.input, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
                         <View style={[F.moneyDot, { backgroundColor: color }]} />
                         <TextInput
@@ -395,7 +399,7 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
                         />
                         <Text style={{ fontSize: 11, color: '#94A3B8' }}>đ</Text>
                     </View>
-                </FormRow>
+                </FormRow> */}
 
                 <FormRow label="Màu hiển thị">
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -456,7 +460,9 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
                     </TouchableOpacity>
                 </FormRow>
 
-                {(name || price) && (
+                {name && (
+                    // || price) && (
+
                     <View style={F.previewBox}>
                         <Text style={F.previewLabel}>Xem trước</Text>
                         <View style={[F.previewCard, { borderTopWidth: 3, borderTopColor: color }]}>
@@ -466,7 +472,7 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
                             <View style={{ flex: 1, gap: 3 }}>
                                 <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{name || 'Tên dịch vụ...'}</Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                    <Text style={{ fontSize: 13, color, fontWeight: '700' }}>{price ? fmt(parseMoney(price)) : 'Chưa có giá'}</Text>
+                                    {/* <Text style={{ fontSize: 13, color, fontWeight: '700' }}>{price ? fmt(parseMoney(price)) : 'Chưa có giá'}</Text> */}
                                     {hasMachine && (
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: color + '18', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
                                             <Ionicons name="settings-outline" size={10} color={color} />
@@ -732,10 +738,10 @@ function ServiceCategoryGrid({ services, isAdmin, onEdit, onDelete }) {
                             <Ionicons name={style.icon} size={28} color={item.color} />
                         </View>
                         <Text style={SC.categoryName}>{item.name}</Text>
-                        <View style={[SC.priceBadge, { backgroundColor: item.color + "22" }]}>
+                        {/* <View style={[SC.priceBadge, { backgroundColor: item.color + "22" }]}>
                             <Text style={[SC.priceLabel, { color: item.color }]}>Giá dịch vụ</Text>
                             <Text style={[SC.priceValue, { color: item.color }]}>{fmt(item.price)}</Text>
-                        </View>
+                        </View> */}
 
                         {/* Nút sửa / xóa chỉ admin */}
                         {isAdmin && (
@@ -1030,9 +1036,9 @@ const SC = StyleSheet.create({
     card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', borderTopWidth: 3, alignItems: 'center', gap: 10 },
     iconWrap: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
     categoryName: { fontSize: 14, fontWeight: '700', color: '#0F172A', textAlign: 'center' },
-    priceBadge: { width: '100%', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
-    priceLabel: { fontSize: 10, fontWeight: '600', marginBottom: 2 },
-    priceValue: { fontSize: 14, fontWeight: '800', letterSpacing: -0.3 },
+    // priceBadge: { width: '100%', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
+    // priceLabel: { fontSize: 10, fontWeight: '600', marginBottom: 2 },
+    // priceValue: { fontSize: 14, fontWeight: '800', letterSpacing: -0.3 },
     actionRow: { flexDirection: 'row', gap: 8, width: '100%' },
     editBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 7, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
     editBtnText: { fontSize: 12, fontWeight: '700', color: '#2563EB' },

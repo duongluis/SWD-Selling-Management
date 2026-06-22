@@ -210,11 +210,10 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
 
                 <View style={S.actions}>
                     {admin && ['Chờ xử lý', 'Đang xử lý'].includes(local.status) && (
-                        <TouchableOpacity style={S.aBtn} onPress={() => router.push(
-                            {
-                                pathname: '/editService/[serviceID]',
-                                params: { serviceID: local.docId, serviceParam: JSON.stringify(local) }
-                            })}>
+                        <TouchableOpacity style={S.aBtn} onPress={() => router.push({
+                            pathname: '/editService/[serviceID]',
+                            params: { serviceID: local.docId, serviceParam: JSON.stringify(local) }
+                        })}>
                             <Ionicons name="create-outline" size={13} color="#2563EB" />
                             <Text style={S.aBtnText}>Chỉnh sửa</Text>
                         </TouchableOpacity>
@@ -316,4 +315,20 @@ const S = StyleSheet.create({
     tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 9, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9' },
     td: { fontSize: 12, color: '#0F172A' },
     tableFoot: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#EFF6FF', borderRadius: 8, marginTop: 4 },
+    aDanger: {
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        paddingHorizontal: 12, paddingVertical: 6,
+        borderRadius: 8, borderWidth: 1,
+        borderColor: '#FCA5A5', backgroundColor: '#FEF2F2',
+    },
+    aDangerText: { fontSize: 12, fontWeight: '600', color: '#DC2626' },
+    aBtnCustomer: {
+        borderColor: '#E2E8F0', backgroundColor: '#F8FAFC',
+    },
+    aBtnCustomerActive: {
+        borderColor: '#BAE6FD', backgroundColor: '#F0F9FF',
+    },
+    aBtnCustomerDone: {
+        borderColor: '#A7F3D0', backgroundColor: '#ECFDF5',
+    },
 });

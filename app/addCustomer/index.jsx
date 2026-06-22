@@ -6,7 +6,7 @@ import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { useContext, useState } from 'react';
 import {
   Alert,
@@ -35,6 +35,9 @@ export default function AddCustomer() {
 
   const consultCreatedBy = params.consultCreatedBy || '';
 
+  const consultDocId = params.consultDocId || '';
+  const fromConsult = params.fromConsult === 'true';
+
   const [form, setForm] = useState({
     name: params.name || '',
     phone: params.phone || '',
@@ -46,17 +49,32 @@ export default function AddCustomer() {
 
   const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
+  const handleCancel = async () => {
+    if (consultDocId && fromConsult) {
+      try {
+        await updateDoc(doc(db, 'consult', consultDocId), {
+          status: 'pending'
+        });
+        router.replace('(tabs)/customerCTV');
+      } catch (e) {
+        console.error('Rollback lỗi:', e);
+      }
+    }
+    router.replace('(tabs)/customer');
+  }
+
 
   const checkingDuplicate = async () => {
+    const normalizePhone = (phone) => phone.replace(/\s+/g, '').trim();
     const userQuery = await getDocs(
-      query(collection(db, 'customers'), where('phone', '==', form.phone))
+      query(collection(db, 'customers'), where('phone', '==', normalizePhone(form.phone)))
     );
 
     if (userQuery.empty) {
       return false;
     } else {
       showAlert("Đã tồn tại khách hàng trên hệ thống, vui lòng liên hệ quản trị viên để biết thêm thông tin ")
-      router.replace("(tabs)/home")
+      handleCancel()
       return true;
     }
   };
@@ -139,7 +157,7 @@ export default function AddCustomer() {
             <Text style={W.pageTitle}>Thêm khách hàng mới</Text>
             <Text style={W.pageSub}>Điền thông tin để thêm khách hàng vào danh sách của bạn</Text>
           </View>
-          <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('(tabs)/customer')}>
+          <TouchableOpacity style={W.cancelBtn} onPress={() => handleCancel()}>
             <Ionicons name="close" size={16} color="#64748B" />
             <Text style={W.cancelBtnText}>Huỷ</Text>
           </TouchableOpacity>
@@ -290,7 +308,7 @@ export default function AddCustomer() {
               <Text style={W.submitBtnText}>{submitting ? 'Đang lưu...' : 'Lưu khách hàng'}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={W.cancelBtnFull} onPress={() => router.replace('(tabs)/customer')}>
+            <TouchableOpacity style={W.cancelBtnFull} onPress={() => handleCancel()}>
               <Text style={W.cancelBtnFullText}>Hủy bỏ</Text>
             </TouchableOpacity>
           </View>
@@ -307,7 +325,7 @@ export default function AddCustomer() {
         <BgWatermark />
         <StatusBar barStyle="dark-content" backgroundColor={Colors.Background} />
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => handleCancel()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={22} color={Colors.TextPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Tạo khách hàng mới</Text>
@@ -363,7 +381,7 @@ export default function AddCustomer() {
               <Ionicons name="save-outline" size={18} color={Colors.White} />
               <Text style={styles.saveBtnText}>Lưu khách hàng</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => handleCancel()} activeOpacity={0.7}>
               <Text style={styles.cancelBtnText}>Hủy bỏ</Text>
             </TouchableOpacity>
             <View style={{ height: insets.bottom + 16 }} />

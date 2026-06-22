@@ -127,7 +127,15 @@ export default function customerView() {
         }).catch(() => { });
         router.push({
           pathname: '/addCustomer',
-          params: { name: customer.name || '', phone: customer.phone || '', address: customer.address || '', note: customer.note || '', consultCreatedBy: customer.createdBy || '' },
+          params: {
+            name: customer.name || '',
+            phone: customer.phone || '',
+            address: customer.address || '',
+            note: customer.note || '',
+            consultCreatedBy: customer.createdBy || '',
+            consultDocId: customer.docId || '',  // ← thêm
+            fromConsult: 'true',
+          },
         });
       }
     } catch (e) { console.error(e); }

@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db, storage } from '../../config/firebaseConfig';
 
 // ── IMPORT HỆ THỐNG STYLES TIỆN ÍCH MỚI ──
+import { showAlert } from '@/components/Main/showAlert';
 import { useCardStyles } from '@/components/Styles/cardStyles';
 import { THEME } from '@/components/Styles/theme';
 
@@ -48,56 +49,56 @@ function timeAgo(ts) {
     return `${Math.floor(h / 24)} ngày trước`;
 }
 
-// ── Compression Helper cho Web ──
-async function compressForWeb(uri) {
-    if (uri.startsWith('data:')) return uri;
-    const resp = await fetch(uri);
-    const blob = await resp.blob();
-    return new Promise((resolve, reject) => {
-        const img = document.createElement('img');
-        const objUrl = URL.createObjectURL(blob);
-        img.onload = () => {
-            const MAX_W = 720;
-            const r = Math.min(1, MAX_W / (img.width || 1));
-            const w = Math.round(img.width * r);
-            const h = Math.round(img.height * r);
-            const canvas = document.createElement('canvas');
-            canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-            URL.revokeObjectURL(objUrl);
-            resolve(canvas.toDataURL('image/jpeg', 0.62));
-        };
-        img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('Không xử lý được ảnh')); };
-        img.src = objUrl;
+// ── Helper chọn ảnh trả về data URI (tránh CORS trên web) ──
+async function pickImageAsDataUri(options = {}) {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return null;
+    const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+        allowsEditing: false,
+        base64: true,
+        ...options,
     });
+    if (result.canceled || !result.assets?.[0]) return null;
+    const asset = result.assets[0];
+
+    if (isWeb && asset.base64) {
+        const mime = asset.mimeType || 'image/jpeg';
+        return `data:${mime};base64,${asset.base64}`;
+    }
+    // Native: trả về file URI bình thường
+    return asset.uri;
 }
 
-// ── Upload Helper cho Native ──
+// ── Upload lên Firebase Storage ──
 async function uploadToStorage(localUri, storagePath) {
     const ref = storageRef(storage, storagePath);
-
     let blob;
+
     if (localUri.startsWith('data:')) {
-        // Web: data URI → blob trực tiếp
-        const res = await fetch(localUri);
-        blob = await res.blob();
+        // Web: convert data URI to blob directly, no fetch needed
+        const byteString = atob(localUri.split(',')[1]);
+        const mimeType = localUri.split(',')[0].split(':')[1].split(';')[0];
+        const byteArray = new Uint8Array(byteString.length);
+        for (let i = 0; i < byteString.length; i++) {
+            byteArray[i] = byteString.charCodeAt(i);
+        }
+        blob = new Blob([byteArray], { type: mimeType });
     } else {
+        // Native: fetch works fine for file:// URIs
         const response = await fetch(localUri);
         blob = await response.blob();
     }
 
-    const ext = localUri.startsWith('data:image/png') ? 'png' : 'jpg';
-    const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
-    await uploadBytes(ref, blob, { contentType: mime });
+    await uploadBytes(ref, blob, { contentType: blob.type || 'image/jpeg' });
     return getDownloadURL(ref);
 }
-
 async function uploadBlocks(blocks, newsId) {
     return Promise.all(blocks.map(async (block, i) => {
         if (block.type !== 'image' || !block.value) return block;
         const uri = block.value;
         if (uri.startsWith('http')) return block; // đã upload rồi, giữ nguyên
-        // data: URI (web) hoặc file URI (native) đều upload lên Storage
         const url = await uploadToStorage(uri, `news/${newsId}/block_${i}.jpg`);
         return { ...block, value: url };
     }));
@@ -200,7 +201,6 @@ function CoverImagePicker({ imageUri, onPick, onRemove, style }) {
 
 // ── Modal biên tập tin tức (Form Biên tập) ──
 function NewsFormModal({ visible, onClose, onSave, editItem }) {
-    // Sử dụng cardStyles để lấy trạng thái isDesktop tương thích với web di động
     const { isDesktop } = useCardStyles();
 
     const [title, setTitle] = useState('');
@@ -232,49 +232,23 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
         }
     }, [editItem, visible]);
 
+    // ✅ Dùng pickImageAsDataUri thay vì compressForWeb + fetch
     const pickCoverImage = async () => {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') return;
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            quality: 1,
-            allowsEditing: false,
-        });
-        if (!result.canceled && result.assets?.[0]?.uri) {
-            const uri = result.assets[0].uri;
-            const final = isWeb ? await compressForWeb(uri) : uri;
-            setImageUri(final);
-            setImageModified(true);
-        }
+        const uri = await pickImageAsDataUri();
+        if (uri) { setImageUri(uri); setImageModified(true); }
     };
 
     const addTextBlock = () => setBlocks(b => [...b, { type: 'text', value: '' }]);
 
     const addImageBlock = async () => {
         if (blocks.filter(b => b.type === 'image').length >= MAX_IMAGE_BLOCKS) return;
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') return;
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'], quality: 1, allowsEditing: false,
-        });
-        if (!result.canceled && result.assets?.[0]?.uri) {
-            const uri = result.assets[0].uri;
-            const final = isWeb ? await compressForWeb(uri) : uri;
-            setBlocks(b => [...b, { type: 'image', value: final }]);
-        }
+        const uri = await pickImageAsDataUri();
+        if (uri) setBlocks(b => [...b, { type: 'image', value: uri }]);
     };
 
     const pickBlockImage = async (idx) => {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') return;
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'], quality: 1, allowsEditing: false,
-        });
-        if (!result.canceled && result.assets?.[0]?.uri) {
-            const uri = result.assets[0].uri;
-            const final = isWeb ? await compressForWeb(uri) : uri;
-            setBlocks(b => b.map((bl, i) => i === idx ? { ...bl, value: final } : bl));
-        }
+        const uri = await pickImageAsDataUri();
+        if (uri) setBlocks(b => b.map((bl, i) => i === idx ? { ...bl, value: uri } : bl));
     };
 
     const updateBlock = (idx, value) => setBlocks(b => b.map((bl, i) => i === idx ? { ...bl, value } : bl));
@@ -394,7 +368,7 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
         );
     }
 
-    // ── GIAO DIỆN DI ĐỘNG (Native Mobile App & Web Điện thoại hiển thị đồng dạng dọc) ──
+    // ── GIAO DIỆN DI ĐỘNG ──
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
             <View style={FM.overlay}>
@@ -547,7 +521,6 @@ export default function NewsScreen() {
 
     const { styles: cardStyles, isDesktop } = useCardStyles();
 
-    // ── LẮNG NGHE REAL-TIME (Hủy hoàn toàn hàm fetchNews, Firebase tự push data) ──
     useEffect(() => {
         setLoading(true);
         const q = query(collection(db, 'news'), orderBy('createdAt', 'desc'));
@@ -558,7 +531,6 @@ export default function NewsScreen() {
             console.error("Lỗi đồng bộ tin tức:", error);
             setLoading(false);
         });
-
         return () => unsub();
     }, []);
 
@@ -570,7 +542,11 @@ export default function NewsScreen() {
     const handleSave = async ({ title, blocks, category, notify, imageUri, imageModified, tags = [], hidden = false }) => {
         if (editItem) {
             let imageUrl = editItem.imageUrl || null;
-            if (imageModified) imageUrl = await uploadToStorage(imageUri, `news/${editItem.id}/cover.jpg`);
+            if (imageModified) {
+                imageUrl = imageUri
+                    ? await uploadToStorage(imageUri, `news/${editItem.id}/cover.jpg`)
+                    : null;
+            }
             const uploadedBlocks = await uploadBlocks(blocks, editItem.id);
             await updateDoc(doc(db, 'news', editItem.id), {
                 title, blocks: uploadedBlocks, category, imageUrl, tags, hidden,
@@ -578,13 +554,31 @@ export default function NewsScreen() {
             });
         } else {
             const docRef = await addDoc(collection(db, 'news'), {
-                title, blocks: [], category, imageUrl: null,
+                title,
+                blocks: [],
+                category,
+                imageUrl: null,
+                tags,
+                hidden,
                 createdAt: serverTimestamp(),
-                authorEmail: userDetail?.email, authorName: userDetail?.name,
+                authorEmail: userDetail?.email,
+                authorName: userDetail?.name,
             });
-            const imageUrl = imageUri ? await uploadToStorage(imageUri, `news/${docRef.id}/cover.jpg`) : null;
-            const uploadedBlocks = await uploadBlocks(blocks, docRef.id);
-            await updateDoc(docRef, { imageUrl, blocks: uploadedBlocks, tags, hidden });
+
+            try {
+                const [imageUrl, uploadedBlocks] = await Promise.all([
+                    imageUri
+                        ? uploadToStorage(imageUri, `news/${docRef.id}/cover.jpg`)
+                        : Promise.resolve(null),
+                    uploadBlocks(blocks, docRef.id),
+                ]);
+                await updateDoc(docRef, { imageUrl, blocks: uploadedBlocks, tags, hidden });
+            } catch (uploadError) {
+                console.error('Upload lỗi, rollback document:', uploadError);
+                await deleteDoc(docRef).catch(() => { });
+                throw uploadError;
+            }
+
             if (notify) {
                 const firstText = blocks.find(b => b.type === 'text')?.value || '';
                 const usersSnap = await getDocs(query(collection(db, 'users')));
@@ -641,7 +635,7 @@ export default function NewsScreen() {
                         <NewsCard item={featured} isAdmin={admin} featured
                             onPress={() => goToDetail(featured)}
                             onEdit={i => { setEditItem(i); setModalOpen(true); }}
-                            onDelete={handleDelete}
+                            onDelete={() => handleDelete(featured)}
                         />
                     )}
                     <View style={N.sectionHeader}>
@@ -651,7 +645,7 @@ export default function NewsScreen() {
                         <NewsCard key={item.id} item={item} isAdmin={admin}
                             onPress={() => goToDetail(item)}
                             onEdit={i => { setEditItem(i); setModalOpen(true); }}
-                            onDelete={handleDelete}
+                            onDelete={() => handleDelete(item)}
                         />
                     ))}
                     {filtered.length === 0 && (
@@ -668,7 +662,7 @@ export default function NewsScreen() {
     );
 }
 
-// ── Styles cho các khối cục bộ ──
+// ── Styles ──
 const FM = StyleSheet.create({
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
     modal: { backgroundColor: '#fff', borderRadius: THEME.radius.lg, width: '100%', maxHeight: '92%', overflow: 'hidden' },

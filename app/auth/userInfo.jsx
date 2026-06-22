@@ -408,7 +408,7 @@ export default function UserInfoView() {
             }
 
             // ── Xử lý mã giới thiệu ─────────────────────────────────────────
-            if (role !== 'ctv') {
+            if (role !== 'ctv' && role !== 'partner') {
                 payload.referralCode = generateReferralCode();
             }
             if (role !== 'daily' && referralCodeInput.trim()) {

@@ -48,3 +48,4 @@ price.json
 .claude/
 prompt.txt
 .claude/settings.json
+cors.json

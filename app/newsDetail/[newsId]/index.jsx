@@ -30,19 +30,37 @@ function formatDate(ts) {
 // Renders an array of content blocks [{type:'text'|'image', value:string}]
 function BlockContent({ blocks }) {
     const { isDesktop } = useLayout();
-    return blocks.map((block, i) => {
-        if (block.type === 'image' && block.value) {
-            return (
-                <View key={i} style={S.inlineImgWrap}>
-                    <Image source={{ uri: block.value }} style={[S.inlineImage, { height: isDesktop ? 360 : 220 }]} resizeMode="contain" />
-                </View>
-            );
-        }
-        if (block.type === 'text' && block.value) {
-            return <Text key={i} style={[S.contentBlock, { fontSize: isDesktop ? 16 : 14, lineHeight: isDesktop ? 28 : 24 }]}>{block.value}</Text>;
-        }
-        return null;
-    });
+    return (
+        <>
+            {blocks.map((block, i) => {
+                if (block.type === 'image' && block.value) {
+                    return (
+                        <View key={i} style={S.inlineImgWrap}>
+                            <Image
+                                source={{ uri: block.value }}
+                                style={[S.inlineImage, { height: isDesktop ? 360 : 220 }]}
+                                resizeMode="contain"
+                            />
+                        </View>
+                    );
+                }
+                if (block.type === 'text' && block.value) {
+                    return (
+                        <Text
+                            key={i}
+                            style={[S.contentBlock, {
+                                fontSize: isDesktop ? 16 : 14,
+                                lineHeight: isDesktop ? 28 : 24
+                            }]}
+                        >
+                            {block.value}
+                        </Text>
+                    );
+                }
+                return null;
+            })}
+        </>
+    );
 }
 
 export default function NewsDetailScreen() {
@@ -53,6 +71,8 @@ export default function NewsDetailScreen() {
 
     const [news, setNews] = useState(null);
     const [loading, setLoading] = useState(true);
+
+
 
     useEffect(() => {
         if (!newsId) { setLoading(false); return; }
@@ -72,7 +92,7 @@ export default function NewsDetailScreen() {
         <View style={[S.root, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center', gap: 12 }]}>
             <Ionicons name="newspaper-outline" size={48} color="#CBD5E1" />
             <Text style={{ fontSize: 16, color: '#94A3B8' }}>Không tìm thấy tin tức</Text>
-            <TouchableOpacity onPress={() => router.back()} style={S.backBtnSmall}>
+            <TouchableOpacity onPress={() => router.replace('(tabs)/news')} style={S.backBtnSmall}>
                 <Text style={{ color: '#2563EB', fontWeight: '600' }}>Quay lại</Text>
             </TouchableOpacity>
         </View>
@@ -80,12 +100,15 @@ export default function NewsDetailScreen() {
 
     const catCfg = CAT_COLORS[news.category] || { c: '#2563EB', bg: '#EFF6FF' };
     const hasBlocks = news.blocks?.length > 0;
+    const fallbackText = news.content
+        || news.blocks?.find(b => b.type === 'text')?.value
+        || '';
 
     return (
         <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
             {/* Header */}
             <View style={S.header}>
-                <TouchableOpacity style={S.backBtn} onPress={() => router.back()}>
+                <TouchableOpacity style={S.backBtn} onPress={() => router.replace('(tabs)/news')}>
                     <Ionicons name="arrow-back" size={20} color="#0F172A" />
                 </TouchableOpacity>
                 <Text style={S.headerTitle} numberOfLines={1}>{news.title}</Text>
@@ -140,15 +163,25 @@ export default function NewsDetailScreen() {
                     <BlockContent blocks={news.blocks} />
                 ) : (
                     <>
-                        <Text style={[S.contentBlock, { fontSize: isDesktop ? 16 : 14, lineHeight: isDesktop ? 28 : 24 }]}>{news.content}</Text>
+                        {!!fallbackText && (
+                            <Text style={[S.contentBlock, {
+                                fontSize: isDesktop ? 16 : 14,
+                                lineHeight: isDesktop ? 28 : 24
+                            }]}>
+                                {fallbackText}
+                            </Text>
+                        )}
                         {(news.images || []).map((uri, i) => (
                             <View key={i} style={S.inlineImgWrap}>
-                                <Image source={{ uri }} style={[S.inlineImage, { height: isDesktop ? 360 : 220 }]} resizeMode="contain" />
+                                <Image
+                                    source={{ uri }}
+                                    style={[S.inlineImage, { height: isDesktop ? 360 : 220 }]}
+                                    resizeMode="contain"
+                                />
                             </View>
                         ))}
                     </>
                 )}
-
                 <View style={{ height: 60 }} />
             </ScrollView>
         </View>
