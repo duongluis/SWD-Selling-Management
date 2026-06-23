@@ -10,7 +10,7 @@ import {
 import { useCallback, useContext, useEffect, useState } from 'react';
 import { getRole } from '../Utils/roleHelper';
 
-// ── Hàm tính rootAdvisor (dùng cho các user chưa có trường này) ──
+// ── Hàm tính rootAdvisor ──────────────────────────────────────
 const getRootAdvisorForUser = async (userEmail) => {
     let root = userEmail;
     let currentEmail = userEmail;
@@ -27,9 +27,10 @@ const getRootAdvisorForUser = async (userEmail) => {
     return root;
 };
 
-// ── Lấy danh sách email team (cho L2/L3) khi chưa có rootAdvisor ──
+// ── Lấy danh sách email team ──────────────────────────────────
 const getTeamEmails = async (myEmail, role) => {
     if (role === 'ctv') return [myEmail];
+    if (role === 'giamdoc') return []; // giamdoc không có team riêng, xử lý riêng
     if (role === 'phantan') {
         const subSnap = await getDocs(query(collection(db, 'users'), where('advisor', '==', myEmail)));
         const subEmails = subSnap.docs.map(d => d.data().email).filter(Boolean);
@@ -48,22 +49,30 @@ const getTeamEmails = async (myEmail, role) => {
     return [];
 };
 
+// ── fetchStatic* — fallback khi teamEmails > 30 ───────────────
+// Dùng batch getDocs thay vì onSnapshot vì không thể onSnapshot nhiều 'in' queries
+const fetchStaticByEmails = async (collectionName, emails) => {
+    const all = [];
+    for (let i = 0; i < emails.length; i += 10) {
+        const chunk = emails.slice(i, i + 10); // Firestore 'in' tối đa 10
+        const snap = await getDocs(
+            query(collection(db, collectionName), where('createdBy', 'in', chunk))
+        );
+        snap.docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
+    }
+    return all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+};
+
+// ── fetch functions cho các loại không dùng realtime ─────────
 async function fetchServices(myEmail, role) {
-    if (role === 'admin') {
+    if (role === 'admin' || role === 'giamdoc') {
         const snap = await getDocs(collection(db, 'service'));
         return snap.docs.map(d => ({ ...d.data(), docId: d.id }))
             .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     }
     const teamEmails = await getTeamEmails(myEmail, role);
     if (teamEmails.length === 0) return [];
-    const allServices = [];
-    for (let i = 0; i < teamEmails.length; i += 30) {
-        const chunk = teamEmails.slice(i, i + 30);
-        const q = query(collection(db, 'service'), where('createdBy', 'in', chunk));
-        const snap = await getDocs(q);
-        snap.docs.forEach(d => allServices.push({ ...d.data(), docId: d.id }));
-    }
-    return allServices.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return fetchStaticByEmails('service', teamEmails);
 }
 
 async function fetchUsers(myEmail, role) {
@@ -76,20 +85,14 @@ async function fetchUsers(myEmail, role) {
 }
 
 async function fetchConsults(myEmail, role) {
-    if (role === 'admin') {
+    if (role === 'admin' || role === 'giamdoc') {
         const snap = await getDocs(query(collection(db, 'consult')));
         return snap.docs.map(d => ({ ...d.data(), docId: d.id }))
             .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     }
     const teamEmails = await getTeamEmails(myEmail, role);
     if (teamEmails.length === 0) return [];
-    const all = [];
-    for (let i = 0; i < teamEmails.length; i += 30) {
-        const chunk = teamEmails.slice(i, i + 30);
-        const snap = await getDocs(query(collection(db, 'consult'), where('createdBy', 'in', chunk)));
-        snap.docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
-    }
-    return all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return fetchStaticByEmails('consult', teamEmails);
 }
 
 function computeStats(type, data) {
@@ -123,7 +126,7 @@ function computeStats(type, data) {
     }
 }
 
-// ── Hook chính ──
+// ── Hook chính ────────────────────────────────────────────────
 export function useScreenData(type) {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
@@ -136,7 +139,46 @@ export function useScreenData(type) {
     const [stats, setStats] = useState({});
     const [error, setError] = useState(null);
 
-    // ── ORDERS realtime ──
+    // ── Helpers nội bộ để setData từ fetchStatic* ────────────
+    const applyStaticData = useCallback((list) => {
+        const sorted = [...list].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        setData(sorted);
+        setStats(computeStats(type, sorted));
+        setLoading(false);
+        setRefreshing(false);
+    }, [type]);
+
+    const fetchStaticOrders = useCallback(async (teamEmails) => {
+        try {
+            const list = await fetchStaticByEmails('orders', teamEmails);
+            applyStaticData(list);
+        } catch (e) {
+            setError(e.message);
+            setLoading(false);
+        }
+    }, [applyStaticData]);
+
+    const fetchStaticCustomers = useCallback(async (teamEmails) => {
+        try {
+            const list = await fetchStaticByEmails('customers', teamEmails);
+            applyStaticData(list);
+        } catch (e) {
+            setError(e.message);
+            setLoading(false);
+        }
+    }, [applyStaticData]);
+
+    const fetchStaticServices = useCallback(async (teamEmails) => {
+        try {
+            const list = await fetchStaticByEmails('service', teamEmails);
+            applyStaticData(list);
+        } catch (e) {
+            setError(e.message);
+            setLoading(false);
+        }
+    }, [applyStaticData]);
+
+    // ── Realtime listener ─────────────────────────────────────
     useEffect(() => {
         if (!myEmail) return;
 
@@ -147,18 +189,20 @@ export function useScreenData(type) {
             try {
                 let q = null;
 
-                // 1. Phân loại cấu trúc truy vấn Real-time theo "type"
                 if (type === 'orders') {
-                    if (role === 'admin') {
+                    if (role === 'admin' || role === 'giamdoc') {
+                        // giamdoc xem tất cả, chỉ đọc — giống admin về data
                         q = collection(db, 'orders');
                     } else if (rootAdvisor && rootAdvisor !== myEmail) {
+                        // L2/L3: lấy theo rootAdvisor của mình
                         q = query(collection(db, 'orders'), where('rootAdvisor', '==', rootAdvisor));
                     } else {
+                        // L1 (daily/phantan): lấy toàn bộ team
                         const teamEmails = await getTeamEmails(myEmail, role);
                         if (teamEmails.length === 0) { setData([]); setLoading(false); return; }
-                        if (teamEmails.length > 30) {
-                            // Giữ nguyên logic fallback tải tĩnh nếu danh sách email quá lớn (>30)
-                            fetchStaticOrders(teamEmails);
+                        if (teamEmails.length > 10) {
+                            // Vượt giới hạn 'in' → dùng static fetch (không realtime)
+                            await fetchStaticOrders(teamEmails);
                             return;
                         }
                         q = query(collection(db, 'orders'), where('createdBy', 'in', teamEmails));
@@ -166,15 +210,15 @@ export function useScreenData(type) {
                 }
 
                 else if (type === 'customers') {
-                    if (role === 'admin') {
+                    if (role === 'admin' || role === 'giamdoc') {
                         q = collection(db, 'customers');
                     } else if (rootAdvisor && rootAdvisor !== myEmail) {
                         q = query(collection(db, 'customers'), where('rootAdvisor', '==', rootAdvisor));
                     } else {
                         const teamEmails = await getTeamEmails(myEmail, role);
                         if (teamEmails.length === 0) { setData([]); setLoading(false); return; }
-                        if (teamEmails.length > 30) {
-                            fetchStaticCustomers(teamEmails);
+                        if (teamEmails.length > 10) {
+                            await fetchStaticCustomers(teamEmails);
                             return;
                         }
                         q = query(collection(db, 'customers'), where('createdBy', 'in', teamEmails));
@@ -182,13 +226,13 @@ export function useScreenData(type) {
                 }
 
                 else if (type === 'services') {
-                    if (role === 'admin') {
+                    if (role === 'admin' || role === 'giamdoc') {
                         q = collection(db, 'service');
                     } else {
                         const teamEmails = await getTeamEmails(myEmail, role);
                         if (teamEmails.length === 0) { setData([]); setLoading(false); return; }
-                        if (teamEmails.length > 30) {
-                            fetchStaticServices(teamEmails);
+                        if (teamEmails.length > 10) {
+                            await fetchStaticServices(teamEmails);
                             return;
                         }
                         q = query(collection(db, 'service'), where('createdBy', 'in', teamEmails));
@@ -201,28 +245,20 @@ export function useScreenData(type) {
                 }
 
                 else if (type === 'consults') {
-                    if (role === 'admin') {
+                    if (role === 'admin' || role === 'giamdoc') {
                         q = collection(db, 'consult');
                     } else {
-                        // Lấy team emails (bao gồm cả người mình là advisor)
                         const teamEmails = await getTeamEmails(myEmail, role);
                         if (teamEmails.length === 0) { setData([]); setLoading(false); return; }
                         q = query(collection(db, 'consult'), where('createdBy', 'in', teamEmails));
                     }
                 }
 
-                // 2. Thiết lập lắng nghe Real-time nếu truy vấn hợp lệ
                 if (q) {
                     unsub = onSnapshot(q, (snap) => {
                         let list = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
-
-                        if (type === 'users') {
-                            list = list.filter(u => u.email !== myEmail);
-                        }
-
-                        // Sắp xếp dữ liệu mới nhất lên đầu
+                        if (type === 'users') list = list.filter(u => u.email !== myEmail);
                         list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-
                         setData(list);
                         setStats(computeStats(type, list));
                         setLoading(false);
@@ -238,39 +274,28 @@ export function useScreenData(type) {
         };
 
         init();
-
-        // Tự động hủy lắng nghe khi unmount để tránh rò rỉ bộ nhớ
         return () => { if (unsub) unsub(); };
     }, [type, myEmail, role, rootAdvisor]);
 
-    // ── fetchCustomers (nội bộ, có quyền truy cập rootAdvisor) ──
+    // ── fetchCustomers nội bộ ─────────────────────────────────
     const fetchCustomers = useCallback(async () => {
-        if (role === 'admin') {
+        if (role === 'admin' || role === 'giamdoc') {
             const snap = await getDocs(collection(db, 'customers'));
             return snap.docs.map(d => ({ ...d.data(), docId: d.id }))
                 .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         }
-        // Nếu có rootAdvisor khác email hiện tại (L1 hoặc người có cấp trên)
         if (rootAdvisor && rootAdvisor !== myEmail) {
             const q = query(collection(db, 'customers'), where('rootAdvisor', '==', rootAdvisor));
             const snap = await getDocs(q);
             return snap.docs.map(d => ({ ...d.data(), docId: d.id }))
                 .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         }
-        // Fallback: dùng teamEmails (L2, L3 hoặc user chưa có rootAdvisor)
         const teamEmails = await getTeamEmails(myEmail, role);
         if (teamEmails.length === 0) return [];
-        const all = [];
-        for (let i = 0; i < teamEmails.length; i += 30) {
-            const chunk = teamEmails.slice(i, i + 30);
-            const q = query(collection(db, 'customers'), where('createdBy', 'in', chunk));
-            const snap = await getDocs(q);
-            snap.docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
-        }
-        return all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        return fetchStaticByEmails('customers', teamEmails);
     }, [myEmail, role, rootAdvisor]);
 
-    // ── Hàm load dữ liệu cho các loại không phải orders ──
+    // ── load cho các type không dùng realtime ─────────────────
     const load = useCallback(async (isRefresh = false) => {
         if (type === 'orders') return;
         if (isRefresh) setRefreshing(true);
@@ -278,17 +303,11 @@ export function useScreenData(type) {
         setError(null);
         try {
             let result;
-            if (type === 'customers') {
-                result = await fetchCustomers();
-            } else if (type === 'services') {
-                result = await fetchServices(myEmail, role);
-            } else if (type === 'users') {
-                result = await fetchUsers(myEmail, role);
-            } else if (type === 'consults') {
-                result = await fetchConsults(myEmail, role);
-            } else {
-                return;
-            }
+            if (type === 'customers') result = await fetchCustomers();
+            else if (type === 'services') result = await fetchServices(myEmail, role);
+            else if (type === 'users') result = await fetchUsers(myEmail, role);
+            else if (type === 'consults') result = await fetchConsults(myEmail, role);
+            else return;
             setData(result);
             setStats(computeStats(type, result));
         } catch (e) {

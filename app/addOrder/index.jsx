@@ -65,7 +65,9 @@ const ORDER_TYPES = {
   },
 };
 
-const ROLE_ORDER_TYPE = { daily: 'buon', phantan: 'le', ctv: 'le', admin: null, other: null };
+// const ROLE_ORDER_TYPE = { daily: 'buon', phantan: 'le', ctv: 'le', admin: null, other: null };
+const ROLE_ORDER_TYPE = { daily: null, phantan: null, ctv: null, admin: null, other: null };
+
 
 const PAYMENT_OPTIONS = [
   { key: 'customer', label: 'Khách hàng thanh toán', icon: 'person-outline', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
@@ -574,33 +576,68 @@ export default function AddOrder() {
       try {
         const { collection, getDocs, query, where } = await import('firebase/firestore');
 
-        let q;
+        let allCustomers = [];
+
         if (role === 'admin') {
           // Admin: lấy tất cả
-          q = collection(db, 'customers');
+          const snap = await getDocs(collection(db, 'customers'));
+          allCustomers = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+
         } else {
-          // Tất cả role khác: chỉ lấy khách hàng do mình tạo
-          q = query(collection(db, 'customers'), where('createdBy', '==', userDetail.email));
+          // Bước 1: luôn lấy khách hàng của chính mình
+          const mySnap = await getDocs(
+            query(collection(db, 'customers'), where('createdBy', '==', userDetail.email))
+          );
+          allCustomers = mySnap.docs.map(d => ({ docId: d.id, ...d.data() }));
+
+          // Bước 2: kiểm tra xem mình có phải advisor của ai không
+          const subordinateSnap = await getDocs(
+            query(collection(db, 'users'), where('advisor', '==', userDetail.email))
+          );
+
+          if (!subordinateSnap.empty) {
+            // Có cấp dưới → lấy email của tất cả cấp dưới
+            const subordinateEmails = subordinateSnap.docs.map(d => d.data().email).filter(Boolean);
+
+            // Firestore 'in' giới hạn 10 phần tử mỗi query → chia batch
+            const BATCH_SIZE = 10;
+            for (let i = 0; i < subordinateEmails.length; i += BATCH_SIZE) {
+              const batch = subordinateEmails.slice(i, i + BATCH_SIZE);
+              const subSnap = await getDocs(
+                query(collection(db, 'customers'), where('createdBy', 'in', batch))
+              );
+              const subCustomers = subSnap.docs.map(d => ({ docId: d.id, ...d.data() }));
+              allCustomers = [...allCustomers, ...subCustomers];
+            }
+          }
         }
 
-        const snap = await getDocs(q);
-        setCustomerList(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
+        // Dedup theo docId phòng trường hợp trùng
+        const seen = new Set();
+        const deduped = allCustomers.filter(c => {
+          if (seen.has(c.docId)) return false;
+          seen.add(c.docId);
+          return true;
+        });
+
+        setCustomerList(deduped);
       } catch (e) {
         console.error('Fetch customers error:', e);
       } finally {
         setCustomerLoading(false);
       }
     };
+
     fetchCustomers();
   }, [userDetail?.email, role]);
 
   useEffect(() => {
     const resolve = async () => {
-      if (effectivePaymentMethod === 'customer') {
-        setResolvedPriceField('price'); // niêm yết
-        return;
-      }
-      // Doanh nghiệp thanh toán → xét advisor
+      // if (effectivePaymentMethod === 'customer') {
+      //   setResolvedPriceField('price'); // niêm yếtgetRolePriceFieldré
+      //   return;
+      // }
+
       if (!userDetail?.advisor) {
         // Không có advisor → dùng role của chính mình
         setResolvedPriceField(getRolePriceField(role));
@@ -781,7 +818,8 @@ export default function AddOrder() {
             <Text style={W.cancelBtnText}>Huỷ</Text>
           </TouchableOpacity>
         </View>
-
+        {console.log("price theo vai tro:", resolvedPriceField)}
+        {console.log("role nguoi dung:", role)}
         <View style={W.grid}>
           <View style={W.col}>
             <View style={W.card}>
@@ -884,7 +922,7 @@ export default function AddOrder() {
                   ws
                   orderType={orderType}
                   catalog={catalog}
-                  priceField={priceField}
+                  priceField={getRolePriceField('admin')}
                   priceLabel={priceLabel}
                   newProduct={newProduct}
                   setNewProduct={handleSetNewProduct}

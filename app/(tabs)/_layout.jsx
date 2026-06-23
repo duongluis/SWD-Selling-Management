@@ -4,7 +4,7 @@ import NotificationPanel from '@/components/Main/notificationPanel';
 import { showAlert } from '@/components/Main/showAlert';
 import { showInfo } from '@/components/Main/showInfo';
 import { useLayout } from '@/components/Main/TabScreenLayout';
-import { getRole, getRoleLabel, isAdmin } from '@/components/Utils/roleHelper';
+import { getRole, getRoleLabel } from '@/components/Utils/roleHelper';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,7 +36,7 @@ const NAV_SECTIONS = [
     items: [
       { key: 'home', link: '(tabs)/home', label: 'Trang chủ', icon: 'home-outline', activeIcon: 'home', visible: () => true },
       { key: 'customer', link: '(tabs)/customer', label: 'Khách hàng', icon: 'people-outline', activeIcon: 'people', visible: (r) => r !== 'ctv' },
-      { key: 'consult', link: '(tabs)/customerctv', label: 'Giới thiệu khách', icon: 'person-add-outline', activeIcon: 'person-add', },
+      { key: 'consult', link: '(tabs)/customerctv', label: 'Giới thiệu khách', icon: 'person-add-outline', activeIcon: 'person-add', visible: () => true },
       { key: 'order', link: '(tabs)/order', label: 'Đơn hàng', icon: 'receipt-outline', activeIcon: 'receipt', visible: () => true },
       { key: 'service', link: '(tabs)/service', label: 'Dịch vụ', icon: 'build-outline', activeIcon: 'build', visible: (r) => r !== 'ctv' },
       { key: 'team', link: '(tabs)/team', label: 'Đội ngũ', icon: 'people-outline', activeIcon: 'people', },
@@ -45,9 +45,9 @@ const NAV_SECTIONS = [
   {
     label: 'TIỆN ÍCH',
     items: [
-      { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'Bảng xếp hạng', icon: 'trophy-outline', activeIcon: 'trophy', visible: () => true },
+      { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'Bảng xếp hạng', icon: 'trophy-outline', activeIcon: 'trophy' },
       { key: 'commission', link: '(tabs)/commission', label: 'Hoa hồng', icon: 'cash-outline', activeIcon: 'cash' },
-      { key: 'revenue', link: '(tabs)/analytics', label: 'Báo cáo doanh thu', icon: 'bar-chart-outline', activeIcon: 'bar-chart', visible: () => true },
+      { key: 'revenue', link: '(tabs)/analytics', label: 'Báo cáo doanh thu', icon: 'bar-chart-outline', activeIcon: 'bar-chart' },
       { key: 'region', link: '(tabs)/regionAnalytics', label: 'Báo cáo khu vực', icon: 'map-outline', activeIcon: 'map', visible: (r) => r === 'admin' },
       { key: 'news', link: '(tabs)/news', label: 'Tin tức', icon: 'newspaper-outline', activeIcon: 'newspaper', visible: () => true },
       { key: 'information', link: '(tabs)/information', label: 'Bảng giá', icon: 'pricetag-outline', activeIcon: 'pricetag', visible: () => true },
@@ -107,12 +107,17 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
 
       return false;                          // không liên quan
     }
-    if (item.key === 'consult') {
-      if (userDetail?.advisor) return true; // có advisor
-      if (isAdvisor) return true;            // là advisor của người khác
-      if (isAdmin) return true;
-      return false;
+    if (item.key === 'revenue' || item.key === 'leaderboard') {
+      if (userDetail?.advisor) return false;
+      return true;
     }
+
+    // if (item.key === 'consult') {
+    //   if (userDetail?.advisor) return true; // có advisor
+    //   if (isAdvisor) return true;            // là advisor của người khác
+    //   if (isAdmin) return true;
+    //   return false;
+    // }
     return role === 'admin';
   };
 

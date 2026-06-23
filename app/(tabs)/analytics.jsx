@@ -188,6 +188,7 @@ export default function AnalyticsScreen() {
     }, [active, period, now]);
 
     const topProducts = useMemo(() => {
+
         const map = new Map();
         active.forEach(o => (o.items || []).forEach(p => {
             const k = p.name;

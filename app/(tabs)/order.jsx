@@ -88,7 +88,7 @@ const getRootAdvisorRole = async (userEmail) => {
 };
 
 // ── Bảng tiêu đề ─────────────────────────────────────────────
-function TableHeader({ showCost, showCreator, tableStyles }) {
+function TableHeader({ role, showCost, showCreator, tableStyles }) {
   return (
     <View style={tableStyles.head}>
       <View style={COL.lead} />
@@ -96,7 +96,7 @@ function TableHeader({ showCost, showCreator, tableStyles }) {
       <View style={COL.date}><Text style={tableStyles.thCenter}>Ngày</Text></View>
       {showCreator && <View style={COL.creator}><Text style={tableStyles.thCenter}>Người tạo</Text></View>}
       <View style={COL.sub}><Text style={tableStyles.thCenter}>Hình thức thanh toán</Text></View>
-      {showCost && <View style={COL.cost}><Text style={tableStyles.thCenter}>Tiền nhập</Text></View>}
+      {showCost && <View style={COL.cost}><Text style={tableStyles.thCenter}>{isAdmin(role) ? 'Doanh thu' : 'Tiền nhập'}</Text></View>}
       <View style={COL.amount}><Text style={tableStyles.thCenter}>Tổng giá trị</Text></View>
       <View style={COL.status}><Text style={[tableStyles.th, tableStyles.thCenter]}>Trạng thái</Text></View>
       <View style={COL.trail} />
@@ -244,7 +244,7 @@ export default function OrderScreen() {
   const [productPrices, setProductPrices] = useState({});
 
   const [creatorNames, setCreatorNames] = useState({});
-  const showCreator = isAdmin(role);
+  const showCreator = isAdmin(role) || role === 'daily';
 
   const [monthFilter, setMonthFilter] = useState('all');
   const [yearFilter, setYearFilter] = useState(String(new Date().getFullYear()));
@@ -336,7 +336,7 @@ export default function OrderScreen() {
           const snap = await getDoc(doc(db, 'users', email));
           if (snap.exists()) {
             const u = snap.data();
-            names[email] = u.nickname || u.name || email;
+            names[email] = isAdmin(role) ? u.nickname || u.name || email : u.name || email;
           }
         } catch (_) { }
       }));
@@ -528,7 +528,7 @@ export default function OrderScreen() {
         <View style={cardStyles.card}>
           {isDesktop && (
             <>
-              <TableHeader showCost={showCostField} showCreator={showCreator} tableStyles={tableStyles} />
+              <TableHeader role={role} showCost={showCostField} showCreator={showCreator} tableStyles={tableStyles} />
               <TotalRow
                 totalCost={totalCostFiltered}
                 totalRevenue={totalRevenueFiltered}
