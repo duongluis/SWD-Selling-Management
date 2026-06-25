@@ -18,6 +18,7 @@ export default function ScreenHeader({
     actionColor = '#2563EB',
     rightSlot,
     leftSlot,      // ← nút back hoặc bất kỳ element nào bên trái title
+    canAccess,
 }) {
     return (
         <View style={S.wrap}>
@@ -30,7 +31,7 @@ export default function ScreenHeader({
                 </View>
                 <View style={S.rightRow}>
                     {rightSlot}
-                    {onAction && (
+                    {onAction && canAccess && (
                         <TouchableOpacity
                             style={[S.actionBtn, { backgroundColor: actionColor }]}
                             onPress={onAction}

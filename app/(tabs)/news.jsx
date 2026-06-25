@@ -295,7 +295,7 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
                     </View>
 
                     <View style={WB.body}>
-                        <ScrollView style={WB.mainScroll} showsVerticalScrollIndicator={false} contentContainerStyle={WB.mainContent}>
+                        <ScrollView style={WB.mainScroll} showsVerticalScrollIndicator={true} contentContainerStyle={WB.mainContent}>
                             <TextInput
                                 style={WB.titleInput}
                                 value={title} onChangeText={setTitle}
@@ -315,7 +315,7 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
                             />
                         </ScrollView>
 
-                        <ScrollView style={WB.sidebar} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+                        <ScrollView style={WB.sidebar} showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 40 }}>
                             <View style={WB.sideCard}>
                                 <Text style={WB.sideCardTitle}>Hiển thị</Text>
                                 {[{ val: false, label: 'Hiển thị' }, { val: true, label: 'Ẩn' }].map(opt => (
@@ -363,8 +363,8 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
                             </View>
                         </ScrollView>
                     </View>
-                </View>
-            </Modal>
+                </View >
+            </Modal >
         );
     }
 
@@ -380,7 +380,7 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                    <ScrollView showsVerticalScrollIndicator={true} style={{ flex: 1 }}>
                         <View style={FM.body}>
                             <Text style={FM.label}>Tiêu đề *</Text>
                             <TextInput style={FM.input} value={title} onChangeText={setTitle} placeholder="Tiêu đề tin tức..." />
@@ -432,7 +432,7 @@ function NewsFormModal({ visible, onClose, onSave, editItem }) {
                     </View>
                 </View>
             </View>
-        </Modal>
+        </Modal >
     );
 }
 
@@ -630,7 +630,7 @@ export default function NewsScreen() {
                     <ActivityIndicator size="large" color={THEME.colors.primary} />
                 </View>
             ) : (
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={N.scroll}>
+                <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={N.scroll} >
                     {featured && (
                         <NewsCard item={featured} isAdmin={admin} featured
                             onPress={() => goToDetail(featured)}
@@ -655,10 +655,11 @@ export default function NewsScreen() {
                         </View>
                     )}
                 </ScrollView>
-            )}
+            )
+            }
 
             <NewsFormModal visible={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} editItem={editItem} />
-        </View>
+        </View >
     );
 }
 

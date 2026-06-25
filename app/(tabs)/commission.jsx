@@ -185,10 +185,10 @@ function CommCardMobile({ r, isAdmin, onApprove }) {
                     <Text style={MR.infoLabel}>Khách hàng</Text>
                     <Text style={MR.infoValue} numberOfLines={1}>{r.customer || '—'}</Text>
                 </View>
-                <View style={[MR.infoCol, { alignItems: 'center' }]}>
+                {isAdmin && (<View style={[MR.infoCol, { alignItems: 'center' }]}>
                     <Text style={MR.infoLabel}>Giá trị đơn</Text>
                     <Text style={MR.infoValue}>{fmtShort(r.totalValue)}</Text>
-                </View>
+                </View>)}
                 <View style={[MR.infoCol, { alignItems: 'flex-end' }]}>
                     <Text style={MR.infoLabel}>{isBonus ? 'Thưởng' : 'Hoa hồng'}</Text>
                     <Text style={[MR.infoValue, { color: isBonus ? '#7C3AED' : '#2563EB', fontWeight: '800' }]}>
@@ -660,7 +660,7 @@ export default function CommissionScreen() {
             </View>
 
             <ScrollView
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator={true}
                 contentContainerStyle={S.scroll}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}
             >

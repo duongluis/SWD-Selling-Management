@@ -136,7 +136,7 @@ export default function AddConsultScreen() {
 
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 <ScrollView
-                    showsVerticalScrollIndicator={false}
+                    showsVerticalScrollIndicator={true}
                     keyboardShouldPersistTaps="handled"
                     contentContainerStyle={styles.scroll}
                 >
@@ -228,7 +228,7 @@ export default function AddConsultScreen() {
                     <Text style={styles.saveBtnText}>{submitting ? 'Đang lưu...' : 'Lưu khách hàng'}</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </View >
     );
 }
 

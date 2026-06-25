@@ -295,18 +295,21 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                             <Text style={[S.aBtnText, { color: '#059669' }]}>{approving ? 'Đang xử lý...' : 'Phê duyệt'}</Text>
                         </TouchableOpacity>
                     )}
-                    <TouchableOpacity
-                        style={[S.aBtn, locked ? { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' } : { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
-                        onPress={handleLock}>
-                        <Ionicons name={locked ? 'lock-open-outline' : 'lock-closed-outline'} size={13} color={locked ? '#059669' : '#DC2626'} />
-                        <Text style={[S.aBtnText, { color: locked ? '#059669' : '#DC2626' }]}>{locked ? 'Mở khóa' : 'Khóa TK'}</Text>
-                    </TouchableOpacity>
                     {isAdminUser && (
-                        <TouchableOpacity style={S.aBtn}
-                            onPress={() => router.push({ pathname: '/editUser/[userEmail]', params: { userEmail: local.email, userParam: JSON.stringify(local) } })}>
-                            <Ionicons name="create-outline" size={13} color="#2563EB" />
-                            <Text style={S.aBtnText}>Chỉnh sửa</Text>
-                        </TouchableOpacity>
+                        <>
+                            <TouchableOpacity
+                                style={[S.aBtn, locked ? { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' } : { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
+                                onPress={handleLock}>
+                                <Ionicons name={locked ? 'lock-open-outline' : 'lock-closed-outline'} size={13} color={locked ? '#059669' : '#DC2626'} />
+                                <Text style={[S.aBtnText, { color: locked ? '#059669' : '#DC2626' }]}>{locked ? 'Mở khóa' : 'Khóa TK'}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={S.aBtn}
+                                onPress={() => router.push({ pathname: '/editUser/[userEmail]', params: { userEmail: local.email, userParam: JSON.stringify(local) } })}>
+                                <Ionicons name="create-outline" size={13} color="#2563EB" />
+                                <Text style={S.aBtnText}>Chỉnh sửa</Text>
+                            </TouchableOpacity>
+                        </>
                     )}
                 </View>
             </View>
@@ -339,7 +342,7 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                     onSaved={next => { setLocal(next); onUpdated?.(next); }}
                 />
             ) : (
-                <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true} >
                     <Section title="Thông tin tài khoản">
                         <InfoRow icon="mail-outline" label="Email" value={local.email} />
                         <InfoRow icon="call-outline" label="Điện thoại" value={fmtPhone(local.phone)} />
@@ -395,8 +398,9 @@ export default function UserDetail({ user, onClose, onUpdated }) {
 
                     <View style={{ height: 40 }} />
                 </ScrollView>
-            )}
-        </View>
+            )
+            }
+        </View >
     );
 }
 

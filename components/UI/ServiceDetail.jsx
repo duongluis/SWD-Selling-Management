@@ -227,7 +227,7 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                 </View>
             </View>
 
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
                 {/* Thông tin dịch vụ */}
                 <View style={S.section}>
                     <Text style={S.sectionTitle}>Thông tin dịch vụ</Text>
@@ -287,7 +287,7 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                     </Pressable>
                 </Pressable>
             </Modal>
-        </View>
+        </View >
     );
 }
 

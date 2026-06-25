@@ -93,7 +93,7 @@ const RC = StyleSheet.create({
 export default function RegionReportScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
-    const isAdmin = role === 'admin';
+    const isAdmin = role === 'admin' || role === 'giamdoc';
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -182,7 +182,7 @@ export default function RegionReportScreen() {
 
     return (
         <TabScreenLayout>
-            <ScrollView showsVerticalScrollIndicator={false}
+            <ScrollView showsVerticalScrollIndicator={true}
                 contentContainerStyle={G.scroll}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}>
 
@@ -324,7 +324,7 @@ export default function RegionReportScreen() {
 
                 <View style={{ height: 80 }} />
             </ScrollView>
-        </TabScreenLayout>
+        </TabScreenLayout >
     );
 }
 

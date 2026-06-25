@@ -6,7 +6,7 @@ import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import StatBar from '@/components/UI/StatBar';
 import { exportCSV, exportExcel, exportImagesZip, fetchExportData } from '@/components/Utils/exportData';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
-import { getRole } from '@/components/Utils/roleHelper';
+import { canAdd, getRole, isGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -161,12 +161,14 @@ function MobileGreeting({ userDetail, role, onExport, onNotif }) {
           <Text style={MB.greetingName}>{userDetail?.name}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {role === 'admin' && (
+          {(role === 'admin' || isGD(role)) && (
             <TouchableOpacity style={MB.topIconBtn} onPress={onExport}>
               <Ionicons name="download-outline" size={16} color="#fff" />
             </TouchableOpacity>
           )}
-          <NotificationPanel bellColor="#fff" bellSize={18} />
+          {role !== 'giamdoc' &&
+            (<NotificationPanel bellColor="#fff" bellSize={18} />
+            )}
         </View>
       </View>
     </View>
@@ -222,7 +224,7 @@ export default function HomeView() {
 
   // ── Web-only data ─────────────────────────────────────────
   const quickActions = [
-    ...(role !== 'ctv' ? [
+    ...(canAdd(role) ? [
       { name: 'Đơn hàng mới', icon: 'add-circle-outline', action: () => router.push('/addOrder'), color: '#3B82F6', bg: '#EFF6FF' },
       { name: 'Thêm khách', icon: 'person-add-outline', action: () => router.push('/addCustomer'), color: '#8B5CF6', bg: '#F5F3FF' },
     ] : []),
@@ -247,7 +249,7 @@ export default function HomeView() {
       />
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={MB.scroll}
       >
         {/* Stat cards — dọc */}
@@ -341,23 +343,27 @@ export default function HomeView() {
       </ScrollView>
 
       {/* FAB — nút thêm đơn hàng */}
-      {role !== 'ctv' && (
-        <TouchableOpacity
-          style={MB.fab}
-          onPress={() => router.push('/addOrder')}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={28} color="#fff" />
-        </TouchableOpacity>
-      )}
+      {
+        role !== 'ctv' && (
+          <TouchableOpacity
+            style={MB.fab}
+            onPress={() => router.push('/addOrder')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={28} color="#fff" />
+          </TouchableOpacity>
+        )
+      }
 
-      {role === 'admin' && (
-        <ExportModal visible={exportOpen} onClose={() => setExportOpen(false)} />
-      )}
-    </View>
+      {
+        (role === 'admin') && (
+          <ExportModal visible={exportOpen} onClose={() => setExportOpen(false)} />
+        )
+      }
+    </View >
   ) : (
     <TabScreenLayout>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={H.scroll}>
+      <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={H.scroll}>
         <View style={H.webBanner}>
           <View>
             <Text style={H.webTitle}>
@@ -366,14 +372,16 @@ export default function HomeView() {
             <Text style={H.webSub}>Tổng quan hoạt động kinh doanh của bạn hôm nay.</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <NotificationPanel bellColor="#0F172A" bellSize={22} />
-            {role === 'admin' && (
+            {role !== 'giamdoc' &&
+              (<NotificationPanel bellColor="#fff" bellSize={22} />
+              )}
+            {(role === 'admin') && (
               <TouchableOpacity style={H.webBtnSecondary} onPress={() => setExportOpen(true)}>
                 <Ionicons name="download-outline" size={15} color="#2563EB" />
                 <Text style={H.webBtnSecondaryText}>Xuất dữ liệu</Text>
               </TouchableOpacity>
             )}
-            {role !== 'ctv' && (
+            {canAdd(role) && (
               <TouchableOpacity style={H.webBtn} onPress={() => router.push('/addOrder')}>
                 <Ionicons name="add" size={16} color="#fff" />
                 <Text style={H.webBtnText}>Đơn hàng mới</Text>
@@ -445,10 +453,12 @@ export default function HomeView() {
         <View style={{ height: 32 }} />
       </ScrollView>
 
-      {role === 'admin' && (
-        <ExportModal visible={exportOpen} onClose={() => setExportOpen(false)} />
-      )}
-    </TabScreenLayout>
+      {
+        (role === 'admin') && (
+          <ExportModal visible={exportOpen} onClose={() => setExportOpen(false)} />
+        )
+      }
+    </TabScreenLayout >
   );
 }
 

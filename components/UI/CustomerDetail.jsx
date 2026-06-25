@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useContext, useEffect, useState } from 'react';
 import { Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { getRole } from '../Utils/roleHelper';
 
 
 const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444'];
@@ -31,6 +32,7 @@ function InfoSection({ title, rows }) {
 export default function CustomerDetail({ customer, onClose, onEdit }) {
     const router = useRouter();
     const { userDetail } = useContext(UserDetailContext);
+    const role = getRole(userDetail); // ← thêm getRole
     const [local, setLocal] = useState(null);
 
     useEffect(() => { if (customer) setLocal(customer); }, [customer]);
@@ -39,9 +41,13 @@ export default function CustomerDetail({ customer, onClose, onEdit }) {
     const color = hashColor(local.name);
     const isCompany = local.bizModel === 'company';
 
+    // Được sửa nếu: là admin HOẶC là người tạo khách hàng
+    const canEditCustomer = role === 'admin' ||
+        role === 'giamdoc' && false ||
+        (userDetail?.email && local.createdBy === userDetail.email);
+
     return (
         <View style={S.panel}>
-            {/* Header */}
             <View style={S.header}>
                 <View style={S.headerTop}>
                     <TouchableOpacity style={S.closeBtn} onPress={onClose}>
@@ -51,28 +57,33 @@ export default function CustomerDetail({ customer, onClose, onEdit }) {
                         <Text style={S.title} numberOfLines={1}>{local.name || local.companyName || '—'}</Text>
                         <Text style={S.subtitle}>{fmtPhone(local.phone)}</Text>
                     </View>
-                    {/* Avatar */}
                     <View style={[S.headerAvatar, { backgroundColor: color + '20' }]}>
                         <Text style={[S.headerAvatarText, { color }]}>{getInitials(local.name)}</Text>
                     </View>
                 </View>
-                {/* Actions */}
+
                 <View style={S.actions}>
-                    {onEdit && (
+                    {/* Nút Sửa: chỉ hiện nếu có onEdit và được quyền */}
+                    {onEdit && canEditCustomer && (
                         <TouchableOpacity style={S.aBtn} onPress={onEdit}>
                             <Ionicons name="create-outline" size={13} color="#2563EB" />
                             <Text style={S.aBtnText}>Sửa</Text>
                         </TouchableOpacity>
                     )}
-                    <TouchableOpacity style={[S.aBtn, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
-                        onPress={() => router.push({ pathname: '/addOrder', params: { customerParams: JSON.stringify(customer) } })}>
-                        <Ionicons name="add-circle-outline" size={13} color="#059669" />
-                        <Text style={[S.aBtnText, { color: '#059669' }]}>Tạo đơn</Text>
-                    </TouchableOpacity>
+                    {/* Nút Tạo đơn: ẩn với giamdoc */}
+                    {role !== 'giamdoc' && (
+                        <TouchableOpacity
+                            style={[S.aBtn, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
+                            onPress={() => router.push({ pathname: '/addOrder', params: { customerParams: JSON.stringify(customer) } })}
+                        >
+                            <Ionicons name="add-circle-outline" size={13} color="#059669" />
+                            <Text style={[S.aBtnText, { color: '#059669' }]}>Tạo đơn</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
 
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
                 <InfoSection
                     title="Thông tin liên hệ"
                     rows={[
@@ -113,7 +124,7 @@ export default function CustomerDetail({ customer, onClose, onEdit }) {
                 />
                 <View style={{ height: 32 }} />
             </ScrollView>
-        </View>
+        </View >
     );
 }
 

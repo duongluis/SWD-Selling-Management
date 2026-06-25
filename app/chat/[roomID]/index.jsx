@@ -208,7 +208,7 @@ function OrderMentionMenu({ orders, query, onSelect, onDismiss }) {
             <ScrollView
                 style={M.list}
                 keyboardShouldPersistTaps="always"
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator={true}
             >
                 {filtered.map((order) => (
                     <TouchableOpacity
@@ -233,7 +233,7 @@ function OrderMentionMenu({ orders, query, onSelect, onDismiss }) {
                     </TouchableOpacity>
                 ))}
             </ScrollView>
-        </View>
+        </View >
     );
 }
 
@@ -442,7 +442,7 @@ export default function ChatScreen() {
                         data={messages}
                         keyExtractor={item => item.id}
                         renderItem={renderMsg}
-                        showsVerticalScrollIndicator={false}
+                        showsVerticalScrollIndicator={true}
                         contentContainerStyle={S.msgList}
                         onContentSizeChange={() => flatRef.current?.scrollToEnd({ animated: false })}
                         keyboardShouldPersistTaps="handled"

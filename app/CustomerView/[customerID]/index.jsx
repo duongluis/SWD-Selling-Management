@@ -120,7 +120,7 @@ export default function customerView() {
             if (adminEmail) createNotification({
               userEmail: adminEmail,
               type: 'consult_success',
-              title: 'Consult thành công',
+              title: 'u thành công',
               body: `${userDetail?.name || userDetail?.email} tư vấn thành công: ${name} (${phone})`,
             }).catch(() => { });
           });
@@ -166,7 +166,7 @@ export default function customerView() {
       </View>
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scroll}
       >
         {/* Profile Card */}
@@ -421,7 +421,7 @@ export default function customerView() {
 
         <View style={{ height: insets.bottom + 24 }} />
       </ScrollView>
-    </View>
+    </View >
   );
 }
 

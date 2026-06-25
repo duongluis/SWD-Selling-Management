@@ -115,7 +115,7 @@ export default function NewsDetailScreen() {
             </View>
 
             <ScrollView
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator={true}
                 contentContainerStyle={[S.scroll, { padding: isDesktop ? 32 : 16 }, isDesktop && { maxWidth: 720, alignSelf: 'center', width: '100%' }]}
             >
                 {/* Hero image */}
@@ -184,7 +184,7 @@ export default function NewsDetailScreen() {
                 )}
                 <View style={{ height: 60 }} />
             </ScrollView>
-        </View>
+        </View >
     );
 }
 

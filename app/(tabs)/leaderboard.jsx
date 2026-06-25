@@ -8,7 +8,7 @@ import StatBar from '@/components/UI/StatBar';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { useFocusEffect } from 'expo-router';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
   Dimensions,
@@ -21,6 +21,7 @@ import {
 import { db } from '../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import { getRole } from '@/components/Utils/roleHelper';
 
 const width = Dimensions.get('window').width
 const RANK_COLORS = ['#F59E0B', '#94A3B8', '#CD7F32'];
@@ -122,7 +123,7 @@ const PERIOD_OPTIONS = [
   { key: 'Q2', label: 'Quý 2' },
   { key: 'Q3', label: 'Quý 3' },
   { key: 'Q4', label: 'Quý 4' },
-  { key: 'year', label: 'Năm này' },
+  { key: 'year', label: 'Năm nay' },
 ];
 
 export default function LeaderboardScreen() {
@@ -134,35 +135,34 @@ export default function LeaderboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [periodFilter, setPeriodFilter] = useState('month');
   const { isDesktop } = useLayout();
-  const myRole = normalizeRole(userDetail || {});
-  const isAdmin = myRole === 'admin';
+  const myRole = getRole(userDetail);
+  const fullAccess = myRole === 'admin' || myRole === 'giamdoc';
 
   const fetchData = useCallback(async () => {
     try {
-      const [userSnap, custSnap] = await Promise.all([
-        getDocs(query(collection(db, 'users'), where('verified', '==', true))),
-        getDocs(collection(db, 'customers')),
-      ]);
+      // Lấy users đã verified, loại admin
+      const userSnap = await getDocs(
+        query(collection(db, 'users'), where('verified', '==', true))
+      );
       const rawUsers = userSnap.docs.map(d => d.data())
         .filter(u => normalizeRole(u) !== 'admin');
 
-      const phones = custSnap.docs.map(d => d.data().phone).filter(Boolean);
-      const ordersFlat = [];
-      await Promise.all(phones.slice(0, 100).map(async (phone) => {
-        try {
-          const s = await getDoc(doc(db, 'orders', phone));
-          if (!s.exists()) return;
-          (s.data().orders || []).forEach(o => {
-            if (o.status !== 'Đã thanh toán' || !o.createdBy) return;
-            ordersFlat.push(o);
-          });
-        } catch (_) { }
-      }));
+      // Lấy tất cả orders đã thanh toán
+      const orderSnap = await getDocs(
+        query(collection(db, 'orders'), where('status', '==', 'Đã thanh toán'))
+      );
+      const ordersFlat = orderSnap.docs
+        .map(d => ({ ...d.data(), docId: d.id }))
+        .filter(o => o.createdBy); // đảm bảo có người tạo
 
       setAllUsers(rawUsers);
       setAllOrders(ordersFlat);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); setRefreshing(false); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
   useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
@@ -181,9 +181,9 @@ export default function LeaderboardScreen() {
   }, [allUsers, allOrders, periodFilter]);
 
   const displayUsers = useMemo(() => {
-    if (isAdmin) return users;
+    if (fullAccess) return users;
     return users.filter(u => normalizeRole(u) === myRole);
-  }, [users, isAdmin, myRole]);
+  }, [users, fullAccess, myRole]);
 
   const dailyGroup = useMemo(() => users.filter(u => normalizeRole(u) === 'daily'), [users]);
   const phantanGroup = useMemo(() => users.filter(u => normalizeRole(u) === 'phantan'), [users]);
@@ -193,7 +193,7 @@ export default function LeaderboardScreen() {
   const statCards = [
     { icon: 'trophy-outline', label: 'Tham gia', value: String(displayUsers.length), color: '#F59E0B', bg: '#FFFBEB' },
     { icon: 'cash-outline', label: 'Top 3 DT', value: fmtCurrency(top3Revenue), color: '#10B981', bg: '#ECFDF5' },
-    { icon: 'medal-outline', label: 'Dẫn đầu', value: displayUsers[0]?.name?.split(' ').pop() || '—', color: '#2563EB', bg: '#EFF6FF' },
+    { icon: 'medal-outline', label: 'Dẫn đầu', value: displayUsers[0]?.name || '—', color: '#2563EB', bg: '#EFF6FF' },
   ];
 
   return (
@@ -207,7 +207,7 @@ export default function LeaderboardScreen() {
       <FilterChips options={PERIOD_OPTIONS} value={periodFilter} onChange={setPeriodFilter} />
 
       {loading ? <EmptyState loading /> : (
-        isAdmin ? (
+        fullAccess ? (
           <FlatList
             data={[]}
             keyExtractor={() => ''}
@@ -220,7 +220,7 @@ export default function LeaderboardScreen() {
             )}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
             contentContainerStyle={{ paddingBottom: 100 }}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
           />
         ) : displayUsers.length === 0 ? (
           <EmptyState empty icon="trophy-outline"
@@ -238,7 +238,7 @@ export default function LeaderboardScreen() {
             )}
             contentContainerStyle={{ paddingBottom: 100 }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
           />
         )
       )}

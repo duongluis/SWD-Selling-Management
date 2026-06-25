@@ -217,7 +217,7 @@ function ProductDropdown({ catalog, onSelect, onClose }) {
                     </TouchableOpacity>
                 )}
             </View>
-            <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={true}>
                 {filtered.length === 0 ? (
                     <Text style={S.dropEmpty}>Không tìm thấy</Text>
                 ) : filtered.map((p, i) => (
@@ -236,7 +236,7 @@ function ProductDropdown({ catalog, onSelect, onClose }) {
                     </TouchableOpacity>
                 ))}
             </ScrollView>
-        </View>
+        </View >
     );
 }
 
@@ -652,7 +652,7 @@ export default function OrderContractScreen() {
 
             {/* Body */}
             <ScrollView
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator={true}
                 contentContainerStyle={[S.body, isDesktop && S.bodyWeb]}
                 keyboardShouldPersistTaps="handled"
             >
@@ -705,7 +705,7 @@ export default function OrderContractScreen() {
                 )}
                 <View style={{ height: 60 }} />
             </ScrollView>
-        </View>
+        </View >
     );
 }
 

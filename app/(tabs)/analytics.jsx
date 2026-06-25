@@ -49,7 +49,7 @@ function BarChart({ bars }) {
 export default function AnalyticsScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
-    const isAdmin = role === 'admin';
+    const fullAccess = role === 'admin' || role === 'giamdoc';
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [orders, setOrders] = useState([]);
@@ -63,7 +63,7 @@ export default function AnalyticsScreen() {
         if (!userDetail?.email) return;
         try {
             let ordersSnap;
-            if (isAdmin) {
+            if (fullAccess) {
                 ordersSnap = await getDocs(collection(db, 'orders'));
             } else {
                 // Lấy team emails
@@ -124,7 +124,7 @@ export default function AnalyticsScreen() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [userDetail?.email, isAdmin]);
+    }, [userDetail?.email, fullAccess]);
 
     useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
@@ -208,15 +208,15 @@ export default function AnalyticsScreen() {
         ) : (
             <TabScreenLayout>
                 <ScrollView
-                    showsVerticalScrollIndicator={false}
+                    showsVerticalScrollIndicator={true}
                     contentContainerStyle={[A.scroll, { padding: isDesktop ? THEME.spacing.xxl : THEME.spacing.lg }]}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}
                 >
                     <View style={A.pageHeader}>
                         <Text style={[A.pageTitle, { fontSize: isDesktop ? 26 : 22 }]}>Báo cáo doanh thu</Text>
                         <View style={A.userBadge}>
-                            <Ionicons name={isAdmin ? 'shield-checkmark-outline' : 'person-outline'} size={13} color="#2563EB" />
-                            <Text style={A.userBadgeText}>{isAdmin ? 'Toàn hệ thống' : (userDetail?.name || userDetail?.email || 'Của tôi')}</Text>
+                            <Ionicons name={fullAccess ? 'shield-checkmark-outline' : 'person-outline'} size={13} color="#2563EB" />
+                            <Text style={A.userBadgeText}>{fullAccess ? 'Toàn hệ thống' : (userDetail?.name || userDetail?.email || 'Của tôi')}</Text>
                         </View>
                     </View>
 
@@ -313,7 +313,7 @@ export default function AnalyticsScreen() {
                         </View>
                     )}
 
-                    {isAdmin && leaderboard.length > 0 && (
+                    {fullAccess && leaderboard.length > 0 && (
                         <View style={A.card}>
                             <Text style={A.cardTitle}>🏆 Top doanh số</Text>
                             {leaderboard.map((u, i) => (

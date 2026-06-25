@@ -168,7 +168,7 @@ export default function EditProfileScreen() {
             </View>
 
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={S.scroll}>
+                <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={S.scroll}>
 
                     {/* Layout 2 cột trên web */}
                     <View style={S.body}>
@@ -326,7 +326,7 @@ export default function EditProfileScreen() {
                     <View style={{ height: 60 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
-        </View>
+        </View >
     );
 }
 

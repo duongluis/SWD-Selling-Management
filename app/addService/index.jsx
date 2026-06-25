@@ -84,7 +84,7 @@ const OrderPickerDropdown = memo(({
                 </TouchableOpacity>
             )}
         </View>
-        <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={true}>
             {orderLoading
                 ? <Text style={S.pickerEmpty}>Đang tải đơn hàng...</Text>
                 : filteredOrders.length === 0
@@ -111,7 +111,7 @@ const OrderPickerDropdown = memo(({
                     })
             }
         </ScrollView>
-    </View>
+    </View >
 ));
 
 // Đặt NGOÀI AddService
@@ -377,7 +377,7 @@ export default function AddService() {
     // ✅ isDesktop điều kiện chọn layout
 
     return isDesktop ? (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
+        <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={W.scroll} >
             <View style={W.pageHeader}>
                 <View>
                     <Text style={W.pageTitle}>Tạo dịch vụ mới</Text>
@@ -604,7 +604,7 @@ export default function AddService() {
                 </View>
 
                 <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                    <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={M.scroll}>
+                    <ScrollView showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled" contentContainerStyle={M.scroll}>
                         <View style={M.banner}>
                             <View style={[M.bannerIcon, { backgroundColor: (currentTypeCfg?.color || '#2563EB') + '22' }]}>
                                 <Ionicons name={getIconByName(currentTypeCfg?.name || '')} size={40} color={currentTypeCfg?.color || '#2563EB'} />
@@ -734,7 +734,7 @@ export default function AddService() {
                         <Text style={M.submitBtnText}>{submitting ? 'Đang tạo...' : 'Tạo dịch vụ'}</Text>
                     </TouchableOpacity>
                 </View>
-            </View>
+            </View >
         );
 }
 

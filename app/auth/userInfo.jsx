@@ -121,7 +121,7 @@ function YearField({ value, onChange }) {
 
             {showDrop && (
                 <View style={S.drop}>
-                    <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+                    <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={true}>
                         {years.map(y => (
                             <TouchableOpacity
                                 key={y}
@@ -136,8 +136,9 @@ function YearField({ value, onChange }) {
                         ))}
                     </ScrollView>
                 </View>
-            )}
-        </View>
+            )
+            }
+        </View >
     );
 }
 
@@ -708,7 +709,7 @@ export default function UserInfoView() {
                             {showProvinceDrop && (
                                 <View style={S.drop}>
                                     <View style={S.dropSearchRow}><Ionicons name="search-outline" size={13} color="#94A3B8" /><TextInput style={{ flex: 1, fontSize: 13, color: '#0F172A' }} placeholder="Tìm tỉnh thành..." placeholderTextColor="#94A3B8" value={provinceSearch} onChangeText={setProvinceSearch} /></View>
-                                    <ScrollView style={{ maxHeight: 160 }} showsVerticalScrollIndicator={false}>
+                                    <ScrollView style={{ maxHeight: 160 }} showsVerticalScrollIndicator={true}>
                                         {filteredProvinces.length === 0 ? <Text style={S.dropEmpty}>{provinceSearch ? 'Không tìm thấy' : 'Chưa có dữ liệu'}</Text>
                                             : filteredProvinces.map(p => (<TouchableOpacity key={p} style={[S.dropItem, selectedProvince === p && S.dropActive]} onPress={() => { setSelectedProvince(p); setShowProvinceDrop(false); setProvinceSearch(''); }} activeOpacity={0.7}>
                                                 <Ionicons name="location-outline" size={13} color={selectedProvince === p ? '#2563EB' : '#94A3B8'} />
@@ -723,7 +724,7 @@ export default function UserInfoView() {
                     </View>
                 )}
             </View>
-        </View>
+        </View >
     );
 
     const renderStepBank = () => (
@@ -746,7 +747,7 @@ export default function UserInfoView() {
                 {showBankDrop && (
                     <View style={S.drop}>
                         <View style={S.dropSearchRow}><Ionicons name="search-outline" size={13} color="#94A3B8" /><TextInput style={{ flex: 1, fontSize: 13, color: '#0F172A' }} placeholder="Tên ngân hàng..." placeholderTextColor="#94A3B8" value={bankSearch} onChangeText={setBankSearch} autoFocus /></View>
-                        <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+                        <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={true}>
                             {filteredBanks.map(b => (
                                 <TouchableOpacity key={b.id} style={[S.dropItem, selectedBank?.id === b.id && S.dropActive]} onPress={() => { setSelectedBank(b); setShowBankDrop(false); setBankSearch(''); setAccountNo(''); setAccountNoErr(''); }} activeOpacity={0.7}>
                                     <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}><Text style={{ fontSize: 10, fontWeight: '800', color: '#2563EB' }}>{b.shortName}</Text></View>
@@ -775,7 +776,7 @@ export default function UserInfoView() {
                     <TextInput style={F.input} placeholder="NGUYEN VAN A" placeholderTextColor="#94A3B8" autoCapitalize="characters" value={accountName} onChangeText={t => setAccountName(t.toUpperCase())} />
                 </View>
             </View>
-        </View>
+        </View >
     );
 
     const renderStep = () => {
@@ -815,7 +816,7 @@ export default function UserInfoView() {
             )}
             <StepBar current={step} total={TOTAL_STEPS} labels={STEP_LABELS} />
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={S.scrollContent}>
+                <ScrollView showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled" contentContainerStyle={S.scrollContent}>
                     {renderStep()}
                     <View style={{ height: insets.bottom + 120 }} />
                 </ScrollView>
@@ -831,7 +832,7 @@ export default function UserInfoView() {
                     <Text style={S.nextBtnText}>{isLastStep ? (submitting ? 'Đang gửi...' : 'Hoàn tất đăng ký') : 'Tiếp theo'}</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </View >
     );
 }
 

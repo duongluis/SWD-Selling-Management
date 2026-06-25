@@ -30,7 +30,7 @@ const getRootAdvisorForUser = async (userEmail) => {
 // ── Lấy danh sách email team ──────────────────────────────────
 const getTeamEmails = async (myEmail, role) => {
     if (role === 'ctv') return [myEmail];
-    if (role === 'giamdoc') return []; // giamdoc không có team riêng, xử lý riêng
+    if (role === 'giamdoc') return [];
     if (role === 'phantan') {
         const subSnap = await getDocs(query(collection(db, 'users'), where('advisor', '==', myEmail)));
         const subEmails = subSnap.docs.map(d => d.data().email).filter(Boolean);
@@ -76,7 +76,7 @@ async function fetchServices(myEmail, role) {
 }
 
 async function fetchUsers(myEmail, role) {
-    if (role !== 'admin') return [];
+    if (role !== 'admin' && role !== 'giamdoc') return [];
     const snap = await getDocs(collection(db, 'users'));
     return snap.docs
         .map(d => ({ ...d.data(), docId: d.id }))
@@ -94,6 +94,7 @@ async function fetchConsults(myEmail, role) {
     if (teamEmails.length === 0) return [];
     return fetchStaticByEmails('consult', teamEmails);
 }
+
 
 function computeStats(type, data) {
     switch (type) {
@@ -148,6 +149,35 @@ export function useScreenData(type) {
         setRefreshing(false);
     }, [type]);
 
+    // ── Helper: lấy customerIds do team tạo ──────────────────────
+    const getCustomerIdsByTeam = async (teamEmails) => {
+        const allIds = [];
+        for (let i = 0; i < teamEmails.length; i += 10) {
+            const chunk = teamEmails.slice(i, i + 10);
+            const snap = await getDocs(
+                query(collection(db, 'customers'), where('createdBy', 'in', chunk))
+            );
+            snap.docs.forEach(d => {
+                const id = d.data().id; // field 'id' trong document customers
+                if (id) allIds.push(id);
+            });
+        }
+        return [...new Set(allIds)]; // dedup
+    };
+
+    // ── Helper: fetch orders theo customerIds ─────────────────────
+    const fetchOrdersByCustomerIds = async (customerIds) => {
+        const all = [];
+        for (let i = 0; i < customerIds.length; i += 10) {
+            const chunk = customerIds.slice(i, i + 10);
+            const snap = await getDocs(
+                query(collection(db, 'orders'), where('customerId', 'in', chunk))
+            );
+            snap.docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
+        }
+        return all;
+    };
+
     const fetchStaticOrders = useCallback(async (teamEmails) => {
         try {
             const list = await fetchStaticByEmails('orders', teamEmails);
@@ -191,21 +221,34 @@ export function useScreenData(type) {
 
                 if (type === 'orders') {
                     if (role === 'admin' || role === 'giamdoc') {
-                        // giamdoc xem tất cả, chỉ đọc — giống admin về data
                         q = collection(db, 'orders');
                     } else if (rootAdvisor && rootAdvisor !== myEmail) {
-                        // L2/L3: lấy theo rootAdvisor của mình
+                        // L2/L3: lấy theo rootAdvisor
                         q = query(collection(db, 'orders'), where('rootAdvisor', '==', rootAdvisor));
                     } else {
-                        // L1 (daily/phantan): lấy toàn bộ team
+                        // L1 (daily/phantan): lấy theo team
                         const teamEmails = await getTeamEmails(myEmail, role);
                         if (teamEmails.length === 0) { setData([]); setLoading(false); return; }
-                        if (teamEmails.length > 10) {
-                            // Vượt giới hạn 'in' → dùng static fetch (không realtime)
-                            await fetchStaticOrders(teamEmails);
-                            return;
-                        }
-                        q = query(collection(db, 'orders'), where('createdBy', 'in', teamEmails));
+
+                        // Bước 1: lấy orders do team tạo (createdBy)
+                        const ordersByCreator = await fetchStaticByEmails('orders', teamEmails);
+
+                        // Bước 2: lấy customerIds do team tạo → lấy orders của khách đó
+                        const customerIds = await getCustomerIdsByTeam(teamEmails);
+                        const ordersByCustomer = customerIds.length > 0
+                            ? await fetchOrdersByCustomerIds(customerIds)
+                            : [];
+
+                        // Bước 3: gộp + dedup theo id
+                        const merged = [...ordersByCreator];
+                        const existingIds = new Set(ordersByCreator.map(o => o.id));
+                        ordersByCustomer.forEach(o => {
+                            if (!existingIds.has(o.id)) merged.push(o);
+                        });
+
+                        // Dùng static (không realtime) vì đã fetch thủ công
+                        applyStaticData(merged);
+                        return;
                     }
                 }
 
@@ -240,7 +283,7 @@ export function useScreenData(type) {
                 }
 
                 else if (type === 'users') {
-                    if (role !== 'admin') { setData([]); setLoading(false); return; }
+                    if (role !== 'admin' && role !== 'giamdoc') { setData([]); setLoading(false); return; }
                     q = collection(db, 'users');
                 }
 

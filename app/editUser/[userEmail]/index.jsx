@@ -159,7 +159,7 @@ export default function EditUserScreen() {
 
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 <ScrollView
-                    showsVerticalScrollIndicator={false}
+                    showsVerticalScrollIndicator={true}
                     keyboardShouldPersistTaps="handled"
                     contentContainerStyle={[S.scroll, { padding: isDesktop ? 32 : 16 }]}
                 >
@@ -274,7 +274,7 @@ export default function EditUserScreen() {
                     <Text style={S.saveBtnText}>{saving ? 'Đang lưu...' : 'Lưu thay đổi'}</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </View >
     );
 }
 

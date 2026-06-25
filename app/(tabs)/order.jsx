@@ -8,7 +8,7 @@ import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import OrderDetail from '@/components/UI/OrderDetail';
 import StatBar from '@/components/UI/StatBar';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
-import { getPriceField, getRole, isAdmin, isCTV } from '@/components/Utils/roleHelper';
+import { canAdd, getPriceField, getRole, isAdmin } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -132,7 +132,6 @@ function TotalRow({ totalCost, totalRevenue, showCost, showCreator, tableStyles 
 }
 
 // ── Dòng dữ liệu đơn hàng ────────────────────────────────────
-// Sửa OrderRow — đổi phần hiển thị pCount → paymentMethod
 function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles, productPrices, tableStyles, showCreator, creatorNames }) {
   const tcfg = TYPE_CFG[item.orderType];
   const pcfg = PAYMENT_CFG[item.paymentMethod] || { label: item.paymentMethod || '—', c: '#64748B', bg: '#F1F5F9' };
@@ -140,6 +139,7 @@ function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles
   const isCancelled = (item.status || '').includes('hủy') || item.status === 'CANCELLED';
   const avatarColor = isCancelled ? '#94A3B8' : AVATAR_COLORS[index % AVATAR_COLORS.length];
   const scfg = getStatusCfg(item.status);
+
 
   const date = item.createdAt
     ? new Date(item.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -184,6 +184,7 @@ function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles
         <View style={COL.creator}>
           <Text style={ROW.cellMuted} numberOfLines={1}>
             {creatorNames[item.createdBy] || item.createdBy?.split('@')[0] || '—'}
+            {console.log("Nguoi tao don: ", creatorNames[item.createdBy])}
           </Text>
         </View>
       )}
@@ -248,6 +249,15 @@ export default function OrderScreen() {
 
   const [monthFilter, setMonthFilter] = useState('all');
   const [yearFilter, setYearFilter] = useState(String(new Date().getFullYear()));
+  const [showFilter, setShowFilter] = useState(false);
+
+  // Đếm số filter đang active
+  const activeFilterCount = [
+    paymentFilter !== 'all',
+    statusFilter !== 'all',
+    yearFilter !== String(new Date().getFullYear()),
+    monthFilter !== 'all',
+  ].filter(Boolean).length;
 
   // Tạo danh sách năm từ data
   const yearOptions = useMemo(() => {
@@ -269,9 +279,6 @@ export default function OrderScreen() {
     () => canShowCost(userDetail, role),
     [userDetail?.advisor, role]
   );
-
-
-
 
   useEffect(() => {
     const fetchProductPrices = async () => {
@@ -323,9 +330,8 @@ export default function OrderScreen() {
       }, 0);
   }, [filtered, role, advisorRoles, productPrices, showCostField]);
 
-  // Thêm vào useEffect fetch advisorRoles, bổ sung fetch tên người tạo
   useEffect(() => {
-    if (!data.length || !isAdmin(role)) return;
+    if (!data.length || !showCreator) return;
     const creators = [...new Set(data.map(o => o.createdBy).filter(Boolean))];
     if (!creators.length) return;
 
@@ -336,7 +342,8 @@ export default function OrderScreen() {
           const snap = await getDoc(doc(db, 'users', email));
           if (snap.exists()) {
             const u = snap.data();
-            names[email] = isAdmin(role) ? u.nickname || u.name || email : u.name || email;
+            names[email] = isAdmin(role) ? u.nickname || u.name || email : u.name;
+
           }
         } catch (_) { }
       }));
@@ -420,109 +427,147 @@ export default function OrderScreen() {
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Tìm kiếm đơn hàng..."
-        actionLabel={!isCTV(role) && isDesktop ? ' Tạo đơn hàng' : undefined}
+        actionLabel={isDesktop ? ' Tạo đơn hàng' : undefined}
         actionIcon="add"
-        onAction={!isCTV(role) ? () => router.push('/addOrder') : undefined}
+        canAccess={canAdd(role)}
+        onAction={() => router.push('/addOrder')}
       />
 
       {/* ── StatBar: luôn full width, không nằm trong ScrollView ── */}
       <StatBar stats={statCards} />
 
-      {/* ── Filter ── */}
-      <View style={FF.filterBlock}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={FF.chipRow}>
-          {[
-            { key: 'all', label: 'Tất cả hình thức' },
-            { key: 'customer', label: 'Khách hàng thanh toán' },
-            { key: 'company', label: 'Doanh nghiệp thanh toán' },
-          ].map(opt => (
-            <TouchableOpacity
-              key={opt.key}
-              style={[YF.chip, paymentFilter === opt.key && YF.chipActive]}
-              onPress={() => { setPaymentFilter(opt.key); setSelected(null); }}
-            >
-              <Text style={[YF.chipText, paymentFilter === opt.key && YF.chipTextActive]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      {/* ── Filter Button + Dropdown ── */}
+      <View style={{ paddingHorizontal: 16, paddingVertical: 8, zIndex: 100 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {/* Nút Filter */}
+          <TouchableOpacity
+            style={[FF.filterBtn, activeFilterCount > 0 && FF.filterBtnActive]}
+            onPress={() => setShowFilter(p => !p)}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="options-outline"
+              size={15}
+              color={activeFilterCount > 0 ? '#fff' : '#64748B'}
+            />
+            <Text style={[FF.filterBtnText, activeFilterCount > 0 && { color: '#fff' }]}>
+              Bộ lọc
+            </Text>
+            {activeFilterCount > 0 && (
+              <View style={FF.filterBadge}>
+                <Text style={FF.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
+            <Ionicons
+              name={showFilter ? 'chevron-up' : 'chevron-down'}
+              size={13}
+              color={activeFilterCount > 0 ? '#fff' : '#64748B'}
+            />
+          </TouchableOpacity>
 
-        {/* Hàng 1: Loại đơn */}
-        {/* <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={FF.chipRow}>
-          {[
-            { key: 'all', label: 'Tất cả' },
-            { key: 'buon', label: 'Đơn buôn' },
-            { key: 'le', label: 'Đơn lẻ' },
-          ].map(opt => (
+          {/* Reset nếu có filter active */}
+          {activeFilterCount > 0 && (
             <TouchableOpacity
-              key={opt.key}
-              style={[YF.chip, typeFilter === opt.key && YF.chipActive]}
-              onPress={() => { setTypeFilter(opt.key); setSelected(null); }}
+              style={FF.resetBtn}
+              onPress={() => {
+                setPaymentFilter('all');
+                setStatusFilter('all');
+                setYearFilter(String(new Date().getFullYear()));
+                setMonthFilter('all');
+                setSelected(null);
+              }}
             >
-              <Text style={[YF.chipText, typeFilter === opt.key && YF.chipTextActive]}>
-                {opt.label}
-              </Text>
+              <Ionicons name="close-circle" size={14} color="#EF4444" />
+              <Text style={FF.resetText}>Xoá lọc</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView> */}
+          )}
+        </View>
 
-        {/* Hàng 2: Trạng thái */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={FF.chipRow}>
-          {[
-            { key: 'all', label: 'Tất cả trạng thái' },
-            { key: 'Chờ xác nhận', label: 'Chờ xác nhận' },
-            { key: 'processing', label: 'Đang xử lý' },
-            { key: 'Đã thanh toán', label: 'Đã thanh toán' },
-            { key: 'Đã hủy', label: 'Đã hủy' },
-          ].map(opt => (
-            <TouchableOpacity
-              key={opt.key}
-              style={[YF.chip, statusFilter === opt.key && YF.chipActive]}
-              onPress={() => { setStatusFilter(opt.key); setSelected(null); }}
-            >
-              <Text style={[YF.chipText, statusFilter === opt.key && YF.chipTextActive]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* Dropdown panel */}
+        {showFilter && (
+          <View style={FF.dropdown}>
+            {/* Hình thức thanh toán */}
+            <Text style={FF.groupLabel}>Hình thức thanh toán</Text>
+            <View style={FF.chipRow}>
+              {[
+                { key: 'all', label: 'Tất cả' },
+                { key: 'customer', label: 'Khách hàng' },
+                { key: 'company', label: 'Doanh nghiệp' },
+              ].map(opt => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[FF.chip, paymentFilter === opt.key && FF.chipActive]}
+                  onPress={() => { setPaymentFilter(opt.key); setSelected(null); }}
+                >
+                  <Text style={[FF.chipText, paymentFilter === opt.key && FF.chipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        {/* Hàng 3: Năm */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={FF.chipRow}>
-          {yearOptions.map(opt => (
-            <TouchableOpacity
-              key={opt.key}
-              style={[YF.chip, yearFilter === opt.key && YF.chipActive]}
-              onPress={() => { setYearFilter(opt.key); setSelected(null); }}
-            >
-              <Text style={[YF.chipText, yearFilter === opt.key && YF.chipTextActive]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+            {/* Trạng thái */}
+            <Text style={FF.groupLabel}>Trạng thái</Text>
+            <View style={FF.chipRow}>
+              {[
+                { key: 'all', label: 'Tất cả' },
+                { key: 'Chờ xác nhận', label: 'Chờ xác nhận' },
+                { key: 'processing', label: 'Đang xử lý' },
+                { key: 'Đã thanh toán', label: 'Đã thanh toán' },
+                { key: 'Đã hủy', label: 'Đã hủy' },
+              ].map(opt => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[FF.chip, statusFilter === opt.key && FF.chipActive]}
+                  onPress={() => { setStatusFilter(opt.key); setSelected(null); }}
+                >
+                  <Text style={[FF.chipText, statusFilter === opt.key && FF.chipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        {/* Hàng 4: Tháng */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={FF.chipRow}>
-          {monthOptions.map(opt => (
-            <TouchableOpacity
-              key={opt.key}
-              style={[YF.chip, monthFilter === opt.key && YF.chipActive]}
-              onPress={() => { setMonthFilter(opt.key); setSelected(null); }}
-            >
-              <Text style={[YF.chipText, monthFilter === opt.key && YF.chipTextActive]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+            {/* Năm */}
+            <Text style={FF.groupLabel}>Năm</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={FF.chipRow}>
+                {yearOptions.map(opt => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[FF.chip, yearFilter === opt.key && FF.chipActive]}
+                    onPress={() => { setYearFilter(opt.key); setSelected(null); }}
+                  >
+                    <Text style={[FF.chipText, yearFilter === opt.key && FF.chipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* Tháng */}
+            <Text style={FF.groupLabel}>Tháng</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={FF.chipRow}>
+                {monthOptions.map(opt => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[FF.chip, monthFilter === opt.key && FF.chipActive]}
+                    onPress={() => { setMonthFilter(opt.key); setSelected(null); }}
+                  >
+                    <Text style={[FF.chipText, monthFilter === opt.key && FF.chipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        )}
       </View>
+
+
 
       <View style={cardStyles.splitLayout}>
         <View style={cardStyles.card}>
@@ -546,8 +591,9 @@ export default function OrderScreen() {
               empty
               icon="receipt-outline"
               title={query ? 'Không tìm thấy' : 'Chưa có đơn hàng'}
-              actionLabel={!isCTV(role) ? 'Tạo đơn hàng' : undefined}
-              onAction={!isCTV(role) ? () => router.push('/addOrder') : undefined}
+              actionLabel={'Tạo đơn hàng'}
+              canAdd={canAdd(role)}
+              onAction={() => router.push('/addOrder')}
             />
           ) : (
             <FlatList
@@ -569,7 +615,9 @@ export default function OrderScreen() {
                 />
               )}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={true}
+              indicatorStyle="black"
+              style={{ flex: 1 }}
               contentContainerStyle={tableStyles.listContainer}
             />
           )}
@@ -645,17 +693,57 @@ const YF = StyleSheet.create({
   chipTextActive: { color: '#fff' },
 });
 
+
 const FF = StyleSheet.create({
-  filterBlock: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 8,
-    gap: 8,          // khoảng cách đều giữa các hàng
+  // Nút filter
+  filterBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 20, backgroundColor: '#F1F5F9',
+    borderWidth: 1, borderColor: '#E2E8F0',
   },
-  chipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 2,
+  filterBtnActive: {
+    backgroundColor: '#1E3A8A', borderColor: '#1E3A8A',
   },
+  filterBtnText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  filterBadge: {
+    backgroundColor: '#fff', borderRadius: 10,
+    paddingHorizontal: 5, paddingVertical: 1, minWidth: 18, alignItems: 'center',
+  },
+  filterBadgeText: { fontSize: 10, fontWeight: '800', color: '#1E3A8A' },
+
+  // Reset button
+  resetBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 8,
+  },
+  resetText: { fontSize: 12, fontWeight: '600', color: '#EF4444' },
+
+  // Dropdown
+  dropdown: {
+    marginTop: 8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1, borderColor: '#E2E8F0',
+    padding: 14,
+    gap: 8,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  groupLabel: {
+    fontSize: 10, fontWeight: '700', color: '#94A3B8',
+    textTransform: 'uppercase', letterSpacing: 0.5,
+    marginTop: 6, marginBottom: 2,
+  },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 20, backgroundColor: '#F1F5F9',
+    borderWidth: 1, borderColor: '#E2E8F0',
+  },
+  chipActive: { backgroundColor: '#1E3A8A', borderColor: '#1E3A8A' },
+  chipText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+  chipTextActive: { color: '#fff' },
 });

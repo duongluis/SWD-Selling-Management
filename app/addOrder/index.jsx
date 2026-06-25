@@ -139,7 +139,7 @@ const ProductDropdown = React.memo(({ catalog, onSelect }) => {
         <TextInput style={PD.searchInput} placeholder="Tìm sản phẩm..." placeholderTextColor="#94A3B8" value={search} onChangeText={setSearch} autoFocus />
         {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={14} color="#94A3B8" /></TouchableOpacity>}
       </View>
-      <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={true}>
         {filtered.length === 0
           ? <Text style={PD.empty}>Không tìm thấy</Text>
           : filtered.map(item => (
@@ -150,7 +150,7 @@ const ProductDropdown = React.memo(({ catalog, onSelect }) => {
             </TouchableOpacity>
           ))}
       </ScrollView>
-    </View>
+    </View >
   );
 });
 const PD = StyleSheet.create({
@@ -224,7 +224,7 @@ const CustomerPickerDropdown = React.memo(({ ws, customerList, customerLoading, 
         ? <Text style={ws ? W.dropdownEmpty : styles.dropdownEmpty}>Đang tải...</Text>
         : filteredCustomers.length === 0
           ? <Text style={ws ? W.dropdownEmpty : styles.dropdownEmpty}>{customerSearch ? 'Không tìm thấy' : 'Chưa có khách hàng'}</Text>
-          : <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+          : <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={true}>
             {filteredCustomers.map((c, i) => (
               <TouchableOpacity key={c.docId || i}
                 style={[ws ? W.dropdownItem : styles.dropdownItem, selectedCustomer?.docId === c.docId && (ws ? W.dropdownItemActive : styles.dropdownItemActive)]}
@@ -240,7 +240,7 @@ const CustomerPickerDropdown = React.memo(({ ws, customerList, customerLoading, 
             ))}
           </ScrollView>
       }
-    </View>
+    </View >
   );
 });
 
@@ -807,7 +807,7 @@ export default function AddOrder() {
   return isDesktop ? (
     <View style={W.root}>
       <BgWatermark />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
+      <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={W.scroll}>
         <View style={W.pageHeader}>
           <View>
             <Text style={W.pageTitle}>Tạo đơn hàng mới</Text>
@@ -976,7 +976,7 @@ export default function AddOrder() {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </View >
   ) :
 
     // ─────────────────────────────────────────────────────────
@@ -993,7 +993,7 @@ export default function AddOrder() {
         </View>
 
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
+          <ScrollView showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
             <View style={styles.formCard}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Order ID</Text>
@@ -1121,7 +1121,7 @@ export default function AddOrder() {
             <View style={{ height: insets.bottom + 24 }} />
           </ScrollView>
         </KeyboardAvoidingView>
-      </View>
+      </View >
     );
 }
 

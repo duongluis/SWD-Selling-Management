@@ -51,7 +51,7 @@ SplashScreen.preventAutoHideAsync();
 
 // ── Route groups ─────────────────────────────────────────────
 const PUBLIC_ROUTES = ['auth', 'index'];          // ai cũng vào được
-const ADMIN_ROUTES = ['users'];                   // chỉ admin
+const ADMIN_ROUTES = ['user'];                   // chỉ admin
 const APP_ROUTES = ['(tabs)', 'addOrder', 'addCustomer', 'addConsult',
   'addService', 'CustomerView', 'ServiceView',
   'OrderView', 'revenue', 'information', 'editUser',
@@ -107,7 +107,7 @@ export default function RootLayout() {
 
     const segment = segments[0] || '';
     const fullPath = segments.join('/');
-    const isAdmin = userDetail?.role === 'admin' || userDetail?.member === 'admin';
+    const isAdmin = userDetail?.role === 'admin' || userDetail?.member === 'admin' || userDetail?.role === 'Giám đốc';
 
     // Các route không cần redirect khi chưa đăng nhập
     const ALLOW_UNAUTHENTICATED = [

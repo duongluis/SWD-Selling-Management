@@ -23,6 +23,7 @@ const getRole = (u) => {
     if (['đại lý', 'daily', 'dealer'].includes(r)) return 'daily';
     if (['đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
     if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
+    if (['giám đốc', 'giam doc', 'giamdoc', 'director'].includes(r)) return 'giamdoc';
     return 'other';
 };
 
@@ -36,6 +37,7 @@ const PRICE_LABELS = {
 const getPriceFields = (role, hasAdvisor = false) => {
     if (hasAdvisor) return ['price'];
     return ({
+        giamdoc: ['price', 'price_a', 'price_p', 'price_c'],
         admin: ['price', 'price_a', 'price_p', 'price_c'],
         daily: ['price_a', 'price'],
         phantan: ['price_p', 'price'],
@@ -224,7 +226,7 @@ function ProductModal({ visible, onClose, onSaved, existingCount, editData = nul
                 </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={F.scrollBody}>
+            <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={F.scrollBody}>
                 <Text style={F.section}>Thông tin cơ bản</Text>
                 <FormRow label="Tên sản phẩm" required><InputBox fkey="name" placeholder="VD: Máy F3000A" /></FormRow>
                 <FormRow label="Công suất lọc"><InputBox fkey="capacity" placeholder="VD: 3000 lít/giờ" /></FormRow>
@@ -273,7 +275,7 @@ function ProductModal({ visible, onClose, onSaved, existingCount, editData = nul
                     <Text style={F.saveBtnText}>{saving ? 'Đang lưu...' : isEdit ? 'Cập nhật' : 'Lưu sản phẩm'}</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </View >
     );
 
     return (
@@ -360,7 +362,7 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
                 </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={F.scrollBody}>
+            <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={F.scrollBody}>
                 <Text style={F.section}>Thông tin dịch vụ</Text>
 
                 <FormRow label="Mã dịch vụ">
@@ -500,7 +502,7 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
                     <Text style={F.saveBtnText}>{saving ? 'Đang lưu...' : isEdit ? 'Cập nhật' : 'Lưu dịch vụ'}</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </View >
     );
 
     return (
@@ -575,7 +577,7 @@ function ProductDetail({ product, priceFields, isAdmin, onClose, onEdit, onDelet
     ].filter(f => product[f.key]);
 
     return (
-        <ScrollView style={D.root} contentContainerStyle={D.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={D.root} contentContainerStyle={D.content} showsVerticalScrollIndicator={true} >
             <View style={D.header}>
                 <TouchableOpacity onPress={onClose} style={D.backBtn}>
                     <Ionicons name="arrow-back" size={18} color="#64748B" />
@@ -620,33 +622,37 @@ function ProductDetail({ product, priceFields, isAdmin, onClose, onEdit, onDelet
                 </View>
             </View>
 
-            {specs.length > 0 && (
-                <View style={D.card}>
-                    <View style={D.cardHeader}><Ionicons name="list-outline" size={15} color="#2563EB" /><Text style={D.cardTitle}>Thông số kỹ thuật</Text></View>
-                    {specs.map((s, i) => (
-                        <View key={i} style={[D.specRow, i % 2 === 0 && D.specRowAlt]}>
-                            <Text style={D.specLabel}>{s.label}</Text>
-                            <Text style={D.specValue}>{s.value}</Text>
-                        </View>
-                    ))}
-                </View>
-            )}
-
-            {features.length > 0 && (
-                <View style={D.card}>
-                    <View style={D.cardHeader}><Ionicons name="star-outline" size={15} color="#2563EB" /><Text style={D.cardTitle}>Tính năng đặc biệt</Text></View>
-                    <View style={D.featureGrid}>
-                        {features.map(f => (
-                            <View key={f.key} style={D.featureItem}>
-                                <View style={D.featureCheck}><Ionicons name="checkmark" size={12} color="#059669" /></View>
-                                <Text style={D.featureText}>{f.label}</Text>
+            {
+                specs.length > 0 && (
+                    <View style={D.card}>
+                        <View style={D.cardHeader}><Ionicons name="list-outline" size={15} color="#2563EB" /><Text style={D.cardTitle}>Thông số kỹ thuật</Text></View>
+                        {specs.map((s, i) => (
+                            <View key={i} style={[D.specRow, i % 2 === 0 && D.specRowAlt]}>
+                                <Text style={D.specLabel}>{s.label}</Text>
+                                <Text style={D.specValue}>{s.value}</Text>
                             </View>
                         ))}
                     </View>
-                </View>
-            )}
-            <View style={{ height: 32 }} />
-        </ScrollView>
+                )
+            }
+
+            {
+                features.length > 0 && (
+                    <View style={D.card}>
+                        <View style={D.cardHeader}><Ionicons name="star-outline" size={15} color="#2563EB" /><Text style={D.cardTitle}>Tính năng đặc biệt</Text></View>
+                        <View style={D.featureGrid}>
+                            {features.map(f => (
+                                <View key={f.key} style={D.featureItem}>
+                                    <View style={D.featureCheck}><Ionicons name="checkmark" size={12} color="#059669" /></View>
+                                    <Text style={D.featureText}>{f.label}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    </View>
+                )
+            }
+            < View style={{ height: 32 }} />
+        </ScrollView >
     );
 }
 
@@ -661,7 +667,7 @@ function ProductList({ products, priceFields, onSelect }) {
             key={isDesktop ? 'grid' : 'list'}
             columnWrapperStyle={isDesktop ? { gap: 14 } : undefined}
             contentContainerStyle={[{ paddingBottom: isDesktop ? 32 : 100 }, isDesktop && { gap: 14 }]}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             renderItem={({ item }) => (
                 <TouchableOpacity style={[L.card, isDesktop && { flex: 1 }]} activeOpacity={0.7} onPress={() => onSelect(item)}>
                     <View style={L.cardTop}>
@@ -702,10 +708,10 @@ function ProductList({ products, priceFields, onSelect }) {
                 </TouchableOpacity>
             )}
             ListEmptyComponent={
-                <View style={L.empty}>
+                < View style={L.empty} >
                     <Ionicons name="cube-outline" size={40} color="#CBD5E1" />
                     <Text style={L.emptyText}>Chưa có sản phẩm</Text>
-                </View>
+                </View >
             }
         />
     );
@@ -729,11 +735,11 @@ function ServiceCategoryGrid({ services, isAdmin, onEdit, onDelete }) {
             key={isDesktop ? 'svc-grid-web' : 'svc-grid-mobile'}
             columnWrapperStyle={{ gap: 12 }}
             contentContainerStyle={{ paddingBottom: isDesktop ? 32 : 100, gap: 12 }}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             renderItem={({ item, index }) => {
                 const style = getCategoryStyle(index);
                 return (
-                    <View style={[SC.card, { flex: 1, borderTopColor: item.color }]}>
+                    <View style={[SC.card, { flex: 1, borderTopColor: item.color }]} >
                         <View style={[SC.iconWrap, { backgroundColor: item.color + "22" }]}>
                             <Ionicons name={style.icon} size={28} color={item.color} />
                         </View>
@@ -764,7 +770,7 @@ function ServiceCategoryGrid({ services, isAdmin, onEdit, onDelete }) {
                                 </TouchableOpacity>
                             </View>
                         )}
-                    </View>
+                    </View >
                 );
             }}
         />

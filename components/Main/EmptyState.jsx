@@ -10,6 +10,7 @@ export default function EmptyState({
     subtitle = '',
     actionLabel,
     onAction,
+    canAdd
 }) {
     if (loading) return (
         <View style={S.center}>
@@ -40,7 +41,7 @@ export default function EmptyState({
             </View>
             <Text style={S.title}>{title}</Text>
             {subtitle ? <Text style={S.sub}>{subtitle}</Text> : null}
-            {onAction && (
+            {onAction && canAdd && (
                 <TouchableOpacity style={S.btn} onPress={onAction}>
                     <Text style={S.btnText}>{actionLabel || 'Thêm mới'}</Text>
                 </TouchableOpacity>

@@ -164,7 +164,7 @@ export default function TeamView() {
                 <View style={styles.listContainer}>
                     <ScrollView
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                        showsVerticalScrollIndicator={false}
+                        showsVerticalScrollIndicator={true}
                         contentContainerStyle={styles.scrollContent}
                     >
                         {members.length === 0 ? (
@@ -207,17 +207,19 @@ export default function TeamView() {
             </View>
 
             {/* Trên mobile: khi chọn member, điều hướng sang màn chi tiết (có thể dùng modal nếu muốn) */}
-            {!isDesktop && selectedMember && (
-                <UserDetail
-                    user={selectedMember}
-                    onClose={() => setSelectedMember(null)}
-                    onUpdated={(updated) => {
-                        setMembers(prev => prev.map(m => m.email === updated.email ? updated : m));
-                        setSelectedMember(updated);
-                    }}
-                />
-            )}
-        </View>
+            {
+                !isDesktop && selectedMember && (
+                    <UserDetail
+                        user={selectedMember}
+                        onClose={() => setSelectedMember(null)}
+                        onUpdated={(updated) => {
+                            setMembers(prev => prev.map(m => m.email === updated.email ? updated : m));
+                            setSelectedMember(updated);
+                        }}
+                    />
+                )
+            }
+        </View >
     );
 }
 

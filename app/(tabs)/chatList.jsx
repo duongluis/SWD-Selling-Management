@@ -129,7 +129,7 @@ export default function ChatListScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
     const myEmail = userDetail?.email || '';
-    const isAdmin = role === 'admin';
+    const isAdmin = role === 'admin' || role === 'giamdoc';
     const { isDesktop } = useLayout();
     const [rooms, setRooms] = useState([]);
     const [customerMap, setCustomerMap] = useState({}); // roomId -> { email, displayName }
@@ -232,7 +232,7 @@ export default function ChatListScreen() {
                     )}
                     contentContainerStyle={{ paddingHorizontal: isDesktop ? 32 : 16, paddingBottom: 100 }}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-                    showsVerticalScrollIndicator={false}
+                    showsVerticalScrollIndicator={true}
                 />
             )}
         </TabScreenLayout>

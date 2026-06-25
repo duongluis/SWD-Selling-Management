@@ -47,7 +47,7 @@ export default function EditCustomerScreen() {
             .then(snap => {
                 if (!snap.exists()) {
                     showAlert('Lỗi', 'Không tìm thấy khách hàng');
-                    router.replace('(tabs)/customers');
+                    router.replace('(tabs)/customer');
                     return;
                 }
                 const d = snap.data();
@@ -59,7 +59,7 @@ export default function EditCustomerScreen() {
                     note: d.note || '',
                 });
             })
-            .catch(e => { showAlert('Lỗi', e.message); router.replace('(tabs)/customers'); })
+            .catch(e => { showAlert('Lỗi', e.message); router.replace('(tabs)/customer'); })
             .finally(() => setLoading(false));
     }, [docId]);
 
@@ -82,7 +82,7 @@ export default function EditCustomerScreen() {
                 updatedAt: new Date().toISOString(),
             };
             await updateDoc(doc(db, 'customers', docId), payload);
-            showSuccess('Thành công', 'Đã cập nhật khách hàng!', () => router.replace('(tabs)/customers'));
+            showSuccess('Thành công', 'Đã cập nhật khách hàng!', () => router.replace('(tabs)/customer'));
         } catch (e) {
             showAlert('Lỗi', e.message);
         } finally {
@@ -102,7 +102,7 @@ export default function EditCustomerScreen() {
     return isDesktop ? (
         <View style={W.root}>
             <BgWatermark />
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
+            <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={W.scroll}>
 
                 {/* Page header */}
                 <View style={W.pageHeader}>
@@ -110,7 +110,7 @@ export default function EditCustomerScreen() {
                         <Text style={W.pageTitle}>Sửa thông tin khách hàng</Text>
                         <Text style={W.pageSub}>Cập nhật thông tin khách hàng trong danh sách của bạn</Text>
                     </View>
-                    <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('(tabs)/customers')}>
+                    <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('(tabs)/customer')}>
                         <Ionicons name="close" size={16} color="#64748B" />
                         <Text style={W.cancelBtnText}>Huỷ</Text>
                     </TouchableOpacity>
@@ -261,13 +261,13 @@ export default function EditCustomerScreen() {
                             <Text style={W.submitBtnText}>{submitting ? 'Đang lưu...' : 'Lưu thay đổi'}</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={W.cancelBtnFull} onPress={() => router.replace('(tabs)/customers')}>
+                        <TouchableOpacity style={W.cancelBtnFull} onPress={() => router.replace('(tabs)/customer')}>
                             <Text style={W.cancelBtnFullText}>Hủy bỏ</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             </ScrollView>
-        </View>
+        </View >
     ) :
 
         // ─────────────────────────────────────────────────────────
@@ -278,7 +278,7 @@ export default function EditCustomerScreen() {
                 <BgWatermark />
                 <StatusBar barStyle="dark-content" backgroundColor={Colors.Background} />
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.replace('(tabs)/customers')} style={styles.backBtn}>
+                    <TouchableOpacity onPress={() => router.replace('(tabs)/customer')} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={22} color={Colors.TextPrimary} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Sửa khách hàng</Text>
@@ -286,7 +286,7 @@ export default function EditCustomerScreen() {
                 </View>
 
                 <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled">
 
                         <View style={styles.section}>
                             <View style={styles.sectionHeader}>
@@ -339,13 +339,13 @@ export default function EditCustomerScreen() {
                             <Ionicons name={submitting ? 'hourglass-outline' : 'save-outline'} size={18} color={Colors.White} />
                             <Text style={styles.saveBtnText}>{submitting ? 'Đang lưu...' : 'Lưu thay đổi'}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.cancelBtn} onPress={() => router.replace('(tabs)/customers')} activeOpacity={0.7}>
+                        <TouchableOpacity style={styles.cancelBtn} onPress={() => router.replace('(tabs)/customer')} activeOpacity={0.7}>
                             <Text style={styles.cancelBtnText}>Hủy bỏ</Text>
                         </TouchableOpacity>
                         <View style={{ height: insets.bottom + 16 }} />
                     </ScrollView>
                 </KeyboardAvoidingView>
-            </View>
+            </View >
         );
 }
 

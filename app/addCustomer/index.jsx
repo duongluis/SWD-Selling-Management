@@ -149,7 +149,7 @@ export default function AddCustomer() {
   return isDesktop ? (
     <View style={W.root}>
       <BgWatermark />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={W.scroll}>
+      <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={W.scroll}>
 
         {/* Page header */}
         <View style={W.pageHeader}>
@@ -314,7 +314,7 @@ export default function AddCustomer() {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </View >
   ) :
 
     // ─────────────────────────────────────────────────────────
@@ -333,7 +333,7 @@ export default function AddCustomer() {
         </View>
 
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled">
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -387,7 +387,7 @@ export default function AddCustomer() {
             <View style={{ height: insets.bottom + 16 }} />
           </ScrollView>
         </KeyboardAvoidingView>
-      </View>
+      </View >
     );
 }
 

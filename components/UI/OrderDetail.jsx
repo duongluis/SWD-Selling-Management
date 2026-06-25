@@ -638,20 +638,21 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                     </TouchableOpacity>
 
                     {/* Chat */}
-                    <TouchableOpacity
-                        style={DP.aBtn}
-                        onPress={() => router.push({
-                            pathname: '/chat/[roomID]',
-                            params: {
-                                roomID: getSupportRoomId(localOrder.id),
-                                orderId: localOrder.id,
-                            },
-                        })}
-                    >
-                        <Ionicons name="chatbubble-outline" size={13} color="#2563EB" />
-                        <Text style={DP.aBtnText}>Chat</Text>
-                    </TouchableOpacity>
-
+                    {role !== 'giamdoc' && (
+                        <TouchableOpacity
+                            style={DP.aBtn}
+                            onPress={() => router.push({
+                                pathname: '/chat/[roomID]',
+                                params: {
+                                    roomID: getSupportRoomId(localOrder.id),
+                                    orderId: localOrder.id,
+                                },
+                            })}
+                        >
+                            <Ionicons name="chatbubble-outline" size={13} color="#2563EB" />
+                            <Text style={DP.aBtnText}>Chat</Text>
+                        </TouchableOpacity>
+                    )}
                     {/* Sửa — admin hoặc người tạo đơn, trạng thái chưa khoá */}
                     {canEditOrder && (
                         <TouchableOpacity
@@ -707,7 +708,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
             )}
 
             {/* ── Body ── */}
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
 
                 {/* 2-col: khách hàng + dịch vụ */}
                 <View style={DP.infoGrid}>
@@ -839,7 +840,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
 
                 <View style={{ height: 40 }} />
             </ScrollView>
-        </View>
+        </View >
     );
 }
 

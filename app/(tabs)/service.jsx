@@ -11,7 +11,7 @@ import ServiceDetail from '@/components/UI/ServiceDetail';
 import StatBar from '@/components/UI/StatBar';
 import { getSupportRoomId, sendSystemMessage } from '@/components/Utils/chatService';
 import { fmtDate } from '@/components/Utils/formatters';
-import { isCTV } from '@/components/Utils/roleHelper';
+import { canAdd } from '@/components/Utils/roleHelper';
 import { isServiceStatusLocked, syncOrderStatusFromService } from '@/components/Utils/syncOrderStatus';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -328,9 +328,10 @@ export default function ServiceScreen() {
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Tìm dịch vụ, khách hàng..."
-        actionLabel={!isCTV(role) && isDesktop ? ' Đăng ký dịch vụ' : undefined}
+        actionLabel={isDesktop ? ' Đăng ký dịch vụ' : undefined}
         actionIcon="add"
-        onAction={!isCTV(role) ? () => router.push('/addService') : undefined}
+        canAccess={canAdd(role)}
+        onAction={() => router.push('/addService')}
       />
       <StatBar stats={statCards} />
 
@@ -357,8 +358,9 @@ export default function ServiceScreen() {
               ? (
                 <EmptyState empty icon="build-outline"
                   title={query ? 'Không tìm thấy' : 'Chưa có dịch vụ'}
-                  actionLabel={!isCTV(role) ? 'Tạo dịch vụ' : undefined}
-                  onAction={!isCTV(role) ? () => router.push('/addService') : undefined}
+                  actionLabel={'Tạo dịch vụ'}
+                  canAdd={canAdd(role)}
+                  onAction={() => router.push('/addService')}
                 />
               )
               : (
@@ -379,7 +381,7 @@ export default function ServiceScreen() {
                     />
                   )}
                   refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-                  showsVerticalScrollIndicator={false}
+                  showsVerticalScrollIndicator={true}
                   contentContainerStyle={tableStyles.listContainer}
                 />
               )

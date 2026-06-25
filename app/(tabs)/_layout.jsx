@@ -48,7 +48,7 @@ const NAV_SECTIONS = [
       { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'Bảng xếp hạng', icon: 'trophy-outline', activeIcon: 'trophy' },
       { key: 'commission', link: '(tabs)/commission', label: 'Hoa hồng', icon: 'cash-outline', activeIcon: 'cash' },
       { key: 'revenue', link: '(tabs)/analytics', label: 'Báo cáo doanh thu', icon: 'bar-chart-outline', activeIcon: 'bar-chart' },
-      { key: 'region', link: '(tabs)/regionAnalytics', label: 'Báo cáo khu vực', icon: 'map-outline', activeIcon: 'map', visible: (r) => r === 'admin' },
+      { key: 'region', link: '(tabs)/regionAnalytics', label: 'Báo cáo khu vực', icon: 'map-outline', activeIcon: 'map' },
       { key: 'news', link: '(tabs)/news', label: 'Tin tức', icon: 'newspaper-outline', activeIcon: 'newspaper', visible: () => true },
       { key: 'information', link: '(tabs)/information', label: 'Bảng giá', icon: 'pricetag-outline', activeIcon: 'pricetag', visible: () => true },
       { key: 'quotation', link: 'orderContract?mode=template', label: 'Form báo giá', icon: 'document-text-outline', activeIcon: 'document-text', visible: () => true },
@@ -58,7 +58,7 @@ const NAV_SECTIONS = [
   {
     label: 'HỖ TRỢ',
     items: [
-      { key: 'chatList', link: '(tabs)/chatList', label: 'Phòng Chat', icon: 'chatbubbles-outline', activeIcon: 'chatbubbles', visible: () => true },
+      { key: 'chatList', link: '(tabs)/chatList', label: 'Phòng Chat', icon: 'chatbubbles-outline', activeIcon: 'chatbubbles', visible: (r) => r !== 'giamdoc' },
       { key: 'profile', link: '(tabs)/editProfile', label: 'Thông tin cá nhân', icon: 'person-circle-outline', activeIcon: 'person-circle', visible: () => true },
     ],
   },
@@ -95,30 +95,41 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
   const roleLabel = getRoleLabel(role);
 
   const shouldShowItem = (item) => {
+    const gd = role === 'giamdoc'; // ← boolean đơn giản
+
     if (item.visible) return item.visible(role);
+
     if (item.key === 'commission' || item.key === 'calculator') {
+      if (gd) return false;                          // giamdoc không thấy
       if (userDetail?.advisor) return false;
       if (role === 'daily') return false;
       return role === 'admin' || role === 'phantan' || role === 'ctv';
     }
-    if (item.key === 'team') {
-      if (userDetail?.advisor) return true; // có advisor
-      if (isAdvisor) return true;            // là advisor của người khác
 
-      return false;                          // không liên quan
+    if (item.key === 'team') {
+      if (gd) return true;                           // giamdoc thấy team
+      if (userDetail?.advisor) return true;
+      if (isAdvisor) return true;
+      return false;
     }
-    if (item.key === 'revenue' || item.key === 'leaderboard') {
+
+    if (item.key === 'leaderboard') {
+      if (gd) return true;                           // giamdoc thấy leaderboard
       if (userDetail?.advisor) return false;
       return true;
     }
 
-    // if (item.key === 'consult') {
-    //   if (userDetail?.advisor) return true; // có advisor
-    //   if (isAdvisor) return true;            // là advisor của người khác
-    //   if (isAdmin) return true;
-    //   return false;
-    // }
-    return role === 'admin';
+    if (item.key === 'revenue') {
+      if (gd) return true;                           // giamdoc thấy revenue
+      if (userDetail?.advisor) return false;
+      return true;
+    }
+
+    if (item.key === 'region') {
+      return role === 'admin' || gd;                 // giamdoc thấy region
+    }
+
+    return role === 'admin' || gd;                     // fallback: admin + giamdoc
   };
 
   const handleNav = (item) => {
@@ -148,7 +159,7 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
         )}
       </View>
 
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
         {NAV_SECTIONS.map(section => {
           const visibleItems = section.items.filter(shouldShowItem);
           if (!visibleItems.length) return null;
@@ -168,7 +179,6 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
           );
         })}
 
-        {/* Admin */}
         {role === 'admin' && (
           <View style={S.navSection}>
             {!collapsed && (
@@ -178,17 +188,35 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
               </View>
             )}
             <NavItem
-              item={{ key: 'users', link: '(tabs)/users', label: 'Danh sách người dùng', icon: 'people-circle-outline', activeIcon: 'people-circle' }}
-              isActive={activeTab === 'users'}
+              item={{ key: 'user', link: '(tabs)/user', label: 'Danh sách người dùng', icon: 'people-circle-outline', activeIcon: 'people-circle' }}
+              isActive={activeTab === 'user'}
               collapsed={collapsed}
               onPress={() => { onClose?.(); router.push('/(tabs)/user'); }}
             />
           </View>
         )}
-      </ScrollView>
+
+        {/* Admin */}
+        {(role === 'admin' || role === 'giamdoc') && (
+          <View style={S.navSection}>
+            {!collapsed && (
+              <View style={S.adminSectionHeader}>
+                <Text style={S.navSectionLabel}>QUẢN TRỊ</Text>
+                <View style={S.adminBadge}><Text style={S.adminBadgeText}>ADMIN</Text></View>
+              </View>
+            )}
+            <NavItem
+              item={{ key: 'user', link: '(tabs)/user', label: 'Danh sách người dùng', icon: 'people-circle-outline', activeIcon: 'people-circle' }}
+              isActive={activeTab === 'user'}
+              collapsed={collapsed}
+              onPress={() => { onClose?.(); router.push('/(tabs)/user'); }}
+            />
+          </View>
+        )}
+      </ScrollView >
 
       {/* User / Logout */}
-      <View style={S.bottomSection}>
+      < View style={S.bottomSection} >
         {showLogout && (
           <View style={S.logoutPopup}>
             <TouchableOpacity style={S.logoutItem} onPress={handleLogout}>
@@ -196,7 +224,8 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
               <Text style={S.logoutItemText}>Đăng xuất</Text>
             </TouchableOpacity>
           </View>
-        )}
+        )
+        }
         <Pressable
           style={[S.userRow, collapsed && { justifyContent: 'center' }]}
           onPress={() => !collapsed && setShowLogout(p => !p)}
@@ -214,7 +243,7 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
             </>
           )}
         </Pressable>
-      </View>
+      </View >
     </>
   );
 }
@@ -296,10 +325,15 @@ function MobileTopBar({ pageLabel, userDetail, onMenuPress, router }) {
         <Text style={MB.topBarTitle} numberOfLines={1}>{pageLabel}</Text>
       </View>
       <View style={MB.topBarRight}>
-        <TouchableOpacity style={MB.topBarBtn} onPress={() => router.push('/(tabs)/chatList')}>
-          <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
-        </TouchableOpacity>
-        <NotificationPanel bellColor="#fff" bellSize={18} />
+        {role !== 'giamdoc' &&
+          (
+            <>
+              <TouchableOpacity style={MB.topBarBtn} onPress={() => router.push('/(tabs)/chatList')}>
+                <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
+              </TouchableOpacity>
+              <NotificationPanel bellColor="#fff" bellSize={18} />
+            </>
+          )}
         <View style={MB.topBarAvatar}>
           <Text style={MB.topBarAvatarText}>{getInitials(userDetail?.name)}</Text>
         </View>
@@ -478,10 +512,15 @@ export default function TabLayout() {
               <Text style={S.breadcrumbCurrent}>{pageLabel}</Text>
             </View>
             <View style={S.topBarActions}>
-              <Pressable style={S.topBarBtn} onPress={() => router.push('/(tabs)/chatList')}>
-                <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
-              </Pressable>
-              <NotificationPanel bellColor="#fff" bellSize={18} />
+              {role !== 'giamdoc' &&
+                (
+                  <>
+                    <Pressable style={S.topBarBtn} onPress={() => router.push('/(tabs)/chatList')}>
+                      <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
+                    </Pressable>
+                    <NotificationPanel bellColor="#fff" bellSize={22} />
+                  </>
+                )}
               <Pressable style={S.topBarBtn}>
                 <Ionicons name="help-circle-outline" size={18} color="#fff" />
               </Pressable>

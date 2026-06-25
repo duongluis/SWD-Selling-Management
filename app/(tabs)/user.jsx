@@ -126,6 +126,7 @@ export default function UsersScreen() {
     const [filter, setFilter] = useState('all');
     const [selected, setSelected] = useState(null);
 
+    const canAccess = role === 'admin' || role === 'giamdoc';
     const { isDesktop } = useLayout();
     const { styles: cardStyles } = useCardStyles();
     const { styles: tableStyles } = useTableStyles();
@@ -142,7 +143,7 @@ export default function UsersScreen() {
         { icon: 'time-outline', label: 'Chờ duyệt', value: String(stats.unverified || 0), color: '#D97706', bg: '#FFFBEB' },
     ];
 
-    if (role !== 'admin') return (
+    if (!canAccess) return (
         <TabScreenLayout>
             <EmptyState empty icon="lock-closed-outline" title="Không có quyền truy cập" />
         </TabScreenLayout>
@@ -183,8 +184,8 @@ export default function UsersScreen() {
                                         isDesktop={isDesktop}
                                     />
                                 )}
-                                showsVerticalScrollIndicator={false}
-                                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+                                showsVerticalScrollIndicator={true}
+                                refreshControl={< RefreshControl refreshing={refreshing} onRefresh={refresh} />}
                                 contentContainerStyle={tableStyles.listContainer}
                             />
                         )}

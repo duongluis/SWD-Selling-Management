@@ -1,24 +1,22 @@
-// app/(tabs)/customerCTV.jsx — refactored
+// app/(tabs)/customerCTV.jsx
 
 import { useScreenData } from '@/components/Hooks/useScreenData';
 import { useSearch } from '@/components/Hooks/useSearch';
 import EmptyState from '@/components/Main/EmptyState';
 import ScreenHeader from '@/components/Main/ScreenHeader';
 import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
+import CtvDetail from '@/components/UI/ctvDetail'; // ← default import, không phải named
 import StatBar from '@/components/UI/StatBar';
 import { getInitials } from '@/components/Utils/formatters';
-import { getRole } from '@/components/Utils/roleHelper';
+import { canAddCTV, getRole } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useContext } from 'react';
+import { useContext, useState } from 'react'; // ← thêm useState
 import {
-    FlatList,
-    RefreshControl,
+    FlatList, RefreshControl,
     StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
-
-
 
 const CONSULT_STATUS_CFG = {
     success: { color: '#059669', bg: '#ECFDF5', label: 'Thành công' },
@@ -57,8 +55,9 @@ export default function CustomerCTVScreen() {
     const { isDesktop } = useLayout();
 
     const role = getRole(userDetail);
-    const canAccess = role !== 'admin' && role !== 'daily' && isDesktop;
-    // map docId → status
+    const [selected, setSelected] = useState(null);  // ← tách ra dòng riêng
+
+    const canAccess = canAddCTV(role) && isDesktop;
     const consultMap = Object.fromEntries(consultList.map(c => [c.docId, c.status || 'none']));
 
     const statCards = [
@@ -68,10 +67,14 @@ export default function CustomerCTVScreen() {
     ];
 
     const handlePress = (item) => {
-        router.push({
-            pathname: '/CustomerView/[customerID]',
-            params: { customerid: item?.docId, customerParam: JSON.stringify(item) },
-        });
+        if (isDesktop) {
+            setSelected(p => p?.docId === item.docId ? null : item);
+        } else {
+            router.push({
+                pathname: '/CustomerView/[customerID]',
+                params: { customerid: item?.docId, customerParam: JSON.stringify(item) },
+            });
+        }
     };
 
     return (
@@ -82,40 +85,61 @@ export default function CustomerCTVScreen() {
                 searchValue={query}
                 onSearchChange={setQuery}
                 searchPlaceholder="Tìm tên, SĐT..."
-                actionLabel={canAccess ? 'Thêm tư vấn' : undefined}
+                canAccess={canAccess}
+                actionLabel="Thêm tư vấn"
                 actionIcon="add"
                 onAction={() => router.push('/addConsult')}
             />
 
             <StatBar stats={statCards} />
 
-            {loading ? <EmptyState loading /> :
-                result.length === 0 ? (
-                    <EmptyState
-                        empty
-                        icon="people-outline"
-                        title={query ? 'Không tìm thấy' : 'Chưa có khách hàng'}
-                        subtitle="Bấm Thêm tư vấn để bắt đầu"
-                        actionLabel="Thêm tư vấn"
-                        onAction={() => router.push('/addConsult')}
-                    />
-                ) : (
-                    <FlatList
-                        data={result}
-                        keyExtractor={(item, i) => item.docId || String(i)}
-                        renderItem={({ item, index }) => (
-                            <ConsultCard
-                                item={item}
-                                index={index}
-                                statusKey={consultMap[item.docId] || 'none'}
-                                onPress={handlePress}
-                            />
-                        )}
-                        contentContainerStyle={{ paddingHorizontal: isDesktop ? 32 : 16, paddingBottom: 100 }}
-                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-                        showsVerticalScrollIndicator={false}
+            {/* ── Split layout: danh sách + panel ── */}
+            <View style={{ flex: 1, flexDirection: 'row' }}>
+                <View style={{ flex: 1 }}>
+                    {loading ? (
+                        <EmptyState loading />
+                    ) : result.length === 0 ? (
+                        <EmptyState
+                            empty
+                            icon="people-outline"
+                            title={query ? 'Không tìm thấy' : 'Chưa có khách hàng'}
+                            subtitle="Bấm Thêm tư vấn để bắt đầu"
+                            actionLabel="Thêm tư vấn"
+                            onAction={() => router.push('/addConsult')}
+                            canAdd={canAccess}
+
+                        />
+                    ) : (
+                        <FlatList
+                            data={result}
+                            keyExtractor={(item, i) => item.docId || String(i)}
+                            renderItem={({ item, index }) => (
+                                <ConsultCard
+                                    item={item}
+                                    index={index}
+                                    statusKey={consultMap[item.docId] || 'none'}
+                                    onPress={handlePress}
+                                />
+                            )}
+                            contentContainerStyle={{
+                                paddingHorizontal: isDesktop ? 32 : 16,
+                                paddingBottom: 100,
+                            }}
+                            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+                            showsVerticalScrollIndicator={true}
+                        />
+                    )}
+                </View>
+
+                {/* Panel detail — chỉ hiện desktop khi đã chọn */}
+                {isDesktop && selected && (
+                    <CtvDetail
+                        customer={selected}
+                        onClose={() => setSelected(null)}
+                        onUpdated={(updated) => setSelected(updated)}
                     />
                 )}
+            </View>
         </TabScreenLayout>
     );
 }
