@@ -1,7 +1,7 @@
 // app/(tabs)/regionReport.jsx — Báo cáo khu vực
 
 import TabScreenLayout from '@/components/Main/TabScreenLayout';
-import { getRole } from '@/components/Utils/roleHelper';
+import { getRole, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -93,7 +93,7 @@ const RC = StyleSheet.create({
 export default function RegionReportScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
-    const isAdmin = role === 'admin' || role === 'giamdoc';
+    const isAdmin = isAdminOrGD(role);
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);

@@ -19,6 +19,7 @@ import { showSuccess } from '../../../components/Main/showSuccess';
 import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import HelpButton from '@/components/Help/HelpButton';
 
 const SERVICE_TYPES = [
     { key: 'MAINTENANCE', label: 'Bảo dưỡng', icon: 'construct-outline', color: '#F59E0B', bg: '#FFFBEB' },
@@ -227,10 +228,13 @@ export default function EditService() {
                         <Text style={W.pageTitle}>Sửa dịch vụ</Text>
                         <Text style={W.pageSub}>Mã dịch vụ: {serviceId}</Text>
                     </View>
-                    <TouchableOpacity style={W.cancelBtn} onPress={() => router.back()}>
-                        <Ionicons name="close" size={16} color="#64748B" />
-                        <Text style={W.cancelBtnText}>Huỷ</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <HelpButton screenKey="editService" />
+                        <TouchableOpacity style={W.cancelBtn} onPress={() => router.back()}>
+                            <Ionicons name="close" size={16} color="#64748B" />
+                            <Text style={W.cancelBtnText}>Huỷ</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 <View style={W.grid}>

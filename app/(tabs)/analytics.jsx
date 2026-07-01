@@ -1,7 +1,7 @@
 // app/(tabs)/analytics.jsx — Báo cáo doanh thu (redesign) responsive
 import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import { THEME } from '@/components/Styles/theme';
-import { getRole } from '@/components/Utils/roleHelper';
+import { getRole, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -49,7 +49,7 @@ function BarChart({ bars }) {
 export default function AnalyticsScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
-    const fullAccess = role === 'admin' || role === 'giamdoc';
+    const fullAccess = isAdminOrGD(role);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [orders, setOrders] = useState([]);

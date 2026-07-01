@@ -19,6 +19,7 @@ import { showSuccess } from '../../../components/Main/showSuccess';
 import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import HelpButton from '@/components/Help/HelpButton';
 
 const toDateStr = (d) => {
     const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
@@ -295,10 +296,13 @@ export default function EditOrder() {
                             </View>
                         </View>
                     </View>
-                    <TouchableOpacity style={W.cancelBtn} onPress={() => router.back()}>
-                        <Ionicons name="close" size={16} color="#64748B" />
-                        <Text style={W.cancelBtnText}>Huỷ</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <HelpButton screenKey="editOrder" />
+                        <TouchableOpacity style={W.cancelBtn} onPress={() => router.back()}>
+                            <Ionicons name="close" size={16} color="#64748B" />
+                            <Text style={W.cancelBtnText}>Huỷ</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* 2-column grid */}

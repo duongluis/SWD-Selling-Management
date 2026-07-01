@@ -1,12 +1,10 @@
 // app/(tabs)/team.jsx
+import { useScreenData } from '@/components/Hooks/useScreenData';
 import BgWatermark from '@/components/Main/BgWatermark';
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import UserDetail from '@/components/UI/UserDetail';
-import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { useCallback, useContext, useState } from 'react';
+import { useState } from 'react';
 import {
     ActivityIndicator,
     Dimensions,
@@ -16,23 +14,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fmtPhone } from '../../components/Utils/formatters';
-import { db } from '../../config/firebaseConfig';
 
-
-
-// Map role hiển thị
 const ROLE_DISPLAY = {
     'đại lý': 'Đại lý',
     'Đối tác': 'Đối tác',
+    'đối tác': 'Đối tác',
     'cộng tác viên': 'CTV',
+    'ctv': 'CTV',
     'admin': 'Admin',
+    'giamdoc': 'Giám đốc',
 };
 
-// Sắp xếp thứ tự role: Đại lý > Đối tác > CTV
-const ROLE_ORDER = { 'đại lý': 1, 'Đối tác': 2, 'cộng tác viên': 3 };
-
 function MemberCard({ member, onPress }) {
-    const roleLabel = ROLE_DISPLAY[member.role] || member.role || '—';
+    const roleLabel = ROLE_DISPLAY[member.role?.toLowerCase()] || member.role || '—';
     return (
         <TouchableOpacity style={styles.card} onPress={() => onPress(member)} activeOpacity={0.7}>
             <View style={styles.avatar}>
@@ -58,63 +52,12 @@ function MemberCard({ member, onPress }) {
 
 export default function TeamView() {
     const insets = useSafeAreaInsets();
-    const router = useRouter();
-    const { userDetail } = useContext(UserDetailContext);
-    const [members, setMembers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [error, setError] = useState(null);
-    const [selectedMember, setSelectedMember] = useState(null); // state cho panel chi tiết
     const { isDesktop } = useLayout();
 
-    const fetchTeam = useCallback(async () => {
-        if (!userDetail?.email) return;
-        setError(null);
-        try {
-            // Lấy L2 — những người có advisor trực tiếp là mình
-            const l2Snap = await getDocs(
-                query(collection(db, 'users'), where('advisor', '==', userDetail.email))
-            );
-            const l2 = l2Snap.docs.map(doc => ({
-                ...doc.data(), id: doc.id, _level: 'L2'
-            }));
+    // ← Chỉ dùng useScreenData, bỏ hết state thủ công
+    const { data: members, loading, refreshing, refresh, error } = useScreenData('team');
+    const [selectedMember, setSelectedMember] = useState(null);
 
-            // Lấy L3 — những người có advisor là một trong các L2
-            let l3 = [];
-            for (const l2Member of l2) {
-                if (!l2Member.email) continue;
-                const l3Snap = await getDocs(
-                    query(collection(db, 'users'), where('advisor', '==', l2Member.email))
-                );
-                l3.push(...l3Snap.docs.map(doc => ({
-                    ...doc.data(), id: doc.id, _level: 'L3'
-                })));
-            }
-
-            const all = [...l2, ...l3];
-            all.sort((a, b) => (ROLE_ORDER[a.role] || 99) - (ROLE_ORDER[b.role] || 99));
-            setMembers(all);
-        } catch (err) {
-            console.error(err);
-            setError('Không thể tải danh sách');
-        } finally {
-            setLoading(false);
-        }
-    }, [userDetail?.email]);
-
-    useFocusEffect(
-        useCallback(() => {
-            fetchTeam();
-        }, [fetchTeam])
-    );
-
-    const onRefresh = async () => {
-        setRefreshing(true);
-        await fetchTeam();
-        setRefreshing(false);
-    };
-
-    // Nhóm theo role
     const grouped = members.reduce((acc, m) => {
         const role = m.role || 'other';
         if (!acc[role]) acc[role] = [];
@@ -122,14 +65,21 @@ export default function TeamView() {
         return acc;
     }, {});
 
-    const roleSections = Object.entries(grouped).map(([role, items]) => ({
-        title: ROLE_DISPLAY[role] || role,
-        data: items,
-    }));
+    const ROLE_ORDER = { 'đại lý': 1, 'đối tác': 2, 'Đối tác': 2, 'cộng tác viên': 3, 'ctv': 3 };
+
+    const roleSections = Object.entries(grouped)
+        .map(([role, items]) => ({
+            title: ROLE_DISPLAY[role?.toLowerCase()] || role,
+            data: items,
+        }))
+        .sort((a, b) => {
+            const order = { 'Đại lý': 1, 'Đối tác': 2, 'CTV': 3 };
+            return (order[a.title] || 99) - (order[b.title] || 99);
+        });
 
     if (loading) {
         return (
-            <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[styles.root, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
                 <ActivityIndicator size="large" color="#2563EB" />
                 <Text style={styles.loadingText}>Đang tải...</Text>
             </View>
@@ -138,32 +88,28 @@ export default function TeamView() {
 
     if (error) {
         return (
-            <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[styles.root, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
                 <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
                 <Text style={styles.errorText}>{error}</Text>
-                <TouchableOpacity style={styles.retryBtn} onPress={fetchTeam}>
+                <TouchableOpacity style={styles.retryBtn} onPress={refresh}> {/* ← refresh thay vì fetchTeam */}
                     <Text style={styles.retryText}>Thử lại</Text>
                 </TouchableOpacity>
             </View>
         );
     }
 
-    // Render nội dung danh sách và panel chi tiết (giống users.jsx)
     return (
         <View style={[styles.root, { paddingTop: insets.top }]}>
             <BgWatermark />
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Đội ngũ của tôi</Text>
-                <Text style={styles.headerSub}>
-                    {members.length} thành viên trực thuộc
-                </Text>
+                <Text style={styles.headerSub}>{members.length} thành viên trực thuộc</Text>
             </View>
 
             <View style={styles.contentRow}>
-                {/* Danh sách thành viên */}
                 <View style={styles.listContainer}>
                     <ScrollView
-                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
                         showsVerticalScrollIndicator={true}
                         contentContainerStyle={styles.scrollContent}
                     >
@@ -183,7 +129,11 @@ export default function TeamView() {
                                         <Text style={styles.sectionCount}>{section.data.length}</Text>
                                     </View>
                                     {section.data.map(member => (
-                                        <MemberCard key={member.id} member={member} onPress={setSelectedMember} />
+                                        <MemberCard
+                                            key={member.docId || member.email}
+                                            member={member}
+                                            onPress={setSelectedMember}
+                                        />
                                     ))}
                                 </View>
                             ))
@@ -192,34 +142,23 @@ export default function TeamView() {
                     </ScrollView>
                 </View>
 
-                {/* Panel chi tiết (chỉ hiển thị trên web, mobile thì có thể dùng modal nhưng giữ đơn giản) */}
                 {isDesktop && selectedMember && (
                     <UserDetail
                         user={selectedMember}
                         onClose={() => setSelectedMember(null)}
-                        onUpdated={(updated) => {
-                            // Cập nhật lại danh sách nếu cần
-                            setMembers(prev => prev.map(m => m.email === updated.email ? updated : m));
-                            setSelectedMember(updated);
-                        }}
+                        onUpdated={(updated) => setSelectedMember(updated)}
                     />
                 )}
             </View>
 
-            {/* Trên mobile: khi chọn member, điều hướng sang màn chi tiết (có thể dùng modal nếu muốn) */}
-            {
-                !isDesktop && selectedMember && (
-                    <UserDetail
-                        user={selectedMember}
-                        onClose={() => setSelectedMember(null)}
-                        onUpdated={(updated) => {
-                            setMembers(prev => prev.map(m => m.email === updated.email ? updated : m));
-                            setSelectedMember(updated);
-                        }}
-                    />
-                )
-            }
-        </View >
+            {!isDesktop && selectedMember && (
+                <UserDetail
+                    user={selectedMember}
+                    onClose={() => setSelectedMember(null)}
+                    onUpdated={(updated) => setSelectedMember(updated)}
+                />
+            )}
+        </View>
     );
 }
 

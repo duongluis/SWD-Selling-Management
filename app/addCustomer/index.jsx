@@ -2,6 +2,7 @@
 
 import BgWatermark from '@/components/Main/BgWatermark';
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import HelpButton from '@/components/Help/HelpButton';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -157,10 +158,13 @@ export default function AddCustomer() {
             <Text style={W.pageTitle}>Thêm khách hàng mới</Text>
             <Text style={W.pageSub}>Điền thông tin để thêm khách hàng vào danh sách của bạn</Text>
           </View>
-          <TouchableOpacity style={W.cancelBtn} onPress={() => handleCancel()}>
-            <Ionicons name="close" size={16} color="#64748B" />
-            <Text style={W.cancelBtnText}>Huỷ</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <HelpButton screenKey="addCustomer" />
+            <TouchableOpacity style={W.cancelBtn} onPress={() => handleCancel()}>
+              <Ionicons name="close" size={16} color="#64748B" />
+              <Text style={W.cancelBtnText}>Huỷ</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={W.grid}>

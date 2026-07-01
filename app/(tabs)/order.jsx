@@ -18,7 +18,7 @@ import { useCardStyles } from '@/components/Styles/cardStyles';
 import { useTableStyles } from '@/components/Styles/tableStyles';
 import { THEME } from '@/components/Styles/theme';
 import { db } from '@/config/firebaseConfig';
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 
@@ -31,11 +31,23 @@ const AVATAR_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#
 
 const STATUS_CFG = {
   'Chờ xác nhận': { c: '#D97706', bg: '#FFFBEB', bd: '#FDE68A' },
+  // Don le - tên mới
+  'Chờ xử lý': { c: '#2563EB', bg: '#EFF6FF', bd: '#BFDBFE' },
+  'Đang xử lý': { c: '#7C3AED', bg: '#F5F3FF', bd: '#DDD6FE' },
+  'Đã xử lý': { c: '#059669', bg: '#ECFDF5', bd: '#A7F3D0' },
+  // Don le - tên cũ (backward compat cho đơn đã tạo trước)
   'Chờ lắp đặt': { c: '#2563EB', bg: '#EFF6FF', bd: '#BFDBFE' },
   'Đang lắp đặt': { c: '#7C3AED', bg: '#F5F3FF', bd: '#DDD6FE' },
+  'Đã lắp đặt': { c: '#059669', bg: '#ECFDF5', bd: '#A7F3D0' },
+  // Don buon
+  'Chờ giao hàng': { c: '#2563EB', bg: '#EFF6FF', bd: '#BFDBFE' },
+  'Đang giao hàng': { c: '#7C3AED', bg: '#F5F3FF', bd: '#DDD6FE' },
+  'Đã giao hàng': { c: '#059669', bg: '#ECFDF5', bd: '#A7F3D0' },
+  'Chờ thanh toán': { c: '#EA580C', bg: '#FFF7ED', bd: '#FED7AA' },
   'Đã thanh toán': { c: '#16A34A', bg: '#DCFCE7', bd: '#86EFAC' },
   'Đã hủy': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
   'CANCELLED': { c: '#DC2626', bg: '#FEF2F2', bd: '#FCA5A5' },
+  'PENDING': { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' },
 };
 
 // Thêm map hiển thị paymentMethod
@@ -46,45 +58,26 @@ const PAYMENT_CFG = {
 
 const getStatusCfg = (s) => STATUS_CFG[s] || { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' };
 
-const canShowCost = (userDetail, role) => {
-  if (isAdmin(role)) return true;
-  return userDetail?.advisor == null;
+const getItemCost = (p, priceField) => {
+  if (!priceField) return 0;
+  return PARSE(p[priceField] ?? p.basePrice ?? 0);
 };
 
-const getItemCost = (p, priceField, productPrices) =>
-  PARSE(productPrices[p.name]?.[priceField] ?? 0);
+const getCostPriceField = (order, role, rootAdvisorRoles) => {
+  // if (isAdmin(role)) return 'price';// admin xem giá gốc
 
-const getCostPriceField = (order, role, advisorRoles) => {
-  if (isAdmin(role)) return 'price';
-  const creatorRole = advisorRoles[order?.createdBy];
-  if (creatorRole) return getPriceField(creatorRole);
-  return getPriceField(role);
-};
-
-// ── Traverse lên advisor cao nhất ────────────────────────────
-const getRootAdvisorRole = async (userEmail) => {
-  let currentEmail = userEmail;
-  let visited = new Set();
-
-  while (currentEmail) {
-    if (visited.has(currentEmail)) break; // tránh vòng lặp
-    visited.add(currentEmail);
-
-    const snap = await getDoc(doc(db, 'users', currentEmail));
-    if (!snap.exists()) break;
-
-    const data = snap.data();
-    const advisor = data?.advisor;
-
-    if (!advisor) {
-      // Đây là người cao nhất, lấy role của họ
-      return getRole(data);
-    }
-
-    currentEmail = advisor;
+  if (order?.rootAdvisor && rootAdvisorRoles[order.rootAdvisor]) {
+    return getPriceField(rootAdvisorRoles[order.rootAdvisor]);
   }
 
-  return 'daily'; // fallback
+  return 0;
+  // return getPriceField(role); // fallback
+};
+
+const canShowCost = (userDetail, role) => {
+  // if (role === 'giamdoc') return false; // ← thêm: giamdoc chỉ xem, không thấy giá nhập
+  if (isAdmin(role)) return true;
+  return userDetail?.advisor == null;
 };
 
 // ── Bảng tiêu đề ─────────────────────────────────────────────
@@ -132,7 +125,7 @@ function TotalRow({ totalCost, totalRevenue, showCost, showCreator, tableStyles 
 }
 
 // ── Dòng dữ liệu đơn hàng ────────────────────────────────────
-function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles, productPrices, tableStyles, showCreator, creatorNames }) {
+function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles, tableStyles, showCreator, creatorNames }) {
   const tcfg = TYPE_CFG[item.orderType];
   const pcfg = PAYMENT_CFG[item.paymentMethod] || { label: item.paymentMethod || '—', c: '#64748B', bg: '#F1F5F9' };
   const total = (item.items || []).reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
@@ -147,7 +140,7 @@ function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles
 
   const priceField = getCostPriceField(item, role, advisorRoles);
   const totalCostRow = (item.items || []).reduce((s, p) =>
-    s + getItemCost(p, priceField, productPrices) * PARSE(p.qty || 1), 0
+    s + getItemCost(p, priceField) * PARSE(p.qty || 1), 0
   );
 
   return (
@@ -242,20 +235,19 @@ export default function OrderScreen() {
   const { styles: tableStyles } = useTableStyles();
 
   const [advisorRoles, setAdvisorRoles] = useState({});
-  const [productPrices, setProductPrices] = useState({});
 
   const [creatorNames, setCreatorNames] = useState({});
   const showCreator = isAdmin(role) || role === 'daily';
 
   const [monthFilter, setMonthFilter] = useState('all');
-  const [yearFilter, setYearFilter] = useState(String(new Date().getFullYear()));
+  const [yearFilter, setYearFilter] = useState('all');
   const [showFilter, setShowFilter] = useState(false);
 
   // Đếm số filter đang active
   const activeFilterCount = [
     paymentFilter !== 'all',
     statusFilter !== 'all',
-    yearFilter !== String(new Date().getFullYear()),
+    yearFilter !== 'all',
     monthFilter !== 'all',
   ].filter(Boolean).length;
 
@@ -280,17 +272,6 @@ export default function OrderScreen() {
     [userDetail?.advisor, role]
   );
 
-  useEffect(() => {
-    const fetchProductPrices = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'productPrice'));
-        const map = {};
-        snap.docs.forEach(d => { map[d.id] = d.data(); });
-        setProductPrices(map);
-      } catch (_) { }
-    };
-    fetchProductPrices();
-  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -306,7 +287,7 @@ export default function OrderScreen() {
 
       const mt = typeFilter === 'all' || o.orderType === typeFilter;
       let mst = true;
-      if (statusFilter === 'processing') mst = ['Chờ lắp đặt', 'Đang lắp đặt'].includes(o.status);
+      if (statusFilter === 'processing') mst = ['Chờ lắp đặt', 'Đang lắp đặt', 'Chờ xử lý', 'Đang xử lý'].includes(o.status);
       else if (statusFilter !== 'all') mst = o.status === statusFilter;
 
       const createdAt = o.createdAt || '';
@@ -325,10 +306,10 @@ export default function OrderScreen() {
       .reduce((sum, o) => {
         const priceField = getCostPriceField(o, role, advisorRoles);
         return sum + (o.items || []).reduce((s, p) =>
-          s + getItemCost(p, priceField, productPrices) * PARSE(p.qty || 1), 0
+          s + getItemCost(p, priceField) * PARSE(p.qty || 1), 0
         );
       }, 0);
-  }, [filtered, role, advisorRoles, productPrices, showCostField]);
+  }, [filtered, role, advisorRoles, showCostField]); // ← bỏ productPrices
 
   useEffect(() => {
     if (!data.length || !showCreator) return;
@@ -357,22 +338,27 @@ export default function OrderScreen() {
       s + (o.items || []).reduce((ss, p) => ss + PARSE(p.price) * PARSE(p.qty || 1), 0), 0)
     , [filtered]);
 
-  // ── Fetch advisor roles (thay useEffect cũ) ──────────────────
   useEffect(() => {
     if (!data.length) return;
 
-    const creators = [...new Set(data.map(o => o.createdBy).filter(Boolean))];
-    if (!creators.length) return;
+    // Lấy unique rootAdvisors từ data (thay vì createdBy)
+    const rootAdvisors = [...new Set(data.map(o => o.rootAdvisor).filter(Boolean))];
+    if (!rootAdvisors.length) return;
 
-    const fetchAdvisorRoles = async () => {
+    const fetchRootAdvisorRoles = async () => {
       const roles = {};
-      await Promise.all(creators.map(async (email) => {
-        roles[email] = await getRootAdvisorRole(email);
+      await Promise.all(rootAdvisors.map(async (email) => {
+        try {
+          const snap = await getDoc(doc(db, 'users', email));
+          if (snap.exists()) {
+            roles[email] = getRole(snap.data()); // lấy role trực tiếp, không traverse
+          }
+        } catch (_) { }
       }));
-      setAdvisorRoles(roles); // key: createdBy email → root role
+      setAdvisorRoles(roles); // key: rootAdvisor email → role
     };
 
-    fetchAdvisorRoles();
+    fetchRootAdvisorRoles();
   }, [data]);
 
   useEffect(() => {
@@ -397,10 +383,10 @@ export default function OrderScreen() {
       .reduce((sum, o) => {
         const priceField = getCostPriceField(o, role, advisorRoles);
         return sum + (o.items || []).reduce((s, p) =>
-          s + getItemCost(p, priceField, productPrices) * PARSE(p.qty || 1), 0
+          s + getItemCost(p, priceField) * PARSE(p.qty || 1), 0
         );
       }, 0);
-  }, [data, role, advisorRoles, productPrices]);
+  }, [data, role, advisorRoles]); // ← bỏ productPrices
 
   const statCards = [
     { icon: 'receipt-outline', label: 'Đơn hàng', value: String(stats.total || 0), color: THEME.colors.primary, bg: THEME.colors.primaryLight },
@@ -472,7 +458,7 @@ export default function OrderScreen() {
               onPress={() => {
                 setPaymentFilter('all');
                 setStatusFilter('all');
-                setYearFilter(String(new Date().getFullYear()));
+                setYearFilter('all');
                 setMonthFilter('all');
                 setSelected(null);
               }}
@@ -486,83 +472,86 @@ export default function OrderScreen() {
         {/* Dropdown panel */}
         {showFilter && (
           <View style={FF.dropdown}>
+
             {/* Hình thức thanh toán */}
-            <Text style={FF.groupLabel}>Hình thức thanh toán</Text>
-            <View style={FF.chipRow}>
-              {[
-                { key: 'all', label: 'Tất cả' },
-                { key: 'customer', label: 'Khách hàng' },
-                { key: 'company', label: 'Doanh nghiệp' },
-              ].map(opt => (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[FF.chip, paymentFilter === opt.key && FF.chipActive]}
-                  onPress={() => { setPaymentFilter(opt.key); setSelected(null); }}
-                >
-                  <Text style={[FF.chipText, paymentFilter === opt.key && FF.chipTextActive]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={FF.filterRow}>
+              <Text style={FF.groupLabel}>Loại</Text>
+              <View style={FF.chipRow}>
+                {[
+                  { key: 'all', label: 'Tất cả' },
+                  { key: 'customer', label: 'Khách hàng' },
+                  { key: 'company', label: 'Doanh nghiệp' },
+                ].map(opt => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[FF.chip, paymentFilter === opt.key && FF.chipActive]}
+                    onPress={() => { setPaymentFilter(opt.key); setSelected(null); }}
+                  >
+                    <Text style={[FF.chipText, paymentFilter === opt.key && FF.chipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
             {/* Trạng thái */}
-            <Text style={FF.groupLabel}>Trạng thái</Text>
-            <View style={FF.chipRow}>
-              {[
-                { key: 'all', label: 'Tất cả' },
-                { key: 'Chờ xác nhận', label: 'Chờ xác nhận' },
-                { key: 'processing', label: 'Đang xử lý' },
-                { key: 'Đã thanh toán', label: 'Đã thanh toán' },
-                { key: 'Đã hủy', label: 'Đã hủy' },
-              ].map(opt => (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[FF.chip, statusFilter === opt.key && FF.chipActive]}
-                  onPress={() => { setStatusFilter(opt.key); setSelected(null); }}
-                >
-                  <Text style={[FF.chipText, statusFilter === opt.key && FF.chipTextActive]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={FF.filterRow}>
+              <Text style={FF.groupLabel}>Trạng thái</Text>
+              <View style={FF.chipRow}>
+                {[
+                  { key: 'all', label: 'Tất cả' },
+                  { key: 'Chờ xác nhận', label: 'Chờ xác nhận' },
+                  { key: 'processing', label: 'Đang xử lý' },
+                  { key: 'Chờ thanh toán', label: 'Chờ thanh toán' },
+                  { key: 'Đã thanh toán', label: 'Đã thanh toán' },
+                  { key: 'Đã hủy', label: 'Đã hủy' },
+                ].map(opt => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[FF.chip, statusFilter === opt.key && FF.chipActive]}
+                    onPress={() => { setStatusFilter(opt.key); setSelected(null); }}
+                  >
+                    <Text style={[FF.chipText, statusFilter === opt.key && FF.chipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
-            {/* Năm */}
-            <Text style={FF.groupLabel}>Năm</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={FF.chipRow}>
-                {yearOptions.map(opt => (
-                  <TouchableOpacity
-                    key={opt.key}
-                    style={[FF.chip, yearFilter === opt.key && FF.chipActive]}
-                    onPress={() => { setYearFilter(opt.key); setSelected(null); }}
-                  >
-                    <Text style={[FF.chipText, yearFilter === opt.key && FF.chipTextActive]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+            {/* Năm + Tháng cùng hàng */}
+            <View style={FF.filterRow}>
+              <Text style={FF.groupLabel}>Năm / Tháng</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={FF.chipRow}>
+                  {yearOptions.map(opt => (
+                    <TouchableOpacity
+                      key={opt.key}
+                      style={[FF.chip, yearFilter === opt.key && FF.chipActive]}
+                      onPress={() => { setYearFilter(opt.key); setSelected(null); }}
+                    >
+                      <Text style={[FF.chipText, yearFilter === opt.key && FF.chipTextActive]}>
+                        {opt.label === 'Tất cả năm' ? 'Tất cả' : opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                  <View style={FF.divider} />
+                  {monthOptions.map(opt => (
+                    <TouchableOpacity
+                      key={opt.key}
+                      style={[FF.chip, monthFilter === opt.key && FF.chipActive]}
+                      onPress={() => { setMonthFilter(opt.key); setSelected(null); }}
+                    >
+                      <Text style={[FF.chipText, monthFilter === opt.key && FF.chipTextActive]}>
+                        {opt.label === 'Tất cả tháng' ? 'Tất cả' : `T${parseInt(opt.key)}`}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
 
-            {/* Tháng */}
-            <Text style={FF.groupLabel}>Tháng</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={FF.chipRow}>
-                {monthOptions.map(opt => (
-                  <TouchableOpacity
-                    key={opt.key}
-                    style={[FF.chip, monthFilter === opt.key && FF.chipActive]}
-                    onPress={() => { setMonthFilter(opt.key); setSelected(null); }}
-                  >
-                    <Text style={[FF.chipText, monthFilter === opt.key && FF.chipTextActive]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
           </View>
         )}
       </View>
@@ -608,7 +597,7 @@ export default function OrderScreen() {
                   showCost={showCostField}
                   role={role}
                   advisorRoles={advisorRoles}
-                  productPrices={productPrices}
+
                   tableStyles={tableStyles}
                   showCreator={showCreator}
                   creatorNames={creatorNames}
@@ -695,7 +684,6 @@ const YF = StyleSheet.create({
 
 
 const FF = StyleSheet.create({
-  // Nút filter
   filterBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 8,
@@ -712,38 +700,51 @@ const FF = StyleSheet.create({
   },
   filterBadgeText: { fontSize: 10, fontWeight: '800', color: '#1E3A8A' },
 
-  // Reset button
   resetBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 8,
   },
   resetText: { fontSize: 12, fontWeight: '600', color: '#EF4444' },
 
-  // Dropdown
   dropdown: {
     marginTop: 8,
     backgroundColor: '#fff',
     borderRadius: 12,
     borderWidth: 1, borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 4,                     // ← giảm gap giữa các row
     shadowColor: '#0F172A',
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 6,
   },
+
+  // Mới: mỗi nhóm là 1 hàng ngang label + chips
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
   groupLabel: {
     fontSize: 10, fontWeight: '700', color: '#94A3B8',
     textTransform: 'uppercase', letterSpacing: 0.5,
-    marginTop: 6, marginBottom: 2,
+    width: 62,                  // ← fixed width để các chips thẳng hàng
   },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, flex: 1 },
   chip: {
-    paddingHorizontal: 12, paddingVertical: 6,
+    paddingHorizontal: 10, paddingVertical: 4,   // ← nhỏ hơn chút
     borderRadius: 20, backgroundColor: '#F1F5F9',
     borderWidth: 1, borderColor: '#E2E8F0',
   },
   chipActive: { backgroundColor: '#1E3A8A', borderColor: '#1E3A8A' },
   chipText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
   chipTextActive: { color: '#fff' },
+
+  // Mới: ngăn cách giữa năm và tháng
+  divider: {
+    width: 1, backgroundColor: '#E2E8F0',
+    marginHorizontal: 4, alignSelf: 'stretch',
+  },
 });

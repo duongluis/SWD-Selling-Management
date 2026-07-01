@@ -3,6 +3,7 @@ import BgWatermark from '@/components/Main/BgWatermark';
 import { showAlert } from '@/components/Main/showAlert';
 import { showSuccess } from '@/components/Main/showSuccess';
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import HelpButton from '@/components/Help/HelpButton';
 import { db } from '@/config/firebaseConfig';
 import Colors from '@/constant/Colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -110,10 +111,13 @@ export default function EditCustomerScreen() {
                         <Text style={W.pageTitle}>Sửa thông tin khách hàng</Text>
                         <Text style={W.pageSub}>Cập nhật thông tin khách hàng trong danh sách của bạn</Text>
                     </View>
-                    <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('(tabs)/customer')}>
-                        <Ionicons name="close" size={16} color="#64748B" />
-                        <Text style={W.cancelBtnText}>Huỷ</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <HelpButton screenKey="editCustomer" />
+                        <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('(tabs)/customer')}>
+                            <Ionicons name="close" size={16} color="#64748B" />
+                            <Text style={W.cancelBtnText}>Huỷ</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 <View style={W.grid}>

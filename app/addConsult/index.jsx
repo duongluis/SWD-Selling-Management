@@ -18,6 +18,7 @@ import { createNotification } from '../../components/Utils/chatService';
 import { db } from '../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import HelpButton from '@/components/Help/HelpButton';
 
 const width = Dimensions.get('window').width
 // ── Field component ───────────────────────────────────────────
@@ -132,6 +133,7 @@ export default function AddConsultScreen() {
                     <Text style={styles.headerTitle}>Thêm khách hàng tư vấn</Text>
                     <Text style={styles.headerSub}>Ghi nhận thông tin buổi tư vấn</Text>
                 </View>
+                <HelpButton screenKey="addConsult" />
             </View>
 
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

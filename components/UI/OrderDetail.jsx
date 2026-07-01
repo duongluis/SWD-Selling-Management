@@ -751,7 +751,16 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                                             <View style={{ flex: 1 }}>
                                                 <Text style={DP.svId}>#{sv.id || sv.docId?.slice(-6)}</Text>
                                                 <Text style={DP.svType}>
-                                                    {sv.type === 'DELIVERY' ? 'Giao hàng' : 'Lắp đặt'}
+                                                    {sv.name || {
+                                                        DELIVERY: 'Giao hàng',
+                                                        INSTALLATION: 'Lắp đặt',
+                                                        MAINTENANCE: 'Bảo dưỡng',
+                                                        CONSULTING: 'Tư vấn',
+                                                        giao_hang: 'Giao hàng',
+                                                        lap_dat: 'Lắp đặt',
+                                                        bao_duong: 'Bảo dưỡng',
+                                                        tu_van: 'Tư vấn',
+                                                    }[sv.type] || sv.type || 'Dịch vụ'}
                                                 </Text>
                                             </View>
                                             <View style={[DP.svStatus, { backgroundColor: c.bg }]}>

@@ -232,9 +232,64 @@ Cập nhật lần cuối: 2026-05-15
     - handleConsultStatusChange: updateDoc vào collection 'consult'
     - Khi chọn 'success' → router.push('/addCustomer') với params name/phone/address/note pre-filled
 
+===== 2026-07-01 =====
+
+[41] ✅ Fix 6 lỗi từ prompt.txt
+
+  [41a] Bộ lọc đơn hàng mặc định "Tất cả năm" (không phải năm 2026)
+    File: app/(tabs)/order.jsx
+    - yearFilter useState: String(new Date().getFullYear()) → 'all'
+    - activeFilterCount: yearFilter !== String(...) → yearFilter !== 'all'
+    - Reset button: setYearFilter(String(...)) → setYearFilter('all')
+
+  [41b] Đổi trạng thái đơn lẻ: Chờ/Đang/Đã lắp đặt → Chờ/Đang/Đã xử lý
+    File: config/status.json
+    - id 9: "Chờ lắp đặt" → "Chờ xử lý"
+    - id 10: "Đang lắp đặt" → "Đang xử lý"
+    - id 11: "Đã lắp đặt" → "Đã xử lý"
+    File: app/(tabs)/order.jsx
+    - STATUS_CFG: thêm entries tên mới + giữ tên cũ (backward compat đơn đã lưu)
+    - Filter "processing": thêm 'Chờ xử lý', 'Đang xử lý' vào mảng includes
+
+  [41c] Dịch vụ trong đơn hàng hiển thị đúng tên
+    File: components/UI/OrderDetail.jsx
+    - Thay sv.type === 'DELIVERY' ? 'Giao hàng' : 'Lắp đặt'
+      bằng mapping đầy đủ: DELIVERY/INSTALLATION/MAINTENANCE/CONSULTING + giao_hang/lap_dat/bao_duong/tu_van
+    - Ưu tiên sv.name → map[sv.type] → sv.type → 'Dịch vụ'
+    File: app/addService/index.jsx
+    - Lưu thêm name: currentTypeCfg?.name vào service document khi tạo
+
+  [41d] createdBy đơn hàng = người tạo khách, không phải admin
+    File: app/addOrder/index.jsx
+    - Khi role === 'admin' && selectedCustomer.createdBy:
+      + effectiveCreatorEmail = selectedCustomer.createdBy
+      + Fetch userDetail của creator để tính rootAdvisor/level đúng
+    - createdBy: effectiveCreatorEmail
+
+  [41e] Tạo dịch vụ → chọn đơn hàng → tự điền SĐT khách
+    File: app/addService/index.jsx
+    - handleSelectOrder: order._phone → order.phone
+
+  [41f] Ẩn "Lưu làm khách hàng" khi đã chọn đơn hàng có sẵn
+    File: app/addService/index.jsx
+    - Web layout + Mobile layout: bọc toggle trong {!selectedOrder && (...)}
+
 [17] Sửa đổi màn hình userInfo
     File: app/auth/userInfo.jsx
     - Bổ sung quyền lợi và điều kiện của từng vai trò
     - Bổ sung mã giới thiệu cho mỗi người dùng
     - Bổ sung trường nhập mã giới thiệu cho mỗi tài khoản khi đăng kí thông tin
-    - Sửa giao diện: hiển thị phần nhập thông tin ở phía trên phần thông tin 
+    - Sửa giao diện: hiển thị phần nhập thông tin ở phía trên phần thông tin
+
+[42] ✅ Cải thiện toàn bộ nội dung helpGuide — thân thiện hơn với người dùng mới
+    File: components/Help/helpGuide.js
+    - Tất cả 29 screenKeys được viết lại / cải thiện
+    - Mô tả: từ mô tả "những gì thấy" → hướng dẫn "phải làm gì" + workflow tiếp theo
+    - Tips: bỏ các tips hiển nhiên, thêm tips actionable (khi nào, tại sao, cái gì xảy ra tiếp theo)
+    - Bổ sung bước 2 cho các màn trước chỉ có 1 bước: consult (luồng hoa hồng), team, leaderboard,
+      commission, revenue (thêm bước biểu đồ analytics_03), profile, chatList, addOrder (3 bước)
+    - addService: viết lại đúng sau fix — order là tùy chọn, phone tự điền từ đơn,
+      "Lưu làm khách hàng" chỉ hiện khi SĐT chưa trong DB
+    - addOrder: thêm Bước 3 về dịch vụ tự động tạo khi submit
+    - consult: thêm bước giải thích luồng hoa hồng (giới thiệu → tư vấn → chốt → hoa hồng)
+    - status colors: mô tả đúng màu vàng/cam = chờ, xanh = hoàn thành, đỏ = hủy

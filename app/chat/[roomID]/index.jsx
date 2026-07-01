@@ -7,7 +7,7 @@ import { db } from '@/config/firebaseConfig';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator, FlatList, KeyboardAvoidingView,
@@ -42,14 +42,13 @@ function formatDate(val) {
     return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-// ── Order Card (hiển thị trong bubble tin nhắn) ───────────────
+// ── Order Card ────────────────────────────────────────────────
 function OrderCard({ order }) {
     const items = order.items || [];
     const total = items.reduce((sum, it) => sum + (it.price || it.basePrice || 0) * (it.qty || 1), 0);
 
     return (
         <View style={OC.card}>
-            {/* Header */}
             <View style={OC.header}>
                 <View style={OC.headerLeft}>
                     <Ionicons name="receipt-outline" size={14} color="#2563EB" />
@@ -64,7 +63,6 @@ function OrderCard({ order }) {
 
             <View style={OC.divider} />
 
-            {/* Khách hàng & Dịch vụ */}
             <View style={OC.infoRow}>
                 <View style={OC.infoCol}>
                     <Text style={OC.infoLabel}>KHÁCH HÀNG</Text>
@@ -87,7 +85,6 @@ function OrderCard({ order }) {
 
             <View style={OC.divider} />
 
-            {/* Sản phẩm */}
             <View style={OC.sectionHeader}>
                 <Ionicons name="water-outline" size={13} color="#2563EB" />
                 <Text style={OC.sectionTitle}>Sản phẩm</Text>
@@ -163,13 +160,11 @@ function MessageBubble({ msg, isMe, prevSender }) {
                 {showSenderName && <Text style={B.senderName}>{msg.senderName}</Text>}
 
                 {isOrder ? (
-                    // ── Order card bubble ──
                     <View style={[B.orderWrap, isMe && B.orderWrapMe]}>
                         <OrderCard order={msg.orderData} />
                         <Text style={[B.time, isMe && B.timeMe]}>{dateStr} {timeStr}</Text>
                     </View>
                 ) : (
-                    // ── Text bubble ──
                     <>
                         <View style={[B.bubble, isMe ? B.bubbleMe : B.bubbleThem]}>
                             <Text style={[B.msgText, isMe && B.msgTextMe]}>{msg.text}</Text>
@@ -233,7 +228,7 @@ function OrderMentionMenu({ orders, query, onSelect, onDismiss }) {
                     </TouchableOpacity>
                 ))}
             </ScrollView>
-        </View >
+        </View>
     );
 }
 
@@ -244,6 +239,10 @@ export default function ChatScreen() {
     const params = useLocalSearchParams();
     const { userDetail } = useContext(UserDetailContext);
     const { isDesktop } = useLayout();
+
+    const isAdmin = userDetail?.role === 'admin';
+    const myEmail = userDetail?.email || '';
+    const myName = userDetail?.name || myEmail;
 
     const roomId = params.roomID || params.roomId || '';
     const orderId = params.orderId || '';
@@ -258,33 +257,60 @@ export default function ChatScreen() {
     const [orders, setOrders] = useState([]);
     const [showMenu, setShowMenu] = useState(false);
     const [mentionQuery, setMentionQuery] = useState('');
-    const isAdmin = userDetail?.role === 'admin';
 
-    const myEmail = userDetail?.email || '';
-    const myName = userDetail?.name || myEmail;
+    // ── Room user email (admin cần biết đây là phòng của ai) ─
+    const [roomUserEmail, setRoomUserEmail] = useState('');
 
-    // ── Fetch orders của user (1 lần khi mount, chỉ non-admin) ─
+
+
+    // ── Fetch room info để lấy userEmail của khách (chỉ admin) ─
     useEffect(() => {
-        if (isAdmin || !myEmail) return;
+        if (!isAdmin || !roomId) return;
+
+        const fetchRoomUser = async () => {
+            try {
+                const roomDoc = await getDoc(doc(db, 'chatRooms', roomId));
+                if (roomDoc.exists()) {
+                    const data = roomDoc.data();
+                    // Ưu tiên field userEmail, fallback tìm member không phải admin
+                    const targetEmail =
+                        data.userEmail ||
+                        (data.members || []).find(m => m !== myEmail) ||
+                        '';
+                    setRoomUserEmail(targetEmail);
+                    console.log('[room] userEmail for orders:', targetEmail);
+                }
+            } catch (e) {
+                console.warn('Fetch room user error:', e);
+            }
+        };
+        fetchRoomUser();
+    }, [isAdmin, roomId, myEmail]);
+
+    // ── Fetch orders ──────────────────────────────────────────
+    // Admin → lấy đơn của khách trong phòng (roomUserEmail)
+    // Non-admin → lấy đơn của chính mình (myEmail)
+    useEffect(() => {
+        const targetEmail = isAdmin ? roomUserEmail : myEmail;
+        if (!targetEmail) return;
 
         const fetchOrders = async () => {
             try {
                 const q = query(
                     collection(db, 'orders'),
-                    where('createdBy', '==', myEmail),
+                    where('createdBy', '==', targetEmail),
                     orderBy('createdAt', 'desc')
                 );
                 const snap = await getDocs(q);
                 const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                console.log('[orders] isAdmin:', isAdmin, 'email:', myEmail);
-                console.log('[orders] fetched:', list.length, list);
+                console.log('[orders] targetEmail:', targetEmail, 'fetched:', list.length, list);
                 setOrders(list);
             } catch (e) {
                 console.warn('Fetch orders error:', e);
             }
         };
         fetchOrders();
-    }, [myEmail, isAdmin]);
+    }, [isAdmin, roomUserEmail, myEmail]);
 
     // ── Subscribe messages ────────────────────────────────────
     useEffect(() => {
@@ -320,16 +346,12 @@ export default function ChatScreen() {
     const handleInputChange = (text) => {
         setInput(text);
 
-        if (isAdmin) return; // admin không dùng # mention
-
-        // Tìm vị trí dấu # cuối cùng
         const hashIdx = text.lastIndexOf('#');
         if (hashIdx === -1) {
             setShowMenu(false);
             return;
         }
 
-        // Không có khoảng trắng giữa # và cursor (để tránh false positive)
         const afterHash = text.slice(hashIdx + 1);
         const hasSpace = afterHash.includes(' ') && afterHash.trim().includes(' ');
         if (hasSpace) {
@@ -345,19 +367,17 @@ export default function ChatScreen() {
     const handleSelectOrder = async (order) => {
         setShowMenu(false);
 
-        // Xóa phần "#..." khỏi input
         const hashIdx = input.lastIndexOf('#');
         const cleanedInput = input.slice(0, hashIdx).trim();
         setInput(cleanedInput);
 
         setSending(true);
         try {
-            // Gửi tin nhắn dạng order_ref
             await sendMessage({
                 roomId,
-                text: `ORDER#${order.id}`,          // text fallback
-                type: 'order_ref',                   // ← custom type
-                orderData: {                          // ← toàn bộ data đơn hàng
+                text: `ORDER#${order.id}`,
+                type: 'order_ref',
+                orderData: {
                     id: order.id,
                     customer: order.customer,
                     address: order.address,
@@ -375,11 +395,9 @@ export default function ChatScreen() {
         }
     };
 
-    const handleDismissMenu = () => {
-        setShowMenu(false);
-    };
+    const handleDismissMenu = () => setShowMenu(false);
 
-    // ── Send text ────────────────────────────────────────────
+    // ── Send text ─────────────────────────────────────────────
     const handleSend = async () => {
         const text = input.trim();
         if (!text || sending) return;
@@ -397,6 +415,9 @@ export default function ChatScreen() {
         const prev = index > 0 ? messages[index - 1] : null;
         return <MessageBubble msg={item} isMe={isMe} prevSender={prev?.sender} />;
     };
+
+    // Hint hiển thị khi có orders sẵn, chưa mở menu
+    const showMentionHint = orders.length > 0 && !showMenu;
 
     return (
         <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
@@ -430,7 +451,6 @@ export default function ChatScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={0}
             >
-                {/* Messages */}
                 {loading ? (
                     <View style={S.loadWrap}>
                         <ActivityIndicator color="#2563EB" />
@@ -456,8 +476,8 @@ export default function ChatScreen() {
                     />
                 )}
 
-                {/* # Order Mention Menu — nằm phía trên input bar */}
-                {showMenu && !isAdmin && (
+                {/* # Order Mention Menu — hiển thị cho cả admin lẫn non-admin */}
+                {showMenu && (
                     <OrderMentionMenu
                         orders={orders}
                         query={mentionQuery}
@@ -468,8 +488,7 @@ export default function ChatScreen() {
 
                 {/* Input bar */}
                 <View style={[S.inputBar, { paddingBottom: insets.bottom + 8 }]}>
-                    {/* Hint # mention cho non-admin */}
-                    {!isAdmin && orders.length > 0 && !showMenu && (
+                    {showMentionHint && (
                         <Text style={S.mentionHint}>
                             Gõ <Text style={S.mentionHintHash}>#</Text> để đính kèm đơn hàng
                         </Text>
@@ -508,6 +527,8 @@ export default function ChatScreen() {
         </View>
     );
 }
+
+// Styles giữ nguyên toàn bộ như cũ...
 
 // ── Order Card Styles ─────────────────────────────────────────
 const OC = StyleSheet.create({

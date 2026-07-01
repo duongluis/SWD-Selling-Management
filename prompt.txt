@@ -1,20 +1,8 @@
 * LƯU Ý (KHÔNG ĐƯỢC XÓA DÒNG NÀY): chỉ sửa đoạn cần sửa, không sửa lại cả file, sau khi sửa xong thì note lại vào done_log.txt
-* Sửa lại code theo logic sau: 
-
-- Ẩn chọn trạng thái của ctv ( ở màn tạo consult của ctv thì trạng thái sẽ luôn là đang tư vấn)
-
-- Fetchdata ở các màn để khi có update data thì sẽ hiện số ở bên phải phần Tab của màn có sự thay đổi mới 
-
-- Bổ sung ngày tạo dịch vụ khi tạo dịch vụ của đơn hàng thay vì dùng ngày tạo đơn hàng làm ngày tạo dịch vụ 
-
-- Thêm mục tạo Sản Phẩm và dịch vụ ở phần bảng giá ( dành cho admin ) : Với sản phẩm thì hiện sẵn các trường cho admin nhập tên, với dịch vụ thì có tên , giá tiền , và trường hiển thị với đơn hàng ( cho phép đơn hàng được tích chọn thêm dịch vụ khi tạo)
-
-- Thêm trường ngày hoàn thành đối với đơn hàng và dịch vụ ( khi trạng thái của dịch vụ được đổi sang hoàn thành thì đơn hàng và dịch vụ sẽ thêm trường ngày hoàn thành là ngày mà trạng thái của dịch vụ được đổi sang hoàn thành ). Và trường ngày hoàn thành có hiển thị ra ở danh sách
- 
-- Bổ sung phòng chat cho mô hình chia phân tầng
-- Bổ sung bộ lọc kiểm tra logic ngày giao đơn
-- Bỏ hoa hồng, hiển thị bảng xếp hạng với Nhà phân phối/đại lý và tính theo giá đại lý 
- 
-- Với những người dùng có vai trò là đối tác/ cộng tác viên mà advisor = "" thì hiển thị hoa hồng, bảng xếp hạng, báo cáo doanh thu, lựa chọn hình thức thanh toán
-- Với những người dùng có vai trò đối tác/ nhà phân phối hoặc những đối tác , cộng tác viên có advisor thì không hiển thị hoa hồng, bảng xếp hạng, báo cáo doanh thu, báo cáo khu vực, hình thức thanh toán mặc định là doanh nghiệp thanh toán 
-- Bổ sung nút tạo dịch vụ và nút tạo sản phẩm , đồng thời bổ sung luồng tạo sản phẩm theo đúng form như danh sách sản phẩm 
+* Sửa lại các lỗi sau:
++ Màn hình đơn hàng đang mặc định bộ lọc ở năm 2026, sửa lại cho lấy tất cả các năm ở mặc định
++ Các trạng thái đơn hàng ( chờ/đang/đã lắp đặt ) đổi hết sang chờ/đã/đang xử lý
++ Dịch vụ ở phần đơn hàng đang bị hiển thị sai tên dịch vụ( yêu cầu)
++ Khi đối tác hoặc ctv không có advisor giới thiệu khách và admin duyệt khách rồi tạo đơn thì đơn hàng được ghi nhận người tạo là admin ( người tạo phải là người giới thiệu khách hoặc người tạo khách mới đúng)
++ Khi tạo dịch vụ mà chọn đơn hàng có sẵn thì chưa tự động điền sdt của khách hàng 
++ Khi tạo dịch vụ và đơn hàng đã có khách hàng thì vẫn hiển thị nút Lưu khách hàng, vui lòng sửa lại 

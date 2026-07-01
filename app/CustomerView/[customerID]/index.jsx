@@ -1,7 +1,7 @@
 import BgWatermark from "@/components/Main/BgWatermark";
 import { showAlert } from "@/components/Main/showAlert";
 import { createNotification } from "@/components/Utils/chatService";
-import { getRole } from "@/components/Utils/roleHelper";
+import { canEditConsult, getRole } from "@/components/Utils/roleHelper";
 import Colors from "@/constant/Colors";
 import { UserDetailContext } from "@/context/UserDetailContext";
 import { Ionicons } from "@expo/vector-icons";
@@ -73,7 +73,7 @@ export default function customerView() {
   const params = useLocalSearchParams();
   const { userDetail } = useContext(UserDetailContext);
   const role = getRole(userDetail);
-  const canEditConsult = role === 'admin' || role === 'ctv';
+  const canEdit = canEditConsult(role);
   const [showDetail, setShowDetail] = useState(false);
 
   const customer = params.customerParam ? JSON.parse(params.customerParam) : {};
@@ -307,7 +307,7 @@ export default function customerView() {
         )}
 
         {/* Sản phẩm quan tâm */}
-        {isConsult && (customer.productNames?.length > 0 || canEditConsult) && (
+        {isConsult && (customer.productNames?.length > 0 || canEdit) && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Sản phẩm quan tâm</Text>
             {(customer.productNames || []).length > 0 ? (

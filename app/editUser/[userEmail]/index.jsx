@@ -14,6 +14,7 @@ import { showSuccess } from '../../../components/Main/showSuccess';
 import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import HelpButton from '@/components/Help/HelpButton';
 
 const ROLE_CONFIG = {
     'đại lý': { color: '#2563EB', bg: '#EFF6FF', label: 'Đại lý / NPP' },
@@ -155,6 +156,7 @@ export default function EditUserScreen() {
                 <View style={[S.roleBadge, { backgroundColor: roleCfg.bg }]}>
                     <Text style={[S.roleBadgeText, { color: roleCfg.color }]}>{roleCfg.label}</Text>
                 </View>
+                <HelpButton screenKey="editUser" />
             </View>
 
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

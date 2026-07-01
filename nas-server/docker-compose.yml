@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  swd-backup:
+    build: .
+    container_name: swd-backup-server
+    restart: unless-stopped
+    ports:
+      - "3099:3099"
+    volumes:
+      - /volume1/Marketing/CRM:/data/uploads
+    environment:
+      API_KEY: ${NAS_API_KEY}
+      UPLOAD_DIR: /data/uploads
+      PORT: 3099

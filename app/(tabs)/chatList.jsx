@@ -5,7 +5,7 @@ import EmptyState from '@/components/Main/EmptyState';
 import ScreenHeader from '@/components/Main/ScreenHeader';
 import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import { timeAgo } from '@/components/Utils/formatters';
-import { getRole } from '@/components/Utils/roleHelper';
+import { getRole, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -129,7 +129,7 @@ export default function ChatListScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
     const myEmail = userDetail?.email || '';
-    const isAdmin = role === 'admin' || role === 'giamdoc';
+    const isAdmin = isAdminOrGD(role);
     const { isDesktop } = useLayout();
     const [rooms, setRooms] = useState([]);
     const [customerMap, setCustomerMap] = useState({}); // roomId -> { email, displayName }

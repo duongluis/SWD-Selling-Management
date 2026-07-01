@@ -19,6 +19,7 @@ import {
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { useLayout } from '../../components/Main/TabScreenLayout';
+import HelpButton from '../../components/Help/HelpButton';
 import { db } from '../../config/firebaseConfig';
 
 
@@ -741,21 +742,36 @@ export default function AddOrder() {
 
       const orderCategory = ORDER_TYPE_TO_CATEGORY[orderType];
       const [orderStatuses] = await Promise.all([fetchStatusList(orderCategory)]);
-      const { rootAdvisor, level } = await calculateHierarchy(userDetail.email, userDetail);
       const initialOrderStatus = orderStatuses[0]?.name || 'Chờ xác nhận';
+
+      // Nếu admin tạo đơn cho khách của ctv/partner, ghi nhận creator là người tạo khách
+      const customerCreator = selectedCustomer?.createdBy;
+      const isAdminCreatingForOther = role === 'admin' && customerCreator && customerCreator !== userDetail.email;
+
+      let effectiveCreatorEmail = userDetail.email;
+      let hierarchyUserDetail = userDetail;
+      if (isAdminCreatingForOther) {
+        effectiveCreatorEmail = customerCreator;
+        try {
+          const creatorSnap = await getDoc(doc(db, 'users', customerCreator));
+          if (creatorSnap.exists()) hierarchyUserDetail = creatorSnap.data();
+        } catch (_) {}
+      }
+      const { rootAdvisor, level } = await calculateHierarchy(effectiveCreatorEmail, hierarchyUserDetail);
 
       const newOrder = {
         id: orderId,
         orderType,
         paymentMethod: effectivePaymentMethod,
         customer: finalCustomerName,
+        phone: finalCustomerPhone,
         customerId: selectedCustomer?.docId || '',
         items: products,
         createdAt: orderDate,
         address: deliveryAddress || userDetail?.address || '',
         note: notes,
         status: initialOrderStatus,
-        createdBy: userDetail?.email || '',
+        createdBy: effectiveCreatorEmail,
         rootAdvisor,
         level,
       };
@@ -813,10 +829,13 @@ export default function AddOrder() {
             <Text style={W.pageTitle}>Tạo đơn hàng mới</Text>
             <Text style={W.pageSub}>Điền thông tin để tạo đơn hàng cho khách hàng</Text>
           </View>
-          <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('(tabs)/order')}>
-            <Ionicons name="close" size={16} color="#64748B" />
-            <Text style={W.cancelBtnText}>Huỷ</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <HelpButton screenKey="addOrder" />
+            <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('(tabs)/order')}>
+              <Ionicons name="close" size={16} color="#64748B" />
+              <Text style={W.cancelBtnText}>Huỷ</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         {console.log("price theo vai tro:", resolvedPriceField)}
         {console.log("role nguoi dung:", role)}

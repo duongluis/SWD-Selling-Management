@@ -113,6 +113,7 @@ export default function CustomerScreen() {
         actionLabel={canAdd(role) && isDesktop ? ' Thêm khách hàng' : undefined}
         actionIcon="add"
         onAction={canAdd(role) ? () => router.push('/addCustomer') : undefined}
+        canAccess={canAdd(role)}
       />
       <StatBar stats={statCards} />
 

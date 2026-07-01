@@ -4,7 +4,7 @@ import { useScreenData } from '@/components/Hooks/useScreenData';
 import NotificationPanel from '@/components/Main/notificationPanel';
 import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import StatBar from '@/components/UI/StatBar';
-import { exportCSV, exportExcel, exportImagesZip, fetchExportData } from '@/components/Utils/exportData';
+import { backupToNAS, exportCSV, exportExcel, exportImagesZip, fetchExportData } from '@/components/Utils/exportData';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
 import { canAdd, getRole, isGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -12,17 +12,36 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useContext, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, Modal,
+  ActivityIndicator, Modal, Platform,
   ScrollView,
-  StyleSheet, Text, TouchableOpacity, View
+  StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+
+// ── NAS config helpers (localStorage) ────────────────────────
+const NAS_URL_KEY = 'swd_nas_url';
+const NAS_KEY_KEY = 'swd_nas_key';
+const loadNasCfg = () => {
+  if (Platform.OS !== 'web') return { url: '', key: '' };
+  return {
+    url: localStorage.getItem(NAS_URL_KEY) || '',
+    key: localStorage.getItem(NAS_KEY_KEY) || '',
+  };
+};
+const saveNasCfg = (url, key) => {
+  if (Platform.OS !== 'web') return;
+  localStorage.setItem(NAS_URL_KEY, url.trim());
+  localStorage.setItem(NAS_KEY_KEY, key.trim());
+};
 
 // ── Export Modal ──────────────────────────────────────────────
 function ExportModal({ visible, onClose }) {
   const [status, setStatus] = useState('');
   const [running, setRunning] = useState(false);
+  const [showNasCfg, setShowNasCfg] = useState(false);
+  const [nasUrl, setNasUrl] = useState(() => loadNasCfg().url);
+  const [nasKey, setNasKey] = useState(() => loadNasCfg().key);
 
   const run = async (fn) => {
     setRunning(true); setStatus('Đang tải dữ liệu...');
@@ -44,12 +63,27 @@ function ExportModal({ visible, onClose }) {
     finally { setRunning(false); }
   };
 
-  const handleClose = () => { setStatus(''); setRunning(false); onClose(); };
+  const runNAS = async () => {
+    const url = nasUrl.trim();
+    if (!url) { setShowNasCfg(true); return; }
+    saveNasCfg(url, nasKey);
+    setRunning(true); setStatus('Đang tải dữ liệu...');
+    try {
+      const data = await fetchExportData(setStatus);
+      const { excel, images, imageCount } = await backupToNAS(data, url, nasKey.trim() || undefined, setStatus);
+      const imgMsg = images ? ` + ${imageCount} ảnh (${images})` : ' (không có ảnh)';
+      setStatus(`✅ Đã backup lên NAS: ${excel}${imgMsg}`);
+    } catch (e) { setStatus(`❌ Lỗi: ${e.message}`); }
+    finally { setRunning(false); }
+  };
+
+  const handleClose = () => { setStatus(''); setRunning(false); setShowNasCfg(false); onClose(); };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={EX.overlay}>
         <View style={EX.modal}>
+          {/* Header */}
           <View style={EX.header}>
             <View style={EX.headerIcon}><Ionicons name="download-outline" size={18} color="#2563EB" /></View>
             <Text style={EX.headerTitle}>Xuất dữ liệu</Text>
@@ -57,7 +91,10 @@ function ExportModal({ visible, onClose }) {
               <Ionicons name="close" size={18} color="#64748B" />
             </TouchableOpacity>
           </View>
-          <Text style={EX.desc}>Xuất toàn bộ dữ liệu về máy. Chỉ hỗ trợ trên Web.</Text>
+
+          <Text style={EX.desc}>Xuất toàn bộ dữ liệu về máy hoặc đẩy lên NAS. Chỉ hỗ trợ trên Web.</Text>
+
+          {/* Options */}
           <View style={EX.options}>
             <TouchableOpacity style={EX.optBtn} onPress={() => run(exportExcel)} disabled={running}>
               <View style={[EX.optIcon, { backgroundColor: '#ECFDF5' }]}><Ionicons name="document-outline" size={22} color="#059669" /></View>
@@ -76,11 +113,61 @@ function ExportModal({ visible, onClose }) {
               <View style={EX.optText}><Text style={EX.optTitle}>Ảnh (.zip)</Text><Text style={EX.optSub}>Toàn bộ ảnh trong tin tức</Text></View>
               <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
             </TouchableOpacity>
+            <View style={EX.optDivider} />
+
+            {/* NAS button */}
+            <TouchableOpacity style={EX.optBtn} onPress={runNAS} disabled={running}>
+              <View style={[EX.optIcon, { backgroundColor: '#F5F3FF' }]}><Ionicons name="server-outline" size={22} color="#7C3AED" /></View>
+              <View style={EX.optText}>
+                <Text style={EX.optTitle}>Backup lên NAS</Text>
+                <Text style={EX.optSub}>{nasUrl ? `Excel + Ảnh → ${nasUrl}` : 'Chưa cấu hình — nhấn ⚙ để thiết lập'}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowNasCfg(v => !v)} hitSlop={8}>
+                <Ionicons name="settings-outline" size={16} color="#7C3AED" />
+              </TouchableOpacity>
+            </TouchableOpacity>
+
+            {/* NAS config panel */}
+            {showNasCfg && (
+              <View style={EX.nasCfg}>
+                <Text style={EX.nasCfgLabel}>Địa chỉ server NAS</Text>
+                <TextInput
+                  style={EX.nasInput}
+                  value={nasUrl}
+                  onChangeText={setNasUrl}
+                  placeholder="http://192.168.1.100:3099"
+                  placeholderTextColor="#94A3B8"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={[EX.nasCfgLabel, { marginTop: 8 }]}>API Key (tuỳ chọn)</Text>
+                <TextInput
+                  style={EX.nasInput}
+                  value={nasKey}
+                  onChangeText={setNasKey}
+                  placeholder="Để trống nếu không dùng"
+                  placeholderTextColor="#94A3B8"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+                <TouchableOpacity
+                  style={EX.nasSaveBtn}
+                  onPress={() => { saveNasCfg(nasUrl, nasKey); setShowNasCfg(false); }}
+                >
+                  <Text style={EX.nasSaveBtnText}>Lưu cấu hình</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
+
+          {/* Status */}
           {(running || status) ? (
             <View style={EX.statusRow}>
               {running && <ActivityIndicator size="small" color="#2563EB" style={{ marginRight: 8 }} />}
-              <Text style={[EX.statusText, status.startsWith('❌') && { color: '#EF4444' }]}>{status}</Text>
+              <Text style={[EX.statusText, status.startsWith('❌') && { color: '#EF4444' }, status.startsWith('⚠️') && { color: '#D97706' }]}>
+                {status}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -106,6 +193,11 @@ const EX = StyleSheet.create({
   optDivider: { height: 1, backgroundColor: '#F1F5F9' },
   statusRow: { flexDirection: 'row', alignItems: 'center', margin: 16, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' },
   statusText: { flex: 1, fontSize: 13, color: '#374151', fontWeight: '500' },
+  nasCfg: { backgroundColor: '#F5F3FF', borderRadius: 10, padding: 12, marginTop: 4, marginBottom: 4, gap: 4 },
+  nasCfgLabel: { fontSize: 11, fontWeight: '700', color: '#7C3AED', letterSpacing: 0.3 },
+  nasInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#DDD6FE', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: '#0F172A', marginTop: 4 },
+  nasSaveBtn: { marginTop: 10, backgroundColor: '#7C3AED', borderRadius: 8, paddingVertical: 9, alignItems: 'center' },
+  nasSaveBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 });
 
 // ── Status config ─────────────────────────────────────────────
@@ -167,7 +259,7 @@ function MobileGreeting({ userDetail, role, onExport, onNotif }) {
             </TouchableOpacity>
           )}
           {role !== 'giamdoc' &&
-            (<NotificationPanel bellColor="#fff" bellSize={18} />
+            (<NotificationPanel bellColor="#000" bellSize={18} />
             )}
         </View>
       </View>
@@ -208,8 +300,6 @@ export default function HomeView() {
 
   const [exportOpen, setExportOpen] = useState(false);
 
-
-
   // Trong component, thay thế các state và useEffect liên quan đến orders
   const { data: orders, loading: ordersLoading, stats } = useScreenData('orders');
 
@@ -228,8 +318,11 @@ export default function HomeView() {
       { name: 'Đơn hàng mới', icon: 'add-circle-outline', action: () => router.push('/addOrder'), color: '#3B82F6', bg: '#EFF6FF' },
       { name: 'Thêm khách', icon: 'person-add-outline', action: () => router.push('/addCustomer'), color: '#8B5CF6', bg: '#F5F3FF' },
     ] : []),
-    { name: 'Phòng chat', icon: 'chatbubbles-outline', action: () => router.push('/chatList'), color: '#059669', bg: '#ECFDF5' },
-    { name: 'Hợp đồng', icon: 'document-text-outline', action: () => router.push('/orderContract?mode=template'), color: '#0C447C', bg: '#EFF6FF' },
+    ...(role !== 'giamdoc' ?
+      [
+        { name: 'Phòng chat', icon: 'chatbubbles-outline', action: () => router.push('/chatList'), color: '#059669', bg: '#ECFDF5' },
+        { name: 'Hợp đồng', icon: 'document-text-outline', action: () => router.push('/orderContract?mode=template'), color: '#0C447C', bg: '#EFF6FF' },
+      ] : []),
   ];
 
   const statCards = [
@@ -373,7 +466,7 @@ export default function HomeView() {
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             {role !== 'giamdoc' &&
-              (<NotificationPanel bellColor="#fff" bellSize={22} />
+              (<NotificationPanel bellColor="#000" bellSize={22} />
               )}
             {(role === 'admin') && (
               <TouchableOpacity style={H.webBtnSecondary} onPress={() => setExportOpen(true)}>

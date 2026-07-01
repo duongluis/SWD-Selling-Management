@@ -5,7 +5,7 @@ import { showAlert } from '@/components/Main/showAlert';
 import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import FilterChips from '@/components/UI/FilterChips';
 import { createNotification } from '@/components/Utils/chatService';
-import { getRole } from '@/components/Utils/roleHelper';
+import { getRole, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -166,7 +166,7 @@ const TB = StyleSheet.create({
 });
 
 // ── Mobile Card ───────────────────────────────────────────────
-function CommCardMobile({ r, isAdmin, onApprove }) {
+function CommCardMobile({ r, isAdmin, canPay, onApprove }) {
     const isBonus = r.recordType === 'bonus';
     return (
         <View style={MR.card}>
@@ -201,7 +201,7 @@ function CommCardMobile({ r, isAdmin, onApprove }) {
                     )}
                 </View>
             </View>
-            {isAdmin && r.status !== 'paid' && (
+            {canPay && r.status !== 'paid' && (
                 <TouchableOpacity style={MR.approveBtn} onPress={() => onApprove(r)}>
                     <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
                     <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>Xác nhận trả</Text>
@@ -244,7 +244,7 @@ const COL_ADMIN = {
     action: { width: 130 },
 };
 
-function TableHeader({ isAdmin }) {
+function TableHeader({ isAdmin, canPay }) {
     const COL = isAdmin ? COL_ADMIN : COL_BASE;
     return (
         <View style={[WRAP_BASE, DT.head]}>
@@ -255,12 +255,12 @@ function TableHeader({ isAdmin }) {
             <View style={COL.value}><Text style={DT.th}>Giá trị</Text></View>
             <View style={COL.commission}><Text style={DT.th}>Số tiền</Text></View>
             <View style={COL.status}><Text style={DT.th}>Trạng thái</Text></View>
-            {isAdmin && <View style={COL.action}><Text style={DT.th}>Hành động</Text></View>}
+            {canPay && <View style={COL.action}><Text style={DT.th}>Hành động</Text></View>}
         </View>
     );
 }
 
-function CommRowDesktop({ r, isAdmin, onApprove, odd }) {
+function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
     const COL = isAdmin ? COL_ADMIN : COL_BASE;
     const isPaid = r.status === 'paid';
     const isBonus = r.recordType === 'bonus';
@@ -292,7 +292,7 @@ function CommRowDesktop({ r, isAdmin, onApprove, odd }) {
             <View style={COL.status}>
                 <StatusBadge status={r.status} />
             </View>
-            {isAdmin && (
+            {canPay && (
                 <View style={COL.action}>
                     <TouchableOpacity
                         style={isPaid ? DT.btnDone : DT.btnPending}
@@ -337,7 +337,8 @@ export default function CommissionScreen() {
     const { userDetail } = useContext(UserDetailContext);
 
     const role = getRole(userDetail);
-    const isAdmin = role === 'admin';
+    const isAdmin = isAdminOrGD(role);
+    const canPay = role === 'admin';
     const { isMobile } = useLayout();
 
     const [loading, setLoading] = useState(true);
@@ -635,7 +636,7 @@ export default function CommissionScreen() {
     return (
         <TabScreenLayout>
             <ScreenHeader
-                title="Báo cáo Thu nhập"
+                title="Hoa Hồng"
                 subtitle={isAdmin ? 'Quản lý hoa hồng & thưởng toàn hệ thống' : 'Hoa hồng và thưởng của bạn'}
                 searchValue={search}
                 onSearchChange={setSearch}
@@ -714,14 +715,14 @@ export default function CommissionScreen() {
                     ) : isMobile ? (
                         <View style={{ marginTop: 4 }}>
                             {filteredRecords.slice(0, 20).map((r, i) => (
-                                <CommCardMobile key={`${r.id}-${r.recordType}-${i}`} r={r} isAdmin={isAdmin} onApprove={handleApprove} />
+                                <CommCardMobile key={`${r.id}-${r.recordType}-${i}`} r={r} isAdmin={isAdmin} canPay={canPay} onApprove={handleApprove} />
                             ))}
                         </View>
                     ) : (
                         <>
-                            <TableHeader isAdmin={isAdmin} />
+                            <TableHeader isAdmin={isAdmin} canPay={canPay} />
                             {filteredRecords.slice(0, 20).map((r, i) => (
-                                <CommRowDesktop key={`${r.id}-${r.recordType}-${i}`} r={r} isAdmin={isAdmin} onApprove={handleApprove} odd={i % 2 === 1} />
+                                <CommRowDesktop key={`${r.id}-${r.recordType}-${i}`} r={r} isAdmin={isAdmin} canPay={canPay} onApprove={handleApprove} odd={i % 2 === 1} />
                             ))}
                         </>
                     )}

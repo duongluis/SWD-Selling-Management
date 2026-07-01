@@ -1,17 +1,16 @@
 // app/(tabs)/_layout.jsx
-
 import NotificationPanel from '@/components/Main/notificationPanel';
 import { showAlert } from '@/components/Main/showAlert';
 import { showInfo } from '@/components/Main/showInfo';
 import { useLayout } from '@/components/Main/TabScreenLayout';
-import { getRole, getRoleLabel } from '@/components/Utils/roleHelper';
+import { getRole, getRoleLabel, isAdminOrGD } from '@/components/Utils/roleHelper';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter, useSegments } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   Image, Platform, Pressable, ScrollView,
@@ -20,7 +19,12 @@ import {
 } from 'react-native';
 import auth, { db } from '../../config/firebaseConfig';
 
+// ── Help imports ──────────────────────────────────────────────
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import FirstTimeHelpTooltip from '../../components/Help/firstTimeHelp';
+import HelpModal from '../../components/Help/helpModal';
 
+const HELP_SEEN_KEY = '@swd_help_tooltip_seen';
 const BANNER_IMAGE = require('../../assets/images/layout-img.png');
 
 
@@ -29,7 +33,7 @@ function getInitials(name) {
   return name.trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
-// ── Nav config ────────────────────────────────────────────────
+// ── Nav config ─────────────────────────────────────────────────
 const NAV_SECTIONS = [
   {
     label: 'CHÍNH',
@@ -64,13 +68,56 @@ const NAV_SECTIONS = [
   },
 ];
 
-// Bottom tabs — 4 mục chính cho mobile
 const MOBILE_BOTTOM_TABS = [
   { key: 'home', link: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
   { key: 'order', link: '(tabs)/order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
   { key: 'customer', link: '(tabs)/customer', label: 'KHÁCH', icon: 'people-outline', activeIcon: 'people' },
   { key: 'service', link: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
 ];
+
+// ── useHelpGuide hook ─────────────────────────────────────────
+// Quản lý toàn bộ state của hệ thống hướng dẫn
+function useHelpGuide(activeTab) {
+  const [helpVisible, setHelpVisible] = useState(false);
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  // Ref để tránh tooltip hiện lại trong cùng session sau khi đã dismiss
+  const tooltipDismissedThisSession = useRef(false);
+
+  // Kiểm tra lần đầu mở app
+  useEffect(() => {
+    const checkFirstTime = async () => {
+      try {
+        const seen = await AsyncStorage.getItem(HELP_SEEN_KEY);
+        if (!seen) {
+          // Delay nhỏ để layout ổn định trước khi hiện tooltip
+          setTimeout(() => setTooltipVisible(true), 1200);
+        }
+      } catch (_) {
+        // AsyncStorage lỗi → bỏ qua, không crash app
+      }
+    };
+    checkFirstTime();
+  }, []);
+
+  const openHelp = useCallback(() => {
+    setHelpVisible(true);
+  }, []);
+
+  const closeHelp = useCallback(() => {
+    setHelpVisible(false);
+  }, []);
+
+  const dismissTooltip = useCallback(async () => {
+    if (tooltipDismissedThisSession.current) return;
+    tooltipDismissedThisSession.current = true;
+    setTooltipVisible(false);
+    try {
+      await AsyncStorage.setItem(HELP_SEEN_KEY, '1');
+    } catch (_) { }
+  }, []);
+
+  return { helpVisible, openHelp, closeHelp, tooltipVisible, dismissTooltip };
+}
 
 // ── Shared NavItem ────────────────────────────────────────────
 function NavItem({ item, isActive, collapsed, onPress }) {
@@ -95,41 +142,43 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
   const roleLabel = getRoleLabel(role);
 
   const shouldShowItem = (item) => {
-    const gd = role === 'giamdoc'; // ← boolean đơn giản
+    const gd = role === 'giamdoc';
+    const admin = role === 'admin';
 
     if (item.visible) return item.visible(role);
 
     if (item.key === 'commission' || item.key === 'calculator') {
-      if (gd) return false;                          // giamdoc không thấy
+      if (gd) return true;
       if (userDetail?.advisor) return false;
       if (role === 'daily') return false;
       return role === 'admin' || role === 'phantan' || role === 'ctv';
     }
 
     if (item.key === 'team') {
-      if (gd) return true;                           // giamdoc thấy team
+      if (gd) return true;
       if (userDetail?.advisor) return true;
       if (isAdvisor) return true;
+      if (admin) return true;
       return false;
     }
 
     if (item.key === 'leaderboard') {
-      if (gd) return true;                           // giamdoc thấy leaderboard
+      if (gd) return true;
       if (userDetail?.advisor) return false;
       return true;
     }
 
     if (item.key === 'revenue') {
-      if (gd) return true;                           // giamdoc thấy revenue
+      if (gd) return true;
       if (userDetail?.advisor) return false;
       return true;
     }
 
     if (item.key === 'region') {
-      return role === 'admin' || gd;                 // giamdoc thấy region
+      return role === 'admin' || gd;
     }
 
-    return role === 'admin' || gd;                     // fallback: admin + giamdoc
+    return role === 'admin' || gd;
   };
 
   const handleNav = (item) => {
@@ -149,7 +198,6 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
 
   return (
     <>
-      {/* Logo */}
       <View style={S.workspaceRow}>
         {!collapsed && (
           <View style={S.workspaceName}>
@@ -179,7 +227,7 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
           );
         })}
 
-        {role === 'admin' && (
+        {isAdminOrGD(role) && (
           <View style={S.navSection}>
             {!collapsed && (
               <View style={S.adminSectionHeader}>
@@ -195,28 +243,9 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
             />
           </View>
         )}
+      </ScrollView>
 
-        {/* Admin */}
-        {(role === 'admin' || role === 'giamdoc') && (
-          <View style={S.navSection}>
-            {!collapsed && (
-              <View style={S.adminSectionHeader}>
-                <Text style={S.navSectionLabel}>QUẢN TRỊ</Text>
-                <View style={S.adminBadge}><Text style={S.adminBadgeText}>ADMIN</Text></View>
-              </View>
-            )}
-            <NavItem
-              item={{ key: 'user', link: '(tabs)/user', label: 'Danh sách người dùng', icon: 'people-circle-outline', activeIcon: 'people-circle' }}
-              isActive={activeTab === 'user'}
-              collapsed={collapsed}
-              onPress={() => { onClose?.(); router.push('/(tabs)/user'); }}
-            />
-          </View>
-        )}
-      </ScrollView >
-
-      {/* User / Logout */}
-      < View style={S.bottomSection} >
+      <View style={S.bottomSection}>
         {showLogout && (
           <View style={S.logoutPopup}>
             <TouchableOpacity style={S.logoutItem} onPress={handleLogout}>
@@ -224,8 +253,7 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
               <Text style={S.logoutItemText}>Đăng xuất</Text>
             </TouchableOpacity>
           </View>
-        )
-        }
+        )}
         <Pressable
           style={[S.userRow, collapsed && { justifyContent: 'center' }]}
           onPress={() => !collapsed && setShowLogout(p => !p)}
@@ -243,7 +271,7 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
             </>
           )}
         </Pressable>
-      </View >
+      </View>
     </>
   );
 }
@@ -252,11 +280,9 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
 function DesktopSidebar({ activeTab, role, userDetail, collapsed, onToggle, isAdvisor, onNavigate, router }) {
   return (
     <View style={[S.sidebar, collapsed && S.sidebarCollapsed]}>
-      {/* Collapse button */}
       <Pressable onPress={onToggle} style={S.collapseBtn}>
         <Ionicons name={collapsed ? 'chevron-forward-outline' : 'chevron-back-outline'} size={20} color="rgba(255,255,255,0.5)" />
       </Pressable>
-
       <SidebarContent
         activeTab={activeTab}
         role={role}
@@ -270,15 +296,12 @@ function DesktopSidebar({ activeTab, role, userDetail, collapsed, onToggle, isAd
   );
 }
 
-// ── Mobile Drawer Sidebar ─────────────────────────────────────
+// ── Mobile Drawer ─────────────────────────────────────────────
 function MobileDrawer({ visible, activeTab, role, userDetail, onNavigate, isAdvisor, router, onClose }) {
   if (!visible) return null;
   return (
     <View style={[StyleSheet.absoluteFillObject, { zIndex: 100, flexDirection: 'row' }]}>
-      {/* Overlay */}
       <Pressable style={MD.overlay} onPress={onClose} />
-
-      {/* Drawer */}
       <View style={MD.drawer}>
         <SidebarContent
           activeTab={activeTab}
@@ -310,14 +333,11 @@ const MD = StyleSheet.create({
 });
 
 // ── Mobile Top Bar ────────────────────────────────────────────
-function MobileTopBar({ pageLabel, userDetail, onMenuPress, router }) {
+// THAY ĐỔI: thêm onHelpPress prop, thêm nút help, wrap bằng View relative
+function MobileTopBar({ pageLabel, userDetail, onMenuPress, router, role, onHelpPress }) {
   return (
     <View style={MB.topBar}>
-      <Image
-        source={BANNER_IMAGE}
-        style={MB.topBarBanner}
-        resizeMode="cover"
-      />
+      <Image source={BANNER_IMAGE} style={MB.topBarBanner} resizeMode="cover" />
       <View style={MB.topBarLeft}>
         <TouchableOpacity style={MB.menuBtn} onPress={onMenuPress}>
           <Ionicons name="menu-outline" size={22} color="#fff" />
@@ -325,15 +345,20 @@ function MobileTopBar({ pageLabel, userDetail, onMenuPress, router }) {
         <Text style={MB.topBarTitle} numberOfLines={1}>{pageLabel}</Text>
       </View>
       <View style={MB.topBarRight}>
-        {role !== 'giamdoc' &&
-          (
-            <>
-              <TouchableOpacity style={MB.topBarBtn} onPress={() => router.push('/(tabs)/chatList')}>
-                <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
-              </TouchableOpacity>
-              <NotificationPanel bellColor="#fff" bellSize={18} />
-            </>
-          )}
+        {role !== 'giamdoc' && (
+          <>
+            <TouchableOpacity style={MB.topBarBtn} onPress={() => router.push('/(tabs)/chatList')}>
+              <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
+            </TouchableOpacity>
+            <NotificationPanel bellColor="#fff" bellSize={18} />
+
+            {/* ── Nút Help (mobile) ── */}
+            <TouchableOpacity style={MB.topBarBtn} onPress={onHelpPress}>
+              <Ionicons name="help-circle-outline" size={18} color="#fff" />
+            </TouchableOpacity>
+          </>
+        )}
+
         <View style={MB.topBarAvatar}>
           <Text style={MB.topBarAvatarText}>{getInitials(userDetail?.name)}</Text>
         </View>
@@ -364,12 +389,12 @@ const MB = StyleSheet.create({
   topBarAvatarText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 });
 
-// ── Mobile Bottom Tab Bar ─────────────────────────────────────
+// ── Mobile Tab Bar ─────────────────────────────────────────────
 function MobileTabBar({ state, navigation, activeKey }) {
   return (
     <View style={BT.wrap}>
       <View style={BT.bar}>
-        {MOBILE_BOTTOM_TABS.map((tab, index) => {
+        {MOBILE_BOTTOM_TABS.map((tab) => {
           const route = state.routes.find(r => r.name === tab.key || r.name === tab.link.replace('(tabs)/', ''));
           const routeIndex = state.routes.findIndex(r => r.name === route?.name);
           const isFocused = activeKey === tab.key || state.index === routeIndex;
@@ -419,24 +444,11 @@ const BT = StyleSheet.create({
   labelActive: { color: '#F8FAFC' },
 });
 
-// ── Tab Screens list ──────────────────────────────────────────
+// ── Tab Screens ────────────────────────────────────────────────
 const TAB_SCREENS = [
-  'home',
-  'order',
-  'customer',
-  'service',
-  'leaderboard',
-  'users',
-  'customerctv',
-  'analytics',
-  'commission',
-  'regionAnalytics',
-  'news',
-  'information',
-  'chatList',
-  'editProfile',
-  'calculator',
-  'team',
+  'home', 'order', 'customer', 'service', 'leaderboard', 'users',
+  'customerctv', 'analytics', 'commission', 'regionAnalytics',
+  'news', 'information', 'chatList', 'editProfile', 'calculator', 'team',
 ];
 
 const SEGMENT_KEY_MAP = {
@@ -447,14 +459,14 @@ const SEGMENT_KEY_MAP = {
   orderContract: 'quotation', ordercontract: 'quotation',
 };
 
-// ── Root Layout ───────────────────────────────────────────────
+// ── Root Layout ────────────────────────────────────────────────
 export default function TabLayout() {
   const { userDetail } = useContext(UserDetailContext);
   const router = useRouter();
   const segments = useSegments();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const width = Dimensions.get('window').width
+  const width = Dimensions.get('window').width;
   const { isDesktop } = useLayout();
   const role = getRole(userDetail);
 
@@ -462,6 +474,9 @@ export default function TabLayout() {
   const activeTab = SEGMENT_KEY_MAP[rawTab] || rawTab;
   const pageLabel = NAV_SECTIONS.flatMap(s => s.items).find(n => n.key === activeTab)?.label || 'Tổng quan';
   const [isAdvisor, setIsAdvisor] = useState(false);
+
+  // ── Help state ────────────────────────────────────────────────
+  const { helpVisible, openHelp, closeHelp, tooltipVisible, dismissTooltip } = useHelpGuide(activeTab);
 
   const handleNavigate = (link) => router.push(`/${link}`);
 
@@ -471,22 +486,15 @@ export default function TabLayout() {
 
   useEffect(() => {
     if (!userDetail?.email) return;
-    // Check xem có ai đang dùng email này làm advisor không
-    const q = query(
-      collection(db, 'users'),
-      where('advisor', '==', userDetail.email)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setIsAdvisor(!snap.empty);
-    });
+    const q = query(collection(db, 'users'), where('advisor', '==', userDetail.email));
+    const unsub = onSnapshot(q, (snap) => setIsAdvisor(!snap.empty));
     return () => unsub();
   }, [userDetail?.email]);
-  // ── Desktop Web ──────────────────────────────────────────────
 
   return (
     <View style={isDesktop ? S.root : { flex: 1 }}>
 
-      {/* Sidebar — chỉ hiện trên desktop */}
+      {/* Sidebar desktop */}
       {isDesktop && (
         <DesktopSidebar
           activeTab={activeTab}
@@ -502,7 +510,7 @@ export default function TabLayout() {
 
       <View style={isDesktop ? S.mainArea : { flex: 1 }}>
 
-        {/* Topbar desktop */}
+        {/* ── Desktop topbar ── */}
         {isDesktop && (
           <View style={S.topBar}>
             <Image source={BANNER_IMAGE} style={[S.topBarBanner, { width }]} resizeMode="cover" />
@@ -512,18 +520,24 @@ export default function TabLayout() {
               <Text style={S.breadcrumbCurrent}>{pageLabel}</Text>
             </View>
             <View style={S.topBarActions}>
-              {role !== 'giamdoc' &&
-                (
-                  <>
-                    <Pressable style={S.topBarBtn} onPress={() => router.push('/(tabs)/chatList')}>
-                      <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
-                    </Pressable>
-                    <NotificationPanel bellColor="#fff" bellSize={22} />
-                  </>
-                )}
-              <Pressable style={S.topBarBtn}>
-                <Ionicons name="help-circle-outline" size={18} color="#fff" />
-              </Pressable>
+              {role !== 'giamdoc' && (
+                <>
+                  <Pressable style={S.topBarBtn} onPress={() => router.push('/(tabs)/chatList')}>
+                    <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
+                  </Pressable>
+                  <NotificationPanel bellColor="#fff" bellSize={22} />
+                </>
+              )}
+
+              {/* ── Nút Help (desktop) — wrap bằng View để định vị tooltip ── */}
+              <View style={{ position: 'relative' }}>
+                <Pressable style={S.topBarBtn} onPress={openHelp}>
+                  <Ionicons name="help-circle-outline" size={18} color="#fff" />
+                </Pressable>
+                {/* Tooltip lần đầu — chỉ hiện trên desktop */}
+                <FirstTimeHelpTooltip visible={tooltipVisible} onDismiss={dismissTooltip} />
+              </View>
+
               <View style={S.topBarDivider} />
               <View style={S.topBarAvatar}>
                 <Text style={S.topBarAvatarText}>{getInitials(userDetail?.name)}</Text>
@@ -546,42 +560,53 @@ export default function TabLayout() {
           />
         )}
 
-        {/* ✅ MỘT Tabs DUY NHẤT — chỉ đổi tabBar prop */}
+        {/* Tabs */}
         <Tabs
           tabBar={(props) =>
-            isDesktop
-              ? null
-              : <MobileTabBar {...props} activeKey={activeTab} />
+            isDesktop ? null : <MobileTabBar {...props} activeKey={activeTab} />
           }
           screenOptions={{ headerShown: false }}
         >
           {tabScreens}
         </Tabs>
 
-        {/* Mobile topbar float */}
+        {/* ── Mobile topbar float ── */}
         {!isDesktop && (
           <View style={[S.mobileTopBarWrap, { pointerEvents: 'box-none' }]}>
-            <MobileTopBar
-              pageLabel={pageLabel}
-              userDetail={userDetail}
-              onMenuPress={() => setDrawerOpen(true)}
-              router={router}
-            />
+            {/* Wrap relative để định vị tooltip */}
+            <View style={{ position: 'relative' }}>
+              <MobileTopBar
+                pageLabel={pageLabel}
+                userDetail={userDetail}
+                onMenuPress={() => setDrawerOpen(true)}
+                router={router}
+                role={role}
+                onHelpPress={openHelp}
+              />
+              {/* Tooltip lần đầu — mobile */}
+              <FirstTimeHelpTooltip visible={tooltipVisible} onDismiss={dismissTooltip} />
+            </View>
           </View>
         )}
 
       </View>
+
+      {/* ── Help Modal — render ngoài cùng để nổi lên trên tất cả ── */}
+      <HelpModal
+        visible={helpVisible}
+        screenKey={activeTab}
+        onClose={closeHelp}
+      />
+
     </View>
   );
 }
 
 // ── Styles ─────────────────────────────────────────────────────
 const S = StyleSheet.create({
-  // Desktop root
   root: { flex: 1, flexDirection: 'row', backgroundColor: '#F8FAFC', height: '100vh' },
   icon: { width: 28, height: 28, marginRight: 8 },
 
-  // Sidebar
   sidebar: { width: 240, backgroundColor: '#2C5282', paddingTop: 0, paddingBottom: 0, paddingHorizontal: 12, flexDirection: 'column', borderRightWidth: 1, borderRightColor: 'rgba(0,0,0,0.15)' },
   sidebarCollapsed: { width: 64, paddingHorizontal: 8 },
   collapseBtn: { position: 'absolute', top: 15, right: 25, width: 25, height: 25, borderRadius: 15, backgroundColor: '#1E3A5F', alignItems: 'center', justifyContent: 'center', zIndex: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
@@ -590,7 +615,6 @@ const S = StyleSheet.create({
   workspaceName: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   workspaceText: { color: '#fff', fontSize: 13, fontWeight: '700', letterSpacing: -0.2 },
 
-  // Nav
   navSection: { marginBottom: 8 },
   navSectionLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4, paddingHorizontal: 8, marginTop: 6 },
   navItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8, marginBottom: 1 },
@@ -600,12 +624,10 @@ const S = StyleSheet.create({
   navLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '500', flex: 1 },
   navLabelActive: { color: '#fff', fontWeight: '700' },
 
-  // Admin
   adminSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, marginBottom: 4, marginTop: 6 },
   adminBadge: { backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   adminBadgeText: { color: 'rgba(255,255,255,0.8)', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
 
-  // Bottom user
   bottomSection: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 8, paddingBottom: 12 },
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 8, paddingVertical: 10, borderRadius: 9, backgroundColor: 'rgba(0,0,0,0.2)' },
   userAvatar: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -616,7 +638,6 @@ const S = StyleSheet.create({
   logoutItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
   logoutItemText: { color: '#F87171', fontSize: 13, fontWeight: '600' },
 
-  // Desktop main area
   mainArea: { flex: 1, flexDirection: 'column', backgroundColor: '#F8FAFC' },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)', overflow: 'hidden', paddingVertical: 10, paddingRight: 16 },
   topBarBanner: { position: 'absolute', height: 60, opacity: 1, backgroundColor: '#40668d' },
@@ -630,7 +651,6 @@ const S = StyleSheet.create({
   topBarAvatarText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   contentArea: { flex: 1, overflow: 'hidden' },
 
-  // Mobile topbar wrapper (float trên Tabs)
   mobileTopBarWrap: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50,
   },

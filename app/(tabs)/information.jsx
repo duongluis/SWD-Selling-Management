@@ -2,7 +2,6 @@ import BgWatermark from '@/components/Main/BgWatermark';
 import { showAlert } from '@/components/Main/showAlert';
 import { showSuccess } from '@/components/Main/showSuccess';
 import { useLayout } from '@/components/Main/TabScreenLayout';
-import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -887,11 +886,11 @@ export default function InformationScreen() {
             <View style={S.container}>
                 {/* Header */}
                 <View style={S.header}>
-                    <TouchableOpacity onPress={() => router.replace('/(tabs)/home')} style={S.backBtn}>
+                    {/* <TouchableOpacity onPress={() => router.replace('/(tabs)/home')} style={S.backBtn}>
                         <Ionicons name="arrow-back" size={20} color={Colors.TextPrimary} />
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                     <View style={{ flex: 1 }}>
-                        <Text style={S.headerTitle}>Thông tin</Text>
+                        <Text style={S.headerTitle}>Bảng giá</Text>
                         <View style={S.roleBadge}>
                             <Text style={S.roleBadgeText}>
                                 {{ admin: '👑 Quản trị viên', daily: '🏪 Đại lý', phantan: '🚚 Đối tác', ctv: '🤝 Cộng tác viên' }[role] || ''}

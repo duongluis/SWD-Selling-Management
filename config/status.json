@@ -52,19 +52,19 @@
         },
         {
             "id": 9,
-            "name": "Chờ lắp đặt",
+            "name": "Chờ xử lý",
             "type": "Đơn lẻ",
             "changeable": false
         },
         {
             "id": 10,
-            "name": "Đang lắp đặt",
+            "name": "Đang xử lý",
             "type": "Đơn lẻ",
             "changeable": false
         },
         {
             "id": 11,
-            "name": "Đã lắp đặt",
+            "name": "Đã xử lý",
             "type": "Đơn lẻ",
             "changeable": true
         },

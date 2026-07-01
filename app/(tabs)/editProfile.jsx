@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../../config/firebaseConfig';
+import HelpButton from '../../components/Help/HelpButton';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
 
@@ -161,10 +162,11 @@ export default function EditProfileScreen() {
             <BgWatermark />
             {/* Header */}
             <View style={S.header}>
-                <TouchableOpacity style={S.backBtn} onPress={() => router.back()}>
+                {/* <TouchableOpacity style={S.backBtn} onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={20} color="#0F172A" />
-                </TouchableOpacity>
-                <Text style={S.headerTitle}>Hồ sơ cá nhân</Text>
+                </TouchableOpacity> */}
+                <Text style={S.headerTitle}>Thông tin cá nhân</Text>
+                <HelpButton screenKey="editProfile" />
             </View>
 
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

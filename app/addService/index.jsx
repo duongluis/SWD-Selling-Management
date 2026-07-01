@@ -1,6 +1,7 @@
 // app/addService.jsx
 import BgWatermark from '@/components/Main/BgWatermark';
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import HelpButton from '@/components/Help/HelpButton';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -202,11 +203,24 @@ export default function AddService() {
     const [savingCustomer, setSavingCustomer] = useState(false);
     const [customerSaved, setCustomerSaved] = useState(false);
     const [wantSaveCustomer, setWantSaveCustomer] = useState(false);
+    const [customerExists, setCustomerExists] = useState(null); // null=chưa check, true/false=kết quả
 
     const normalizePhone = (phone) => (phone || '').replace(/\s+/g, '').trim();
 
 
     // ── Effects ──────────────────────────────────────────────
+
+    // Kiểm tra SĐT đã có trong DB chưa → quyết định có hiện nút "Lưu làm khách hàng"
+    useEffect(() => {
+        const phone = normalizePhone(customerPhone);
+        if (phone.length < 9) { setCustomerExists(null); return; }
+        let cancelled = false;
+        getDocs(query(collection(db, 'customers'), where('phone', '==', phone)))
+            .then(snap => { if (!cancelled) { const exists = !snap.empty; setCustomerExists(exists); if (exists) setWantSaveCustomer(false); } })
+            .catch(() => { if (!cancelled) setCustomerExists(null); });
+        return () => { cancelled = true; };
+    }, [customerPhone]);
+
     useEffect(() => {
         const fetchServiceTypes = async () => {
             try {
@@ -297,9 +311,19 @@ export default function AddService() {
         );
 
     const handleSelectOrder = (order) => {
+        let phone = order.phone || order.customerPhone || '';
+        // Fallback: tra cứu từ danh sách customers đã load nếu đơn cũ không có phone
+        if (!phone && order.customerId) {
+            const found = customers.find(c => c.docId === order.customerId || c.id === order.customerId);
+            if (found) phone = found.phone || '';
+        }
+        if (!phone && order.customer) {
+            const found = customers.find(c => c.name === order.customer);
+            if (found) phone = found.phone || '';
+        }
         setSelectedOrder(order);
         setCustomerName(order.customer || '');
-        setCustomerPhone(order._phone || '');
+        setCustomerPhone(phone);
         setAddress(order.address || '');
         setSelectedMachine(null);
         setShowOrderPicker(false);
@@ -356,6 +380,7 @@ export default function AddService() {
             const newService = {
                 id: serviceId,
                 type: serviceType,
+                name: currentTypeCfg?.name || '',
                 orderId: selectedOrder?.id || null,
                 orderItems: selectedOrder?.items || [],
                 machineItem: selectedMachine || null,
@@ -383,10 +408,13 @@ export default function AddService() {
                     <Text style={W.pageTitle}>Tạo dịch vụ mới</Text>
                     <Text style={W.pageSub}>Điền thông tin để tạo yêu cầu dịch vụ mới</Text>
                 </View>
-                <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('/(tabs)/service')}>
-                    <Ionicons name="close" size={16} color="#64748B" />
-                    <Text style={W.cancelBtnText}>Huỷ</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <HelpButton screenKey="addService" />
+                    <TouchableOpacity style={W.cancelBtn} onPress={() => router.replace('/(tabs)/service')}>
+                        <Ionicons name="close" size={16} color="#64748B" />
+                        <Text style={W.cancelBtnText}>Huỷ</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <View style={W.grid}>
@@ -520,6 +548,7 @@ export default function AddService() {
                             </View>
                         </View>
 
+                        {customerExists === false && (
                         <TouchableOpacity
                             style={[W.inputGroup, W.toggleRow]}
                             onPress={() => setWantSaveCustomer(v => !v)}
@@ -530,9 +559,9 @@ export default function AddService() {
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={W.toggleLabel}>Lưu làm khách hàng</Text>
-                                {/* <Text style={W.toggleSub}>Tự động thêm vào danh sách khách hàng khi tạo dịch vụ</Text> */}
                             </View>
                         </TouchableOpacity>
+                        )}
 
                         <NotesInput value={note} onChange={setNote} label="Ghi chú" />
 
@@ -706,6 +735,7 @@ export default function AddService() {
                             </View>
                             <NotesInputMobile value={note} onChange={setNote} />
 
+                            {customerExists === false && (
                             <TouchableOpacity
                                 style={M.toggleRow}
                                 onPress={() => setWantSaveCustomer(v => !v)}
@@ -719,6 +749,7 @@ export default function AddService() {
                                     <Text style={M.toggleSub}>Tự động thêm vào danh sách khi tạo dịch vụ</Text>
                                 </View>
                             </TouchableOpacity>
+                            )}
 
                         </View>
 

@@ -9,11 +9,12 @@ import FilterChips from '@/components/UI/FilterChips';
 import StatBar from '@/components/UI/StatBar';
 import UserDetail from '@/components/UI/UserDetail';
 import { fmtDate, getInitials } from '@/components/Utils/formatters';
+import { isAdminOrGD } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-    FlatList, RefreshControl,
+    FlatList, Modal, RefreshControl,
     StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 
@@ -43,6 +44,7 @@ function TableHead({ tableStyles, isDesktop }) {
         <View style={tableStyles.head}>
             <View style={{ width: 46 }} />
             <Text style={[tableStyles.th, { flex: 2 }]}>Người dùng</Text>
+            <Text style={[tableStyles.th, { flex: 1 }]}>Biệt danh</Text>  {/* ← thêm */}
             <Text style={[tableStyles.th, { flex: 1 }]}>Vai trò</Text>
             <Text style={[tableStyles.th, { flex: 1 }]}>Ngày tạo</Text>
             <Text style={[tableStyles.th, { flex: 1 }]}>Trạng thái</Text>
@@ -71,6 +73,15 @@ function UserRow({ item, index, isActive, onPress, tableStyles, isDesktop }) {
                 <Text style={R.name} numberOfLines={1}>{item.name || item.companyName || '—'}</Text>
                 <Text style={R.sub} numberOfLines={1}>{item.email}</Text>
             </View>
+
+            {/* Biệt danh ← thêm */}
+            {isDesktop && (
+                <View style={[R.col, { flex: 1 }]}>
+                    <Text style={R.nickname} numberOfLines={1}>
+                        {item.nickname || '—'}
+                    </Text>
+                </View>
+            )}
             {/* Vai trò */}
             {isDesktop && (
                 <View style={[R.col, { flex: 1 }]}>
@@ -117,6 +128,7 @@ const R = StyleSheet.create({
     roleText: { fontSize: 11, fontWeight: '700' },
     pill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20, alignSelf: 'flex-start' },
     pillText: { fontSize: 11, fontWeight: '700' },
+    nickname: { fontSize: 12, fontWeight: '600', color: '#475569' },
 });
 
 export default function UsersScreen() {
@@ -126,7 +138,7 @@ export default function UsersScreen() {
     const [filter, setFilter] = useState('all');
     const [selected, setSelected] = useState(null);
 
-    const canAccess = role === 'admin' || role === 'giamdoc';
+    const canAccess = isAdminOrGD(role);
     const { isDesktop } = useLayout();
     const { styles: cardStyles } = useCardStyles();
     const { styles: tableStyles } = useTableStyles();
