@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-    FlatList, Modal, RefreshControl,
+    FlatList, Modal, Pressable, RefreshControl,
     StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 

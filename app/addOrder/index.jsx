@@ -11,6 +11,7 @@ import {
   TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import HelpButton from '../../components/Help/HelpButton';
 import {
   ORDER_TYPE_TO_CATEGORY,
   SERVICE_TYPE_TO_CATEGORY,
@@ -19,7 +20,6 @@ import {
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { useLayout } from '../../components/Main/TabScreenLayout';
-import HelpButton from '../../components/Help/HelpButton';
 import { db } from '../../config/firebaseConfig';
 
 
@@ -72,7 +72,7 @@ const ROLE_ORDER_TYPE = { daily: null, phantan: null, ctv: null, admin: null, ot
 
 const PAYMENT_OPTIONS = [
   { key: 'customer', label: 'Khách hàng thanh toán', icon: 'person-outline', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
-  { key: 'company', label: 'Doanh nghiệp thanh toán', icon: 'business-outline', color: '#8B5CF6', bg: '#F5F3FF', border: '#DDD6FE' },
+  { key: 'company', label: 'Người bán thanh toán', icon: 'business-outline', color: '#8B5CF6', bg: '#F5F3FF', border: '#DDD6FE' },
 ];
 
 // ── DateField ─────────────────────────────────────────────────
@@ -93,8 +93,11 @@ const DateField = React.memo(({ orderDate, setOrderDate, selectedDate, setSelect
 
   return isDesktop ? (
     <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 9, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 8 }}>
+      {/* lang="sv-SE" ép thứ tự nhập yyyy/mm/dd (năm trước) thay vì dd/mm/yyyy theo locale máy,
+          tránh lỗi "ngày quá khứ" khi năm mới gõ 1-2 chữ số cuối cùng */}
       <input
         type="date"
+        lang="sv-SE"
         value={orderDate || ''}
         min={toDateStr(minDate)}
         style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: '#0F172A', backgroundColor: 'transparent', fontWeight: '500', cursor: 'pointer', width: '100%' }}
@@ -128,6 +131,7 @@ const DateField = React.memo(({ orderDate, setOrderDate, selectedDate, setSelect
       </>
     );
 });
+DateField.displayName = 'DateField';
 
 // ── ProductDropdown ───────────────────────────────────────────
 const ProductDropdown = React.memo(({ catalog, onSelect }) => {
@@ -154,6 +158,7 @@ const ProductDropdown = React.memo(({ catalog, onSelect }) => {
     </View >
   );
 });
+ProductDropdown.displayName = 'ProductDropdown';
 const PD = StyleSheet.create({
   wrap: { backgroundColor: '#FFF', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginTop: 4, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 10, elevation: 6, overflow: 'hidden', zIndex: 99 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
@@ -201,6 +206,7 @@ const OrderTypeField = React.memo(({ ws, orderType, lockedType, setOrderType }) 
     </View>
   );
 });
+OrderTypeField.displayName = 'OrderTypeField';
 
 // ── CustomerPickerDropdown ────────────────────────────────────
 const CustomerPickerDropdown = React.memo(({ ws, customerList, customerLoading, customerSearch, setCustomerSearch, selectedCustomer, setSelectedCustomer, setDeliveryAddress, setShowCustomerPicker }) => {
@@ -244,6 +250,7 @@ const CustomerPickerDropdown = React.memo(({ ws, customerList, customerLoading, 
     </View >
   );
 });
+CustomerPickerDropdown.displayName = 'CustomerPickerDropdown';
 
 // ── AddProductForm ────────────────────────────────────────────
 const AddProductForm = React.memo(({ ws, orderType, catalog, priceField, priceLabel, newProduct, setNewProduct, showProductDrop, setShowProductDrop, onAdd, onCancel }) => {
@@ -312,41 +319,60 @@ const AddProductForm = React.memo(({ ws, orderType, catalog, priceField, priceLa
     </View>
   );
 });
+AddProductForm.displayName = 'AddProductForm';
 
 // ── ServiceList ───────────────────────────────────────────────
-const ServiceList = React.memo(({ ws, serviceTypesList = [], selectedServices, setSelectedServices, serviceNote, onServiceNoteChange, orderType }) => {
+const ServiceList = React.memo(({ ws, serviceTypesList = [], selectedServices, setSelectedServices, serviceNote, onServiceNoteChange, orderType, deliveryAddress, onAddressChange }) => {
 
-  if (!serviceTypesList || serviceTypesList.length === 0) return null;
-
+  // useCallback phải gọi trước mọi return sớm (serviceTypesList rỗng lúc đầu rồi mới có
+  // dữ liệu từ Firestore) để không lệch số lượng hook giữa các lần render
   const toggleService = useCallback((svcType) => {
     setSelectedServices(prev =>
       prev.includes(svcType) ? prev.filter(t => t !== svcType) : [...prev, svcType]
     );
   }, [setSelectedServices]);
 
+  if (!serviceTypesList || serviceTypesList.length === 0) return null;
 
   return (
     <View style={ws ? W.autoSvcCard : styles.autoSvcCard}>
       <Text style={[ws ? W.cardTitle : styles.sectionTitle, { marginBottom: 12 }]}>Dịch vụ tự động tạo</Text>
       {serviceTypesList.map(svc => {
         const isSelected = selectedServices.includes(svc.type);
-        const orderKey = svc.name?.toLowerCase().includes('giao hàng') ? 'buon'
+        const isDelivery = svc.name?.toLowerCase().includes('giao hàng');
+        const orderKey = isDelivery ? 'buon'
           : svc.name?.toLowerCase().includes('lắp đặt') ? 'le'
             : null;
         const cfg = orderKey ? ORDER_TYPES[orderKey] : {};
         return (
-          <TouchableOpacity key={svc.type} style={[ws ? W.serviceRow : styles.serviceRow]} onPress={() => toggleService(svc.type)} activeOpacity={0.8}>
-            <View style={[ws ? W.serviceIcon : styles.serviceIcon, { backgroundColor: isSelected ? cfg.svcBg || '#EFF6FF' : '#F1F5F9' }]}>
-              <Ionicons name={cfg.svcIcon || 'construct-outline'} size={18} color={isSelected ? cfg.svcColor || '#2563EB' : '#94A3B8'} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[ws ? W.serviceName : styles.serviceName]}>{svc.name || svc.type}</Text>
-              {svc.description && <Text style={[ws ? W.serviceDesc : styles.serviceDesc]}>{svc.description}</Text>}
-            </View>
-            <View style={[ws ? W.toggleSwitch : styles.toggleSwitch, isSelected && (ws ? W.toggleOn : styles.toggleOn)]}>
-              <View style={[ws ? W.toggleThumb : styles.toggleThumb, isSelected && (ws ? W.toggleThumbOn : styles.toggleThumbOn)]} />
-            </View>
-          </TouchableOpacity>
+          <React.Fragment key={svc.type}>
+            <TouchableOpacity style={[ws ? W.serviceRow : styles.serviceRow]} onPress={() => toggleService(svc.type)} activeOpacity={0.8}>
+              <View style={[ws ? W.serviceIcon : styles.serviceIcon, { backgroundColor: isSelected ? cfg.svcBg || '#EFF6FF' : '#F1F5F9' }]}>
+                <Ionicons name={cfg.svcIcon || 'construct-outline'} size={18} color={isSelected ? cfg.svcColor || '#2563EB' : '#94A3B8'} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[ws ? W.serviceName : styles.serviceName]}>{svc.name || svc.type}</Text>
+                {svc.description && <Text style={[ws ? W.serviceDesc : styles.serviceDesc]}>{svc.description}</Text>}
+              </View>
+              <View style={[ws ? W.toggleSwitch : styles.toggleSwitch, isSelected && (ws ? W.toggleOn : styles.toggleOn)]}>
+                <View style={[ws ? W.toggleThumb : styles.toggleThumb, isSelected && (ws ? W.toggleThumbOn : styles.toggleThumbOn)]} />
+              </View>
+            </TouchableOpacity>
+            {isDelivery && isSelected && (
+              <View style={[ws ? W.inputGroup : styles.inputGroup, { marginTop: -4, marginBottom: 12 }]}>
+                <Text style={ws ? W.svcLabel : styles.svcLabel}>Địa chỉ giao hàng</Text>
+                <View style={ws ? W.inputBox : styles.inputBox}>
+                  <TextInput
+                    style={ws ? W.input : styles.input}
+                    placeholder="Nhập địa chỉ giao hàng..."
+                    placeholderTextColor="#94A3B8"
+                    value={deliveryAddress}
+                    onChangeText={onAddressChange}
+                  />
+                </View>
+              </View>
+            )}
+          </React.Fragment>
         );
       })}
       <Text style={[ws ? W.svcLabel : styles.svcLabel, { marginTop: 12 }]}>Ghi chú cho các dịch vụ</Text>
@@ -363,6 +389,7 @@ const ServiceList = React.memo(({ ws, serviceTypesList = [], selectedServices, s
     </View>
   );
 });
+ServiceList.displayName = 'ServiceList';
 
 // ── PaymentMethodField ────────────────────────────────────────
 const PaymentMethodField = React.memo(({ ws, orderType, useFixedPrice, fixedPayment, paymentMethod, setPaymentMethod }) => {
@@ -434,6 +461,7 @@ const PaymentMethodField = React.memo(({ ws, orderType, useFixedPrice, fixedPaym
     </View>
   );
 });
+PaymentMethodField.displayName = 'PaymentMethodField';
 
 // ── Main ─────────────────────────────────────────────────────
 export default function AddOrder() {
@@ -705,7 +733,10 @@ export default function AddOrder() {
           // Fallback: tự tạo từ ORDER_TYPES config
           const defaults = orderType === 'buon'
             ? [{ type: 'DELIVERY', name: 'Giao hàng', description: 'Dịch vụ giao hàng tận nơi' }]
-            : [{ type: 'INSTALLATION', name: 'Lắp đặt', description: 'Dịch vụ lắp đặt tại địa điểm' }];
+            : [
+              { type: 'INSTALLATION', name: 'Lắp đặt', description: 'Dịch vụ lắp đặt tại địa điểm' },
+              { type: 'DELIVERY', name: 'Giao hàng', description: 'Dịch vụ giao hàng tận nơi' },
+            ];
           setServiceTypesList(defaults);
         }
       } catch (e) {
@@ -755,7 +786,7 @@ export default function AddOrder() {
         try {
           const creatorSnap = await getDoc(doc(db, 'users', customerCreator));
           if (creatorSnap.exists()) hierarchyUserDetail = creatorSnap.data();
-        } catch (_) {}
+        } catch (_) { }
       }
       const { rootAdvisor, level } = await calculateHierarchy(effectiveCreatorEmail, hierarchyUserDetail);
 
@@ -897,12 +928,14 @@ export default function AddOrder() {
                 </View>
               )}
 
-              <View style={W.inputGroup}>
-                <Text style={W.label}>Địa chỉ giao hàng</Text>
-                <View style={W.inputBox}>
-                  <TextInput style={W.input} placeholder="Nhập địa chỉ..." placeholderTextColor="#94A3B8" value={deliveryAddress} onChangeText={handleAddressChange} />
+              {orderType !== 'buon' && (
+                <View style={W.inputGroup}>
+                  <Text style={W.label}>Địa chỉ giao hàng</Text>
+                  <View style={W.inputBox}>
+                    <TextInput style={W.input} placeholder="Nhập địa chỉ..." placeholderTextColor="#94A3B8" value={deliveryAddress} onChangeText={handleAddressChange} />
+                  </View>
                 </View>
-              </View>
+              )}
 
               <View style={W.inputGroup}>
                 <Text style={W.label}>Ghi chú</Text>
@@ -973,6 +1006,8 @@ export default function AddOrder() {
               serviceNote={serviceNote}
               onServiceNoteChange={handleServiceNoteChange}
               orderType={orderType}
+              deliveryAddress={deliveryAddress}
+              onAddressChange={handleAddressChange}
             />
 
             {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
@@ -1095,12 +1130,14 @@ export default function AddOrder() {
                 {products.length > 0 && <View style={styles.totalRow}><Text style={styles.totalLabel}>Tổng cộng</Text><Text style={styles.totalAmount}>{fmt(totalAmount)}</Text></View>}
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Địa chỉ giao hàng</Text>
-                <View style={[styles.inputBox, styles.textAreaBox]}>
-                  <TextInput style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]} placeholder="Địa chỉ giao hàng..." placeholderTextColor="#B0B0C8" multiline value={deliveryAddress} onChangeText={handleAddressChange} />
+              {orderType !== 'buon' && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Địa chỉ giao hàng</Text>
+                  <View style={[styles.inputBox, styles.textAreaBox]}>
+                    <TextInput style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]} placeholder="Địa chỉ giao hàng..." placeholderTextColor="#B0B0C8" multiline value={deliveryAddress} onChangeText={handleAddressChange} />
+                  </View>
                 </View>
-              </View>
+              )}
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Ghi chú (tuỳ chọn)</Text>
@@ -1117,6 +1154,8 @@ export default function AddOrder() {
                 serviceNote={serviceNote}
                 onServiceNoteChange={handleServiceNoteChange}
                 orderType={orderType}
+                deliveryAddress={deliveryAddress}
+                onAddressChange={handleAddressChange}
               />
 
               {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}

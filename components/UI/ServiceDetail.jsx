@@ -1,7 +1,7 @@
 // components/UI/ServiceDetail.jsx — style giống order panel
 
 import { showAlert } from '@/components/Main/showAlert';
-import { createNotification } from '@/components/Utils/chatService';
+import { createNotification, getSupportRoomId, sendSystemMessage } from '@/components/Utils/chatService';
 import { fmtCurrency, fmtDate, fmtPhone } from '@/components/Utils/formatters';
 import { getRole } from '@/components/Utils/roleHelper';
 import { isServiceStatusLocked, syncOrderStatusFromService } from '@/components/Utils/syncOrderStatus';
@@ -142,7 +142,9 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                     if (newOrderStatus) {
                         showAlert('Đã đồng bộ', `Đơn hàng #${local.orderId} tự động chuyển sang "${newOrderStatus}"`);
                     }
-                }).catch(() => { });
+                }).catch((err) => {
+                    console.log("err: ", err);
+                });
 
                 // ── Thông báo → dẫn tới chat (nếu có đơn liên kết) ──
                 const createdBy = local.createdBy;

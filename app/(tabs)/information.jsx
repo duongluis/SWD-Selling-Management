@@ -608,6 +608,7 @@ function ProductDetail({ product, priceFields, isAdmin, onClose, onEdit, onDelet
 
             <View style={D.card}>
                 <View style={D.cardHeader}><Ionicons name="pricetag-outline" size={15} color="#2563EB" /><Text style={D.cardTitle}>Bảng giá</Text></View>
+                <Text style={D.vatNote}>Giá này đã bao gồm phí VAT</Text>
                 <View style={D.priceGrid}>
                     {priceFields.map(field => {
                         const cfg = PRICE_LABELS[field];
@@ -791,6 +792,12 @@ export default function InformationScreen() {
     const [loadingProducts, setLoadingProducts] = useState(true);
     const [loadingServices, setLoadingServices] = useState(true);
     const [selectedProduct, setSelectedProduct] = useState(null);
+    const [productSearch, setProductSearch] = useState('');
+
+    const normalize = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
+    const filteredProducts = productSearch.trim()
+        ? products.filter(p => normalize(p.name).includes(normalize(productSearch)))
+        : products;
 
     // Modal state
     const [showProductModal, setShowProductModal] = useState(false);
@@ -955,10 +962,34 @@ export default function InformationScreen() {
                                     </View>
                                 ) : (
                                     <>
-                                        <View style={S.listHeader}>
-                                            <Text style={S.listCount}>{products.length} sản phẩm</Text>
+                                        <View style={S.searchBar}>
+                                            <Ionicons name="search-outline" size={16} color="#94A3B8" />
+                                            <TextInput
+                                                style={S.searchInput}
+                                                value={productSearch}
+                                                onChangeText={setProductSearch}
+                                                placeholder="Tìm sản phẩm theo tên..."
+                                                placeholderTextColor="#94A3B8"
+                                                returnKeyType="search"
+                                            />
+                                            {productSearch.length > 0 && (
+                                                <TouchableOpacity onPress={() => setProductSearch('')}
+                                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                                    <Ionicons name="close-circle" size={16} color="#CBD5E1" />
+                                                </TouchableOpacity>
+                                            )}
                                         </View>
-                                        <ProductList products={products} priceFields={priceFields} onSelect={setSelectedProduct} />
+                                        <View style={S.listHeader}>
+                                            <Text style={S.listCount}>{filteredProducts.length} sản phẩm</Text>
+                                        </View>
+                                        {filteredProducts.length === 0 ? (
+                                            <View style={S.loadingWrap}>
+                                                <Ionicons name="search-outline" size={28} color="#CBD5E1" />
+                                                <Text style={S.loadingText}>Không tìm thấy sản phẩm nào</Text>
+                                            </View>
+                                        ) : (
+                                            <ProductList products={filteredProducts} priceFields={priceFields} onSelect={setSelectedProduct} />
+                                        )}
                                     </>
                                 )}
                             </View>
@@ -1017,6 +1048,8 @@ const S = StyleSheet.create({
     listContainer: { flex: 1, paddingHorizontal: IS_WEB ? 32 : 16, paddingTop: 16 },
     listHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
     listCount: { fontSize: 13, color: '#64748B', fontWeight: '600' },
+    searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14 },
+    searchInput: { flex: 1, fontSize: 14, color: '#0F172A' },
     loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: 60 },
     loadingText: { fontSize: 14, color: '#94A3B8' },
 });
@@ -1068,6 +1101,7 @@ const D = StyleSheet.create({
     card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: IS_WEB ? 20 : 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14, marginHorizontal: IS_WEB ? 32 : 16 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     cardTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+    vatNote: { fontSize: 12, fontWeight: '600', color: '#EF4444', marginTop: -8, marginBottom: 12 },
     priceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     priceCard: { flex: 1, minWidth: IS_WEB ? 160 : 140, padding: 14, borderRadius: 10 },
     priceLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },

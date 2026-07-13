@@ -1,5 +1,7 @@
 // components/Hooks/useIdleReload.js
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
+import { cleanupStaleCaches } from '../Utils/cleanupStaleCaches';
 
 const IDLE_MS = 5 * 60 * 1000; // 5 phút
 
@@ -8,6 +10,10 @@ export function useIdleReload() {
     const idleSince = useRef(null); // thời điểm bắt đầu idle
 
     useEffect(() => {
+        // Hook luôn được gọi (đúng rules-of-hooks) — chỉ thực thi logic trên web
+        // vì dùng window/document/navigator.serviceWorker (không tồn tại trên native)
+        if (Platform.OS !== 'web') return;
+
         const markIdle = () => {
             idleSince.current = Date.now();
         };
@@ -15,7 +21,7 @@ export function useIdleReload() {
         const checkAndReload = () => {
             if (idleSince.current && Date.now() - idleSince.current >= IDLE_MS) {
                 idleSince.current = null;
-                window.location.reload();
+                cleanupStaleCaches().finally(() => window.location.reload());
                 return;
             }
         };

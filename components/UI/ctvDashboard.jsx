@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, Dimensions, FlatList, Platform, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useLayout } from "../Main/TabScreenLayout";
 
 function getInitials(name) {
     if (!name) return "?";

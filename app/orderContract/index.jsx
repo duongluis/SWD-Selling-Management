@@ -833,10 +833,4 @@ const S = StyleSheet.create({
         fontWeight: '600',
         color: '#0F172A',
     },
-    // Chỉnh lại calcInputs để hiển thị text thay vì TextInput
-    calcInputs: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 4,
-    },
 });

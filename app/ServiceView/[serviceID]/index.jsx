@@ -151,7 +151,10 @@ export default function ServiceDetailScreen() {
             async () => {
                 setUpdating(true);
                 try {
-                    await updateDoc(doc(db, 'service', service.id), { status: newStatus });
+                    await updateDoc(doc(db, 'service', service.id), {
+                        status: newStatus,
+                        ...(newStatus === 'Hoàn thành' && { completedDate: new Date().toISOString() }),
+                    });
                     setService(prev => ({ ...prev, status: newStatus }));
                     const newOrderStatus = await syncOrderStatusFromService(service, newStatus);
                     if (newOrderStatus) {

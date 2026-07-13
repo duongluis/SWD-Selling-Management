@@ -346,7 +346,7 @@ export default function CalculatorScreen() {
                                 <Ionicons name="calculator-outline" size={40} color="#CBD5E1" />
                             </View>
                             <Text style={styles.emptyTitle}>Chưa có mặt hàng</Text>
-                            <Text style={styles.emptySub}>Bấm "Thêm mặt hàng" để bắt đầu tính toán</Text>
+                            <Text style={styles.emptySub}>Bấm &quot;Thêm mặt hàng&quot; để bắt đầu tính toán</Text>
                             <TouchableOpacity style={styles.emptyBtn} onPress={() => setPickerOpen(true)}>
                                 <Ionicons name="add-circle-outline" size={16} color="#2563EB" />
                                 <Text style={styles.emptyBtnText}>Thêm mặt hàng</Text>

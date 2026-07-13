@@ -52,8 +52,10 @@ function DateField({ value, onChange, webStyle }) {
     };
     return isDesktop ? (
         <View style={webStyle || S.inputBox}>
+            {/* lang="sv-SE" ép thứ tự nhập yyyy/mm/dd (năm trước) thay vì dd/mm/yyyy theo locale máy */}
             <input
                 type="date"
+                lang="sv-SE"
                 value={value || ''}
                 style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: '#0F172A', backgroundColor: 'transparent', fontWeight: '500', cursor: 'pointer', width: '100%' }}
                 onChange={e => { if (e.target.value) onChange(e.target.value); }}

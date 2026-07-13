@@ -37,6 +37,7 @@ const NotesInput = memo(({ value, onChange, label }) => (
         </View>
     </View>
 ));
+NotesInput.displayName = 'NotesInput';
 
 const NotesInputMobile = memo(({ value, onChange }) => (
     <>
@@ -53,6 +54,7 @@ const NotesInputMobile = memo(({ value, onChange }) => (
         </View>
     </>
 ));
+NotesInputMobile.displayName = 'NotesInputMobile';
 
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
@@ -114,6 +116,7 @@ const OrderPickerDropdown = memo(({
         </ScrollView>
     </View >
 ));
+OrderPickerDropdown.displayName = 'OrderPickerDropdown';
 
 // Đặt NGOÀI AddService
 const MachinePickerSection = memo(({
@@ -166,6 +169,7 @@ const MachinePickerSection = memo(({
         </View>
     );
 });
+MachinePickerSection.displayName = 'MachinePickerSection';
 
 // ── Single export default ────────────────────────────────────
 export default function AddService() {

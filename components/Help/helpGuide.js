@@ -75,7 +75,7 @@ export const HELP_GUIDE = {
                 description:
                     'Nhấn vào một đơn để mở panel chi tiết (trên máy tính) hoặc chuyển sang màn chi tiết (điện thoại). Tại đây bạn thấy đầy đủ: sản phẩm, khách hàng, dịch vụ kèm theo, và có thể cập nhật trạng thái, xuất biên bản hoặc mở chat.',
                 tips: [
-                    'Nhấn badge trạng thái (ví dụ "Chờ xử lý") để chuyển sang bước tiếp theo.',
+                    // 'Nhấn badge trạng thái (ví dụ "Chờ xử lý") để chuyển sang bước tiếp theo.',
                     'Nhấn "Xuất HĐ" để in biên bản bàn giao gửi khách ký xác nhận.',
                     'Nhấn "Chat" để trao đổi trực tiếp về đơn hàng với đội hỗ trợ.',
                     'Chỉ người tạo đơn hoặc Admin mới thấy nút "Sửa đơn".',
@@ -131,22 +131,21 @@ export const HELP_GUIDE = {
                 title: 'Theo dõi khách đã giới thiệu',
                 image: require('../../assets/images/help/consult_01.png'),
                 description:
-                    'Đây là màn hình dành riêng cho Cộng tác viên (CTV). Mỗi khi bạn giới thiệu một khách hàng tiềm năng, họ sẽ xuất hiện tại đây kèm trạng thái xử lý. Nhấn "+ Giới thiệu khách" để thêm người mới.',
+                    'Đây là màn hình giới thiệu khách, dành cho những khách hàng mình cần tư vấn hộ. Mỗi khi bạn giới thiệu một khách hàng tiềm năng, họ sẽ xuất hiện tại đây kèm trạng thái xử lý. Nhấn "+ Giới thiệu khách" để thêm người mới.',
                 tips: [
                     'Badge "Đang tư vấn" (xanh dương) = đội bán hàng đang liên hệ với khách.',
-                    'Badge "Thành công" (xanh lá) = khách đã mua hàng — hoa hồng sẽ được tính.',
-                    'Badge "Thất bại" (đỏ) = khách không chốt — bạn không mất gì, hãy giới thiệu tiếp.',
+                    'Badge "Thành công" (xanh lá) = tư vấn khách thành công -> Khách sẽ sớm có đơn hàng.',
+                    'Badge "Thất bại" (đỏ) = khách không chốt — bạn không mất gì, hãy giới thiệu thêm khách hàng để tư vấn viên hỗ trợ tư vấn nhé.',
                     'Nhấn vào khách để xem chi tiết tiến trình xử lý.',
                 ],
             },
             {
-                title: 'Luồng hoa hồng từ giới thiệu',
-                image: require('../../assets/images/help/consult_01.png'),
+                title: 'Chi tiết người cần tư vấn',
+                image: require('../../assets/images/help/consult_02.png'),
                 description:
-                    'Luồng hoạt động: Bạn giới thiệu khách → Đội bán hàng tư vấn → Nếu thành công, admin tạo khách hàng và đơn hàng chính thức → Sau khi đơn được thanh toán, hoa hồng xuất hiện trong tab Hoa hồng của bạn.',
+                    'Hiển thị chi tiết người cần tư vấn bao gồm các thông tin cơ bản, kèm theo đó là các chức năng đi kèm như gọi điện, nhắn tin',
                 tips: [
-                    'Hoa hồng chỉ tính khi đơn hàng đạt trạng thái "Đã thanh toán".',
-                    'Kiểm tra tab Hoa hồng (nếu có) để xem tiền đã được duyệt hay chưa.',
+                    'Với những khách hàng tư vấn thành công sẽ được hiển thị bên tab Khách hàng và người giới thiệu khách sẽ nhận được hoa hồng mỗi khi vị khách đó có đơn.',
                     'Điền đầy đủ thông tin (tên, SĐT, địa chỉ, nhu cầu) để tăng tỉ lệ chốt.',
                 ],
             },
@@ -161,7 +160,7 @@ export const HELP_GUIDE = {
                 title: 'Danh sách dịch vụ',
                 image: require('../../assets/images/help/service_01.png'),
                 description:
-                    'Màn hình Dịch vụ hiển thị tất cả yêu cầu dịch vụ: giao hàng, lắp đặt, bảo dưỡng... Mỗi dịch vụ có mã riêng, tên khách, loại dịch vụ và trạng thái xử lý hiện tại.',
+                    'Màn dịch vụ hiển thị thông số các dịch vụ đã được tạo, danh sách đã hoàn thành và chưa hoàn thành',
                 tips: [
                     'Nhấn "+ Tạo dịch vụ" để đăng ký dịch vụ mới cho khách.',
                     'Tìm kiếm theo tên khách hoặc mã dịch vụ để lọc nhanh.',
@@ -200,7 +199,7 @@ export const HELP_GUIDE = {
                 title: 'Danh sách thành viên trực thuộc',
                 image: require('../../assets/images/help/team_01.png'),
                 description:
-                    'Màn hình Đội ngũ hiển thị tất cả thành viên đang hoạt động dưới quyền bạn, nhóm theo vai trò (Đại lý, Đối tác, CTV). Mỗi thẻ ghi rõ tên, email, số điện thoại và vai trò hiện tại.',
+                    'Màn hình Đội ngũ hiển thị tất cả thành viên đang hoạt động trong đội nhóm của bạn , nhóm theo vai trò. Mỗi thẻ ghi rõ tên, email, số điện thoại và vai trò hiện tại.',
                 tips: [
                     'Bạn chỉ thấy những người đã đăng ký dưới mã giới thiệu của bạn.',
                     'Nhấn vào thẻ thành viên để xem thông tin chi tiết và liên hệ.',
@@ -211,10 +210,10 @@ export const HELP_GUIDE = {
                 title: 'Xem chi tiết thành viên',
                 image: require('../../assets/images/help/team_02.png'),
                 description:
-                    'Nhấn vào một thành viên để xem thông tin đầy đủ: email, số điện thoại, vai trò, ngày tham gia và doanh số. Trên màn hình rộng (máy tính), panel chi tiết mở ra bên phải mà không cần thoát danh sách.',
+                    'Nhấn vào một thành viên để xem thông tin đầy đủ: email, số điện thoại, vai trò, ngày tham gia và doanh số. ',
                 tips: [
-                    'Nhấn "Chat" trong chi tiết thành viên để liên lạc trực tiếp.',
-                    'Muốn thêm thành viên mới: chia sẻ mã giới thiệu của bạn (trong tab Hồ sơ).',
+                    // 'Nhấn "Chat" trong chi tiết thành viên để liên lạc trực tiếp.',
+                    'Muốn thêm thành viên mới: chia sẻ mã giới thiệu của bạn .',
                 ],
             },
         ],
@@ -235,16 +234,16 @@ export const HELP_GUIDE = {
                     'Thứ hạng cập nhật ngay khi có đơn hàng mới được xác nhận thanh toán.',
                 ],
             },
-            {
-                title: 'Xem chi tiết từng thành viên',
-                image: require('../../assets/images/help/leaderboard_02.png'),
-                description:
-                    'Nhấn vào tên một thành viên trong bảng để xem chi tiết doanh số, số đơn hàng và hiệu suất của họ. Admin và Giám đốc thấy toàn bộ đội; các vai trò khác chỉ thấy người cùng cấp và cấp dưới.',
-                tips: [
-                    'Tìm kiếm theo tên để nhanh chóng tra cứu thành viên cụ thể.',
-                    'Màu xanh = đứng đầu kỳ; vị trí 1-3 có huy hiệu vàng/bạc/đồng.',
-                ],
-            },
+            // {
+            //     title: 'Xem chi tiết từng thành viên',
+            //     image: require('../../assets/images/help/leaderboard_02.png'),
+            //     description:
+            //         'Nhấn vào tên một thành viên trong bảng để xem chi tiết doanh số, số đơn hàng và hiệu suất của họ. Admin và Giám đốc thấy toàn bộ đội; các vai trò khác chỉ thấy người cùng cấp và cấp dưới.',
+            //     tips: [
+            //         'Tìm kiếm theo tên để nhanh chóng tra cứu thành viên cụ thể.',
+            //         'Màu xanh = đứng đầu kỳ; vị trí 1-3 có huy hiệu vàng/bạc/đồng.',
+            //     ],
+            // },
         ],
     },
 
@@ -355,14 +354,14 @@ export const HELP_GUIDE = {
         screenLabel: 'Bảng giá',
         steps: [
             {
-                title: 'Bảng giá sản phẩm theo vai trò',
+                title: 'Bảng giá sản phẩm',
                 image: require('../../assets/images/help/information_01.png'),
                 description:
-                    'Danh sách toàn bộ sản phẩm kèm giá bán theo vai trò của bạn. Hệ thống có 4 mức giá: Niêm yết (giá bán lẻ), Đại lý, Đối tác và CTV — bạn sẽ thấy mức giá phù hợp với vai trò hiện tại.',
+                    'Danh sách toàn bộ sản phẩm kèm giá bán.',
                 tips: [
-                    'Giá bạn thấy chính là giá bạn được phép bán — dùng để báo giá cho khách.',
+                    'Giá bạn thấy chính là giá gợi ý — dùng để báo giá cho khách.',
                     'Nhấn vào thẻ sản phẩm để xem thông số kỹ thuật đầy đủ (công suất, thương hiệu...).',
-                    'Nếu muốn biết giá của vai trò khác, liên hệ Admin.',
+
                 ],
             },
         ],
@@ -383,15 +382,15 @@ export const HELP_GUIDE = {
                     'Phòng chat tự tạo khi đơn hàng mới được tạo — bạn không cần tạo thủ công.',
                 ],
             },
-            {
-                title: 'Mở chat nhanh từ trang chủ',
-                image: require('../../assets/images/help/chat_02.png'),
-                description:
-                    'Từ trang chủ, nhấn nút "Phòng chat" trong khu vực Thao tác nhanh để vào ngay danh sách chat. Đây là cách nhanh nhất khi bạn đang ở trang chủ và cần trả lời tin nhắn gấp.',
-                tips: [
-                    'Bạn sẽ nhận thông báo đẩy mỗi khi có tin nhắn mới trong phòng của mình.',
-                ],
-            },
+            // {
+            //     title: 'Mở chat nhanh từ trang chủ',
+            //     image: require('../../assets/images/help/chat_02.png'),
+            //     description:
+            //         'Từ trang chủ, nhấn nút "Phòng chat" trong khu vực Thao tác nhanh để vào ngay danh sách chat. Đây là cách nhanh nhất khi bạn đang ở trang chủ và cần trả lời tin nhắn gấp.',
+            //     tips: [
+            //         'Bạn sẽ nhận thông báo đẩy mỗi khi có tin nhắn mới trong phòng của mình.',
+            //     ],
+            // },
         ],
     },
 
@@ -407,7 +406,7 @@ export const HELP_GUIDE = {
                 tips: [
                     'Chia sẻ mã giới thiệu với đối tác/cộng tác viên để họ đăng ký dưới tên bạn.',
                     'Mỗi thành viên đăng ký qua mã của bạn sẽ tạo ra hoa hồng lên tuyến cho bạn.',
-                    'Nhấn vào mã để sao chép và chia sẻ qua Zalo, Facebook...',
+                    // 'Nhấn vào mã để sao chép và chia sẻ qua Zalo, Facebook...',
                 ],
             },
             {
@@ -488,7 +487,7 @@ export const HELP_GUIDE = {
             },
             {
                 title: 'Bước 3 — Dịch vụ kèm & hoàn tất',
-                image: require('../../assets/images/help/addOrder_02.png'),
+                image: require('../../assets/images/help/addOrder_03.png'),
                 description:
                     'Phần "Dịch vụ tự động tạo" cho phép bật/tắt dịch vụ kèm theo đơn (giao hàng, lắp đặt). Bật dịch vụ nào thì sau khi tạo đơn, một yêu cầu dịch vụ tương ứng sẽ tự động xuất hiện trong tab Dịch vụ. Nhấn "Tạo đơn hàng" để hoàn tất.',
                 tips: [

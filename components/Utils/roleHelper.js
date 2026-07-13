@@ -19,7 +19,7 @@ export const getRoleLabel = (role) => ({
 }[role] || 'Người dùng');
 
 /** Quyền hạn */
-export const canAdd = (role) => ['admin', 'daily', 'phantan', 'ctv'].includes(role);
+export const canAdd = (role) => ['admin', 'daily', 'phantan'].includes(role);
 export const canAddCTV = (role) => ['phantan', 'ctv'].includes(role);
 export const canEdit = (role) => ['admin', 'daily', 'phantan'].includes(role);
 export const canEditConsult = (role) => ['admin', 'daily', 'ctv'].includes(role);

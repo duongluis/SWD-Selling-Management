@@ -3,6 +3,7 @@
 
 import { showAlert } from '@/components/Main/showAlert';
 import { createNotification, getSupportRoomId, sendStatusUpdateMessage } from '@/components/Utils/chatService';
+import { computeOrderCommission } from '@/components/Utils/commissionCalc';
 import { fmtCurrency } from '@/components/Utils/formatters';
 import { isAdmin as checkAdmin } from '@/components/Utils/roleHelper';
 import { syncServiceStatusFromOrder } from '@/components/Utils/syncOrderStatus';
@@ -11,7 +12,7 @@ import statusConfig from '@/config/status.json';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator, Dimensions, Modal, Platform, ScrollView, StyleSheet,
@@ -311,12 +312,19 @@ const getStatusOptions = (orderType) => {
     return (statusConfig[key] || statusConfig['don_le']).map(s => s.name);
 };
 
+// Các trạng thái "đang xử lý/giao hàng" vốn tự động đồng bộ theo dịch vụ đính kèm
+// (xem syncServiceStatusFromOrder) → chỉ cho sửa tay khi đơn KHÔNG có dịch vụ nào
+const AUTO_SYNC_STATUSES = ['Chờ xử lý', 'Đang xử lý', 'Chờ lắp đặt', 'Đang lắp đặt', 'Chờ giao hàng', 'Đang giao hàng'];
+
 // Kiểm tra trạng thái hiện tại có được phép thay đổi không
-const isStatusChangeable = (orderType, currentStatus) => {
+const isStatusChangeable = (orderType, currentStatus, hasNoServices) => {
     if (!currentStatus || ['CANCELLED', 'PENDING', 'COMPLETED'].includes(currentStatus)) return false;
     const key = orderType === 'buon' ? 'don_buon' : 'don_le';
     const found = (statusConfig[key] || statusConfig['don_le']).find(s => s.name === currentStatus);
-    return found ? found.changeable : false;
+    if (!found) return false;
+    if (found.changeable) return true;
+    // Đơn không có dịch vụ đính kèm → không có gì tự đồng bộ, cho phép sửa tay
+    return !!hasNoServices && AUTO_SYNC_STATUSES.includes(currentStatus);
 };
 
 // ── Status Chip ───────────────────────────────────────────────
@@ -383,7 +391,9 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     // ── State — khai báo TRƯỚC mọi return ──
     const [localOrder, setLocalOrder] = useState(null);
     const [services, setServices] = useState([]);
-    const [svLoading, setSvLoading] = useState(false);
+    // true ngay từ đầu để tránh nháy "Chưa có dịch vụ" / mở khoá đổi trạng thái nhầm
+    // trong khoảnh khắc trước khi fetchServices (useEffect) kịp chạy
+    const [svLoading, setSvLoading] = useState(true);
     const [menuOpen, setMenuOpen] = useState(false);
     const [menuPos, setMenuPos] = useState({ top: 0, right: 16 });
     const [updating, setUpdating] = useState(false);
@@ -509,6 +519,11 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
             day: '2-digit', month: '2-digit', year: 'numeric',
         })
         : null;
+    const paymentDateStr = localOrder.paymentDate
+        ? new Date(localOrder.paymentDate).toLocaleString('vi-VN', {
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        })
+        : null;
 
     // Quyền sửa: admin hoặc người tạo đơn, trừ các trạng thái đã khoá
     const isCreator = !!orderCreator && orderCreator === userDetail?.email;
@@ -521,8 +536,9 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     // && !LOCKED_STATUSES.includes(localOrder.status);
 
     // Quyền đổi status: chỉ admin
+    const hasNoServices = !svLoading && services.length === 0;
     const canChangeStatus = admin
-        && isStatusChangeable(localOrder.orderType, localOrder.status);
+        && isStatusChangeable(localOrder.orderType, localOrder.status, hasNoServices);
 
     // ── Handlers ──
     const handleExport = async () => {
@@ -568,9 +584,27 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
         showAlert('Cập nhật trạng thái', `Chuyển sang "${newStatus}"?`, async () => {
             setUpdating(true);
             try {
+                // Đơn chuyển sang "Đã thanh toán" → ghi nhận thời điểm thanh toán
+                const isPaid = newStatus === 'Đã thanh toán';
+                const paymentDate = isPaid ? new Date().toISOString() : null;
+
                 // ✅ Cập nhật trực tiếp vào document order (cấu trúc phẳng)
                 const orderRef = doc(db, 'orders', localOrder.id);
-                await updateDoc(orderRef, { status: newStatus });
+                await updateDoc(orderRef, {
+                    status: newStatus,
+                    ...(isPaid ? { paymentDate } : {}),
+                });
+
+                // Đơn thanh toán lần đầu → ghi 1 document hoa hồng/thưởng vào collection 'commissions'
+                // (chỉ áp dụng cho đơn thanh toán từ nay trở đi, không hồi tố đơn cũ)
+                if (isPaid) {
+                    computeOrderCommission({ ...localOrder, status: newStatus, paymentDate })
+                        .then(payload => {
+                            if (!payload) { console.warn(`Không tính được hoa hồng cho đơn #${localOrder.id}: không tìm thấy người tạo đơn`); return; }
+                            return setDoc(doc(db, 'commissions', localOrder.id), payload);
+                        })
+                        .catch(e => console.error(`Ghi commission cho đơn #${localOrder.id} thất bại:`, e));
+                }
 
                 // Sync service + gửi chat message (fire-and-forget)
                 syncServiceStatusFromOrder(localOrder.id, newStatus).catch(() => { });
@@ -598,7 +632,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                     });
                 }
 
-                const next = { ...localOrder, status: newStatus };
+                const next = { ...localOrder, status: newStatus, ...(isPaid ? { paymentDate } : {}) };
                 setLocalOrder(next);
                 onUpdated?.(next);
             } catch (e) { showAlert('Lỗi', e.message); }
@@ -612,7 +646,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
             {/* ── Header ── */}
             <View style={DP.header}>
                 <View style={DP.headerTop}>
-                    {date && <Text style={DP.date}>{date}</Text>}
+                    {date && <Text style={DP.date}>Ngày giao đơn: {date}</Text>}
                     <TouchableOpacity style={DP.closeBtn} onPress={onClose}>
                         <Ionicons name="close" size={15} color="#64748B" />
                     </TouchableOpacity>
@@ -626,6 +660,13 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         </View>
                     )}
                 </View>
+
+                {paymentDateStr && (
+                    <View style={DP.paymentDateRow}>
+                        <Ionicons name="checkmark-done-circle-outline" size={13} color="#16A34A" />
+                        <Text style={DP.paymentDateText}>Ngày thanh toán: {paymentDateStr}</Text>
+                    </View>
+                )}
 
                 <View style={DP.actions}>
                     {/* Xuất HĐ */}
@@ -863,6 +904,8 @@ const DP = StyleSheet.create({
     title: { fontSize: 16, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
     typePill: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
     typePillText: { fontSize: 10, fontWeight: '700' },
+    paymentDateRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+    paymentDateText: { fontSize: 11, fontWeight: '600', color: '#16A34A' },
     actions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingTop: 4 },
     aBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
     aBtnText: { fontSize: 12, fontWeight: '600', color: '#2563EB' },

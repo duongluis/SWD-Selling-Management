@@ -21,11 +21,11 @@ export function useSearch(data, searchKeys = ['name'], filterKey = null) {
         }
 
         // Search text
-        const q = query.trim().toLowerCase();
+        const q = query.trim().toLowerCase().replace(/\s+/g, '');
         if (q) {
             out = out.filter(item =>
                 searchKeys.some(key => {
-                    const val = String(item[key] || '').toLowerCase();
+                    const val = String(item[key] || '').toLowerCase().replace(/\s+/g, '');
                     return val.includes(q);
                 })
             );

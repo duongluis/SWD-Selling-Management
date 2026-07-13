@@ -446,7 +446,7 @@ const BT = StyleSheet.create({
 
 // ── Tab Screens ────────────────────────────────────────────────
 const TAB_SCREENS = [
-  'home', 'order', 'customer', 'service', 'leaderboard', 'users',
+  'home', 'order', 'customer', 'service', 'leaderboard', 'user',
   'customerctv', 'analytics', 'commission', 'regionAnalytics',
   'news', 'information', 'chatList', 'editProfile', 'calculator', 'team',
 ];

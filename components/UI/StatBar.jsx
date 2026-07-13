@@ -23,8 +23,8 @@ function StatCard({ icon, label, value, color, bg }) {
  * @param stats - array of { icon, label, value, color, bg }
  */
 export default function StatBar({ stats = [] }) {
-    if (!stats.length) return null;
     const { isDesktop } = useLayout();
+    if (!stats.length) return null;
     return isDesktop ? (
         <View style={S.rowWeb}>
             {stats.map((s, i) => <StatCard key={i} {...s} />)}

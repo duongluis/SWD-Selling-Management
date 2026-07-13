@@ -1,12 +1,10 @@
 import { useLayout } from "@/components/Main/TabScreenLayout";
 import Colors from "@/constant/Colors";
 import { router } from "expo-router";
-import { useEffect } from 'react';
 import {
   Dimensions,
   Image,
   ImageBackground,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -21,13 +19,7 @@ export default function Index() {
 
   const { isDesktop } = useLayout()
 
-  useEffect(() => {
-    if (Platform.OS === 'web' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        registrations.forEach((reg) => reg.unregister());
-      });
-    }
-  }, []);
+  // Dọn Service Worker cũ đã chuyển vào app/_layout.jsx (chạy trên mọi route, không chỉ ở đây)
 
   // ✅ Fix double assets
   const fixUri = (imgObj) => {

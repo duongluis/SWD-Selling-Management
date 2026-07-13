@@ -10,6 +10,13 @@ import {
 import { useCallback, useContext, useEffect, useState } from 'react';
 import { getRole, isAdminOrGD } from '../Utils/roleHelper';
 
+// createdAt không hợp lệ (thiếu/sai định dạng) → coi như cũ nhất (0),
+// tránh NaN làm Array.sort xếp lệch vị trí ngẫu nhiên
+const toRecordTime = (createdAt) => {
+    const t = new Date(createdAt || 0).getTime();
+    return Number.isNaN(t) ? 0 : t;
+};
+
 // ── Hàm tính rootAdvisor ──────────────────────────────────────
 const getRootAdvisorForUser = async (userEmail) => {
     let root = userEmail;
@@ -60,7 +67,7 @@ const fetchStaticByEmails = async (collectionName, emails) => {
         );
         snap.docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
     }
-    return all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return all.sort((a, b) => toRecordTime(b.createdAt) - toRecordTime(a.createdAt));
 };
 
 // ── Helpers cho L1 orders (module-level để reuse ở useFocusEffect) ──
@@ -71,7 +78,9 @@ const getCustomerIdsByTeam = async (teamEmails) => {
         const snap = await getDocs(
             query(collection(db, 'customers'), where('createdBy', 'in', chunk))
         );
-        snap.docs.forEach(d => { const id = d.data().id; if (id) allIds.push(id); });
+        // d.id = Firestore docId của customer (đúng là giá trị order.customerId đang trỏ tới,
+        // KHÔNG phải field data().id — field đó chỉ là 1 timestamp nội bộ không liên quan)
+        snap.docs.forEach(d => allIds.push(d.id));
     }
     return [...new Set(allIds)];
 };
@@ -108,11 +117,22 @@ async function fetchServices(myEmail, role) {
     if (isAdminOrGD(role)) {
         const snap = await getDocs(collection(db, 'service'));
         return snap.docs.map(d => ({ ...d.data(), docId: d.id }))
-            .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+            .sort((a, b) => toRecordTime(b.createdAt) - toRecordTime(a.createdAt));
     }
     const teamEmails = await getTeamEmails(myEmail, role);
     if (teamEmails.length === 0) return [];
     return fetchStaticByEmails('service', teamEmails);
+}
+
+async function fetchCommissions(myEmail, role) {
+    if (isAdminOrGD(role)) {
+        const snap = await getDocs(collection(db, 'commissions'));
+        return snap.docs.map(d => ({ ...d.data(), docId: d.id }))
+            .sort((a, b) => toRecordTime(b.createdAt) - toRecordTime(a.createdAt));
+    }
+    const teamEmails = await getTeamEmails(myEmail, role);
+    if (teamEmails.length === 0) return [];
+    return fetchStaticByEmails('commissions', teamEmails);
 }
 
 // ── fetch team members ────────────────────────────────────────
@@ -128,7 +148,7 @@ async function fetchTeam(myEmail, role, userDetail, isAdvisor) {
                 const isDaily = ['đại lý', 'daily', 'dealer'].includes(r);
                 return !u.advisor;
             })
-            .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+            .sort((a, b) => toRecordTime(b.createdAt) - toRecordTime(a.createdAt));
     }
 
     // Đại lý → L2/L3 của mình
@@ -167,7 +187,7 @@ async function fetchTeam(myEmail, role, userDetail, isAdvisor) {
             const isDaily = ['đại lý', 'daily', 'dealer'].includes(r);
             return !u.advisor && !isDaily;
         })
-        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        .sort((a, b) => toRecordTime(b.createdAt) - toRecordTime(a.createdAt));
 }
 
 async function fetchUsers(myEmail, role) {
@@ -176,7 +196,7 @@ async function fetchUsers(myEmail, role) {
     return snap.docs
         .map(d => ({ ...d.data(), docId: d.id }))
         .filter(u => u.email !== myEmail)
-        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        .sort((a, b) => toRecordTime(b.createdAt) - toRecordTime(a.createdAt));
 }
 
 async function fetchConsults(myEmail, role) {
@@ -206,7 +226,7 @@ async function fetchConsults(myEmail, role) {
             );
             snap.docs.forEach(d => all.push({ ...d.data(), docId: d.id }));
         }
-        return all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        return all.sort((a, b) => toRecordTime(b.createdAt) - toRecordTime(a.createdAt));
     }
 
     const teamEmails = await getTeamEmails(myEmail, role);
@@ -242,6 +262,10 @@ function computeStats(type, data) {
         }
         case 'team':
             return { total: data.length };
+        case 'commissions': {
+            const pending = data.filter(c => c.commissionStatus === 'pending' || c.bonusStatus === 'pending');
+            return { total: data.length, pending: pending.length };
+        }
         default:
             return { total: data.length };
     }
@@ -263,7 +287,7 @@ export function useScreenData(type) {
 
     // ── Helpers nội bộ để setData từ fetchStatic* ────────────
     const applyStaticData = useCallback((list) => {
-        const sorted = [...list].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        const sorted = [...list].sort((a, b) => toRecordTime(b.createdAt) - toRecordTime(a.createdAt));
         setData(sorted);
         setStats(computeStats(type, sorted));
         setLoading(false);
@@ -283,6 +307,26 @@ export function useScreenData(type) {
     const fetchStaticServices = useCallback(async (teamEmails) => {
         try {
             const list = await fetchStaticByEmails('service', teamEmails);
+            applyStaticData(list);
+        } catch (e) {
+            setError(e.message);
+            setLoading(false);
+        }
+    }, [applyStaticData]);
+
+    const fetchStaticConsults = useCallback(async (teamEmails) => {
+        try {
+            const list = await fetchStaticByEmails('consult', teamEmails);
+            applyStaticData(list);
+        } catch (e) {
+            setError(e.message);
+            setLoading(false);
+        }
+    }, [applyStaticData]);
+
+    const fetchStaticCommissions = useCallback(async (teamEmails) => {
+        try {
+            const list = await fetchStaticByEmails('commissions', teamEmails);
             applyStaticData(list);
         } catch (e) {
             setError(e.message);
@@ -351,6 +395,20 @@ export function useScreenData(type) {
                     q = collection(db, 'users');
                 }
 
+                else if (type === 'commissions') {
+                    if (isAdminOrGD(role)) {
+                        q = collection(db, 'commissions');
+                    } else {
+                        const teamEmails = await getTeamEmails(myEmail, role);
+                        if (teamEmails.length === 0) { setData([]); setLoading(false); return; }
+                        if (teamEmails.length > 10) {
+                            await fetchStaticCommissions(teamEmails);
+                            return;
+                        }
+                        q = query(collection(db, 'commissions'), where('createdBy', 'in', teamEmails));
+                    }
+                }
+
                 else if (type === 'consults') {
                     if (isAdminOrGD(role)) {
                         // Không dùng onSnapshot toàn bộ collection nữa
@@ -362,6 +420,10 @@ export function useScreenData(type) {
                     } else {
                         const teamEmails = await getTeamEmails(myEmail, role);
                         if (teamEmails.length === 0) { setData([]); setLoading(false); return; }
+                        if (teamEmails.length > 10) {
+                            await fetchStaticConsults(teamEmails);
+                            return;
+                        }
                         q = query(collection(db, 'consult'), where('createdBy', 'in', teamEmails));
                     }
                 }
@@ -370,7 +432,7 @@ export function useScreenData(type) {
                     unsub = onSnapshot(q, (snap) => {
                         let list = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
                         if (type === 'users') list = list.filter(u => u.email !== myEmail);
-                        list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                        list.sort((a, b) => toRecordTime(b.createdAt) - toRecordTime(a.createdAt));
                         setData(list);
                         setStats(computeStats(type, list));
                         setLoading(false);
@@ -394,13 +456,13 @@ export function useScreenData(type) {
         if (isAdminOrGD(role)) {
             const snap = await getDocs(collection(db, 'customers'));
             return snap.docs.map(d => ({ ...d.data(), docId: d.id }))
-                .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                .sort((a, b) => toRecordTime(b.createdAt) - toRecordTime(a.createdAt));
         }
         if (rootAdvisor && rootAdvisor !== myEmail) {
             const q = query(collection(db, 'customers'), where('rootAdvisor', '==', rootAdvisor));
             const snap = await getDocs(q);
             return snap.docs.map(d => ({ ...d.data(), docId: d.id }))
-                .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                .sort((a, b) => toRecordTime(b.createdAt) - toRecordTime(a.createdAt));
         }
         const teamEmails = await getTeamEmails(myEmail, role);
         if (teamEmails.length === 0) return [];
@@ -419,6 +481,7 @@ export function useScreenData(type) {
             else if (type === 'services') result = await fetchServices(myEmail, role);
             else if (type === 'users') result = await fetchUsers(myEmail, role);
             else if (type === 'consults') result = await fetchConsults(myEmail, role);
+            else if (type === 'commissions') result = await fetchCommissions(myEmail, role);
             else if (type === 'team') result = await fetchTeam(myEmail, role, userDetail, isAdvisor); // ← thêm
             else return;
             setData(result);

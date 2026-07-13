@@ -307,7 +307,10 @@ export default function ServiceScreen() {
     if (!item || newStatus === item.status) return;
     showAlert('Cập nhật trạng thái', `Chuyển sang "${newStatus}"?`, async () => {
       try {
-        await updateDoc(doc(db, 'service', item.docId), { status: newStatus });
+        await updateDoc(doc(db, 'service', item.docId), {
+          status: newStatus,
+          ...(newStatus === 'Hoàn thành' && { completedDate: new Date().toISOString() }),
+        });
         syncOrderStatusFromService({ type: item.type, orderId: item.orderId, phone: item.phone }, newStatus);
         const creatorEmail = item.createdBy;
         if (creatorEmail) {

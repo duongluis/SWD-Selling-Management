@@ -47,6 +47,10 @@ export async function fetchExportData(onProgress) {
     const consultsSnap = await getDocs(collection(db, 'consult'));
     const consults = consultsSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
 
+    onProgress?.('Đang tải danh sách hoa hồng...');
+    const commissionSnap = await getDocs(collection(db, 'commissions'));
+    const commissions = commissionSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
+
     onProgress?.('Đang tải người dùng...');
     const usersSnap = await getDocs(collection(db, 'users'));
     const users = usersSnap.docs.map(d => {
@@ -54,11 +58,12 @@ export async function fetchExportData(onProgress) {
         return { ...safe, docId: d.id };
     });
 
+
     onProgress?.('Đang tải tin tức...');
     const newsSnap = await getDocs(collection(db, 'news'));
     const news = newsSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
 
-    return { customers, orders, services, consults, users, news };
+    return { customers, orders, services, consults, commissions, users, news };
 }
 
 // ── Format rows ───────────────────────────────────────────────
@@ -130,7 +135,7 @@ function formatServices(services) {
             'Ghi chú': s.note || '',
             'Tạo bởi': s.createdBy || '',
             'Ngày tạo': fmtDate(s.createdAt),
-            'Ngày hoàn thành': fmtDate(s.completedAt),
+            'Ngày hoàn thành': fmtDate(s.completedDate),
         };
     });
 }
@@ -145,6 +150,24 @@ function formatConsults(consults) {
         'Trạng thái': { success: 'Thành công', failed: 'Thất bại', pending: 'Đang xử lý' }[c.status] || c.status || '',
         'Tạo bởi': c.createdBy || '',
         'Ngày tạo': fmtDate(c.createdAt),
+    }));
+}
+function formatCommissions(commissions) {
+    return commissions.map((c, i) => ({
+        'ID đơn hàng': c.id || '',
+        'Khách hàng': c.customer || '',
+        'Người tạo đơn': c.createdBy || '',
+        'Giá trị đơn': c.totalValue || 0,
+        'Hoa hồng': c.commission || 0,
+        'Trạng thái hoa hồng': { pending: 'Chưa thanh toán', paid: 'Đã thanh toán' }[c.commissionStatus] || '',
+        'Người nhận thưởng': c.collaboratorEmail || '',
+        'Hoa hồng thưởng': c.bonusAmount || 0,
+        'Trạng thái thưởng': { pending: 'Chưa thanh toán', paid: 'Đã thanh toán' }[c.bonusStatus] || '',
+        'Ngày hoàn thành đơn': fmtDate(c.paidAt),
+        //   'Vai trò của người nhận': { price_a: 'đại lý', price_c: 'đối tác', price_p: 'CTV' }[c.basePriceField] || '',
+        // paymentMethod,
+        // 'Người tạo đơn': c.sellerEmail || '',
+
     }));
 }
 
@@ -196,6 +219,8 @@ async function buildExcelBlob(data) {
         ['Khách Hàng', formatCustomers(data.customers)],
         ['Dịch Vụ', formatServices(data.services)],
         ['Giới Thiệu Khách', formatConsults(data.consults)],
+        ['Hoa hồng', formatCommissions(data.commissions)],
+
         ['Người Dùng', formatUsers(data.users)],
         ['Tin Tức', formatNews(data.news)],
     ];
@@ -292,6 +317,7 @@ export async function exportCSV(data) {
         ['khach-hang.csv', formatCustomers(data.customers)],
         ['dich-vu.csv', formatServices(data.services)],
         ['gioi-thieu-khach.csv', formatConsults(data.consults)],
+        ['hoa-hong.csv', formatCommissions(data.commissions)],
         ['nguoi-dung.csv', formatUsers(data.users)],
         ['tin-tuc.csv', formatNews(data.news)],
     ];

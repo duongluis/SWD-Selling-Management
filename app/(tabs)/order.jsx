@@ -8,7 +8,7 @@ import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import OrderDetail from '@/components/UI/OrderDetail';
 import StatBar from '@/components/UI/StatBar';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
-import { canAdd, getPriceField, getRole, isAdmin } from '@/components/Utils/roleHelper';
+import { canAdd, getPriceField, getRole, isAdmin, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -21,6 +21,12 @@ import { db } from '@/config/firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
+// Ngày giao đơn không hợp lệ (thiếu/sai định dạng) → coi như cũ nhất (0),
+// tránh NaN làm Array.sort xếp lệch vị trí ngẫu nhiên
+const toOrderTime = (createdAt) => {
+  const t = new Date(createdAt || 0).getTime();
+  return Number.isNaN(t) ? 0 : t;
+};
 
 const TYPE_CFG = {
   buon: { label: 'Đơn buôn', c: '#065F46', bg: '#ECFDF5' },
@@ -53,7 +59,7 @@ const STATUS_CFG = {
 // Thêm map hiển thị paymentMethod
 const PAYMENT_CFG = {
   customer: { label: 'Khách hàng', icon: 'person-outline', c: '#0891B2', bg: '#ECFEFF' },
-  company: { label: 'Doanh nghiệp', icon: 'business-outline', c: '#7C3AED', bg: '#F5F3FF' },
+  company: { label: 'Người bán', icon: 'business-outline', c: '#7C3AED', bg: '#F5F3FF' },
 };
 
 const getStatusCfg = (s) => STATUS_CFG[s] || { c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' };
@@ -75,8 +81,7 @@ const getCostPriceField = (order, role, rootAdvisorRoles) => {
 };
 
 const canShowCost = (userDetail, role) => {
-  // if (role === 'giamdoc') return false; // ← thêm: giamdoc chỉ xem, không thấy giá nhập
-  if (isAdmin(role)) return true;
+  if (isAdminOrGD(role)) return true;
   return userDetail?.advisor == null;
 };
 
@@ -89,7 +94,7 @@ function TableHeader({ role, showCost, showCreator, tableStyles }) {
       <View style={COL.date}><Text style={tableStyles.thCenter}>Ngày</Text></View>
       {showCreator && <View style={COL.creator}><Text style={tableStyles.thCenter}>Người tạo</Text></View>}
       <View style={COL.sub}><Text style={tableStyles.thCenter}>Hình thức thanh toán</Text></View>
-      {showCost && <View style={COL.cost}><Text style={tableStyles.thCenter}>{isAdmin(role) ? 'Doanh thu' : 'Tiền nhập'}</Text></View>}
+      {showCost && <View style={COL.cost}><Text style={tableStyles.thCenter}>{isAdminOrGD(role) ? 'Doanh thu' : 'Tiền nhập'}</Text></View>}
       <View style={COL.amount}><Text style={tableStyles.thCenter}>Tổng giá trị</Text></View>
       <View style={COL.status}><Text style={[tableStyles.th, tableStyles.thCenter]}>Trạng thái</Text></View>
       <View style={COL.trail} />
@@ -242,6 +247,8 @@ export default function OrderScreen() {
   const [monthFilter, setMonthFilter] = useState('all');
   const [yearFilter, setYearFilter] = useState('all');
   const [showFilter, setShowFilter] = useState(false);
+  const [sortOrder, setSortOrder] = useState('desc'); // 'desc' = gần nhất trước, 'asc' = xa nhất trước
+  const [showSort, setShowSort] = useState(false);
 
   // Đếm số filter đang active
   const activeFilterCount = [
@@ -285,6 +292,7 @@ export default function OrderScreen() {
         // creatorEmail.includes(q) ||          // ✅ tìm theo email người tạo
         creatorName.includes(q);             // ✅ tìm theo tên/nickname người tạo
 
+
       const mt = typeFilter === 'all' || o.orderType === typeFilter;
       let mst = true;
       if (statusFilter === 'processing') mst = ['Chờ lắp đặt', 'Đang lắp đặt', 'Chờ xử lý', 'Đang xử lý'].includes(o.status);
@@ -293,10 +301,13 @@ export default function OrderScreen() {
       const createdAt = o.createdAt || '';
       const my = yearFilter === 'all' || createdAt.startsWith(yearFilter);
       const mm = monthFilter === 'all' || createdAt.slice(5, 7) === monthFilter;
+      const mp = paymentFilter === 'all' || o.paymentMethod === paymentFilter;
 
-      return ms && mt && mst && my && mm;
-    });
-  }, [data, query, typeFilter, statusFilter, yearFilter, monthFilter, creatorNames]);
+      return ms && mt && mst && my && mm && mp;
+    }).sort((a, b) => sortOrder === 'asc'
+      ? toOrderTime(a.createdAt) - toOrderTime(b.createdAt)
+      : toOrderTime(b.createdAt) - toOrderTime(a.createdAt));
+  }, [data, query, typeFilter, statusFilter, yearFilter, monthFilter, paymentFilter, creatorNames, sortOrder]);
 
 
   const totalCostFiltered = useMemo(() => {
@@ -388,12 +399,21 @@ export default function OrderScreen() {
       }, 0);
   }, [data, role, advisorRoles]); // ← bỏ productPrices
 
+  const isAdminOrGDRole = isAdminOrGD(role);
+  // Giá sản phẩm đã bao gồm VAT → tách VAT theo công thức: VAT = DT/1.08*0.08, DT chưa VAT = DT/1.08
+  const vatAmount = totalCost / 1.08 * 0.08;
+  const revenueExVat = totalCost / 1.08;
+
   const statCards = [
     { icon: 'receipt-outline', label: 'Đơn hàng', value: String(stats.total || 0), color: THEME.colors.primary, bg: THEME.colors.primaryLight },
     { icon: 'cube-outline', label: 'Đơn buôn', value: String(data.filter(o => o.orderType === 'buon').length), color: THEME.colors.success, bg: THEME.colors.successLight },
     { icon: 'home-outline', label: 'Đơn lẻ', value: String(data.filter(o => o.orderType === 'le').length), color: THEME.colors.purple, bg: THEME.colors.purpleLight },
-    { icon: 'cash-outline', label: 'Doanh thu', value: fmtCurrency(totalRevenue), color: THEME.colors.warning, bg: THEME.colors.warningLight },
-    ...(showCostField ? [{ icon: 'pricetag-outline', label: 'Tiền nhập', value: fmtCurrency(totalCost), color: '#0891B2', bg: '#ECFEFF' }] : []),
+    ...(!isAdminOrGDRole ? [{ icon: 'cash-outline', label: 'Doanh thu', value: fmtCurrency(totalRevenue), color: THEME.colors.warning, bg: THEME.colors.warningLight }] : []),
+    ...(showCostField ? [{ icon: 'pricetag-outline', label: isAdminOrGDRole ? 'Doanh thu (VAT)' : 'Tiền nhập', value: fmtCurrency(totalCost), color: '#0891B2', bg: '#ECFEFF' }] : []),
+    ...(isAdminOrGDRole ? [
+      { icon: 'calculator-outline', label: 'VAT', value: fmtCurrency(vatAmount), color: '#DC2626', bg: '#FEF2F2' },
+      { icon: 'trending-down-outline', label: 'Doanh thu (chưa VAT)', value: fmtCurrency(revenueExVat), color: '#7C3AED', bg: '#F5F3FF' },
+    ] : []),
   ];
 
   const handlePress = (item) => {
@@ -451,6 +471,41 @@ export default function OrderScreen() {
             />
           </TouchableOpacity>
 
+          {/* Nút Sắp xếp theo ngày giao đơn */}
+          <View style={{ position: 'relative' }}>
+            <TouchableOpacity
+              style={FF.filterBtn}
+              onPress={() => setShowSort(p => !p)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="swap-vertical-outline" size={15} color="#64748B" />
+              <Text style={FF.filterBtnText}>
+                {sortOrder === 'asc' ? 'Xa nhất trước' : 'Gần nhất trước'}
+              </Text>
+              <Ionicons name={showSort ? 'chevron-up' : 'chevron-down'} size={13} color="#64748B" />
+            </TouchableOpacity>
+
+            {showSort && (
+              <View style={[FF.dropdown, { position: 'absolute', top: '100%', left: 0, minWidth: 200 }]}>
+                {[
+                  { key: 'asc', label: 'Ngày giao gần nhất → xa nhất', icon: 'arrow-down-outline' },
+                  { key: 'desc', label: 'Ngày giao xa nhất → gần nhất', icon: 'arrow-up-outline' },
+                ].map(opt => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[FF.chip, sortOrder === opt.key && FF.chipActive, { marginBottom: 4, justifyContent: 'flex-start', gap: 6, flexDirection: 'row', alignItems: 'center' }]}
+                    onPress={() => { setSortOrder(opt.key); setShowSort(false); }}
+                  >
+                    <Ionicons name={opt.icon} size={13} color={sortOrder === opt.key ? '#fff' : '#64748B'} />
+                    <Text style={[FF.chipText, sortOrder === opt.key && FF.chipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
           {/* Reset nếu có filter active */}
           {activeFilterCount > 0 && (
             <TouchableOpacity
@@ -480,7 +535,7 @@ export default function OrderScreen() {
                 {[
                   { key: 'all', label: 'Tất cả' },
                   { key: 'customer', label: 'Khách hàng' },
-                  { key: 'company', label: 'Doanh nghiệp' },
+                  { key: 'company', label: 'Người bán' },
                 ].map(opt => (
                   <TouchableOpacity
                     key={opt.key}

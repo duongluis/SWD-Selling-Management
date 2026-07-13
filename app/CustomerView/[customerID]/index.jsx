@@ -49,7 +49,7 @@ const handleCall = async (phone) => {
   }
 };
 const handleZalo = async (phone) => {
-  const z = `zalo://chat?phone=${phone}`;
+  const z = `zalo://conversation?phonenumber=${phone}`;
   const f = `https://zalo.me/${phone}`;
   try {
     const can = await Linking.canOpenURL(z);
@@ -67,7 +67,7 @@ const handleSMS = async (phone) => {
   }
 };
 
-export default function customerView() {
+export default function CustomerView() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();

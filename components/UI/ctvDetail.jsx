@@ -35,7 +35,7 @@ const handleCall = async (phone) => {
     } catch (e) { console.error(e); }
 };
 const handleZalo = async (phone) => {
-    const z = `zalo://chat?phone=${phone}`;
+    const z = `zalo://conversation?phonenumber=${phone}`;
     const f = `https://zalo.me/${phone}`;
     try {
         const can = await Linking.canOpenURL(z);

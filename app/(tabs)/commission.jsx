@@ -1,5 +1,6 @@
 // app/(tabs)/commission.jsx — Hoa hồng + Thưởng (responsive)
 
+import { useScreenData } from '@/components/Hooks/useScreenData';
 import ScreenHeader from '@/components/Main/ScreenHeader';
 import { showAlert } from '@/components/Main/showAlert';
 import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
@@ -8,9 +9,8 @@ import { createNotification } from '@/components/Utils/chatService';
 import { getRole, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
-import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { useCallback, useContext, useMemo, useState } from 'react';
+import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator, Dimensions, Platform,
     RefreshControl, ScrollView, StyleSheet,
@@ -29,60 +29,6 @@ const fmtShort = n => {
     if (n >= 1_000) return (n / 1_000).toFixed(0) + 'k';
     return String(n);
 };
-
-// ── Helpers vai trò → price field ────────────────────────────
-const getRolePriceField = (role) => ({
-    daily: 'price_a',
-    phantan: 'price_p',
-    ctv: 'price_c',
-}[role] || 'price');
-
-const getRoleFromUserData = (u) => {
-    const r = (u?.role || u?.member || '').toLowerCase();
-    if (r === 'admin') return 'admin';
-    if (['đại lý', 'daily', 'dealer'].includes(r)) return 'daily';
-    if (['đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
-    if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
-    return 'other';
-};
-
-/**
- * Tính hoa hồng đúng công thức:
- * commission = Σ (price_sp_i - basePrice_sp_i) * qty_i
- *
- * basePrice theo vai trò người tạo cấp 1 (không có advisor):
- * - daily  → price_a
- * - phantan → price_p
- * - ctv    → price_c
- * - khác   → price (niêm yết)
- *
- * Nếu người tạo có advisor, ta dùng priceField đã được lưu vào đơn (baseRolePriceField).
- */
-function calcCommission(items = [], basePriceField = 'price') {
-    return Math.max(
-        items.reduce((sum, p) => {
-            const sellPrice = parseFloat(p.price || 0);
-            // Ưu tiên lấy basePrice được lưu trong item, fallback sang priceField tương ứng vai trò
-            const basePrice = parseFloat(p[basePriceField] || p.basePrice || p.price || 0);
-            const qty = parseFloat(p.qty || 1);
-            return sum + (sellPrice - basePrice) * qty;
-        }, 0),
-        0
-    );
-}
-
-/**
- * Tính thưởng:
- * bonus = 1% × Σ price_field_role_collab_i × qty_i
- * price_field lấy theo vai trò của người được gán collaboration
- */
-function calcBonus(items = [], collabPriceField = 'price') {
-    return items.reduce((sum, p) => {
-        const rolePrice = parseFloat(p[collabPriceField] || p.price || 0);
-        const qty = parseFloat(p.qty || 1);
-        return sum + rolePrice * qty * 0.01;
-    }, 0);
-}
 
 // ── StatCard ──────────────────────────────────────────────────
 function StatCard({ label, value, color, borderColor }) {
@@ -194,9 +140,9 @@ function CommCardMobile({ r, isAdmin, canPay, onApprove }) {
                     <Text style={[MR.infoValue, { color: isBonus ? '#7C3AED' : '#2563EB', fontWeight: '800' }]}>
                         {fmt(r.commission)}
                     </Text>
-                    {isAdmin && r.sellerEmail && (
+                    {isAdmin && (isBonus ? r.collaboratorEmail : r.sellerEmail) && (
                         <Text style={[MR.infoLabel, { marginTop: 2, fontSize: 9 }]} numberOfLines={1}>
-                            {r.sellerEmail.split('@')[0]}
+                            {(isBonus ? r.collaboratorEmail : r.sellerEmail).split('@')[0]}
                         </Text>
                     )}
                 </View>
@@ -244,15 +190,16 @@ const COL_ADMIN = {
     action: { width: 130 },
 };
 
-function TableHeader({ isAdmin, canPay }) {
+function TableHeader({ isAdmin, canPay, mainTab }) {
     const COL = isAdmin ? COL_ADMIN : COL_BASE;
+    const isBonus = mainTab === 'bonus';
     return (
         <View style={[WRAP_BASE, DT.head]}>
             <View style={COL.order}><Text style={DT.th}>Đơn hàng</Text></View>
             <View style={COL.customer}><Text style={DT.th}>Khách hàng</Text></View>
-            {isAdmin && <View style={COL.seller}><Text style={DT.th}>Nhân viên</Text></View>}
+            {isAdmin && <View style={COL.seller}><Text style={DT.th}>{isBonus ? 'Người nhận thưởng' : 'Nhân viên'}</Text></View>}
             <View style={COL.type}><Text style={DT.th}>Loại</Text></View>
-            <View style={COL.value}><Text style={DT.th}>Giá trị</Text></View>
+            {isAdmin && <View style={COL.value}><Text style={DT.th}>Giá trị</Text></View>}
             <View style={COL.commission}><Text style={DT.th}>Số tiền</Text></View>
             <View style={COL.status}><Text style={DT.th}>Trạng thái</Text></View>
             {canPay && <View style={COL.action}><Text style={DT.th}>Hành động</Text></View>}
@@ -275,15 +222,17 @@ function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
             </View>
             {isAdmin && (
                 <View style={COL.seller}>
-                    <Text style={DT.td} numberOfLines={1}>{r.sellerEmail || '—'}</Text>
+                    <Text style={DT.td} numberOfLines={1}>{(isBonus ? r.collaboratorEmail : r.sellerEmail) || '—'}</Text>
                 </View>
             )}
             <View style={COL.type}>
                 <TypeBadge type={r.recordType} />
             </View>
-            <View style={COL.value}>
-                <Text style={[DT.td, { fontWeight: '600' }]} numberOfLines={1}>{fmtShort(r.totalValue)}</Text>
-            </View>
+            {isAdmin && (
+                <View style={COL.value}>
+                    <Text style={[DT.td, { fontWeight: '600' }]} numberOfLines={1}>{fmtShort(r.totalValue)}</Text>
+                </View>
+            )}
             <View style={COL.commission}>
                 <Text style={[DT.td, { fontWeight: '800', color: isBonus ? '#7C3AED' : '#2563EB' }]} numberOfLines={1}>
                     {fmt(r.commission)}
@@ -341,192 +290,34 @@ export default function CommissionScreen() {
     const canPay = role === 'admin';
     const { isMobile } = useLayout();
 
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [orders, setOrders] = useState([]);
     const [mainTab, setMainTab] = useState('commission'); // 'commission' | 'bonus'
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
 
-    // Cache: email → userData (để lấy role & collaboration)
-    const [userCache, setUserCache] = useState({});
+    // Bản ghi hoa hồng (được ghi vào 'commissions' khi đơn chuyển "Đã thanh toán")
+    // — lọc theo team (createdBy) như các màn khác, thông qua useScreenData
+    const { data: teamCommissions, loading, refreshing, refresh } = useScreenData('commissions');
 
+    // Bổ sung: bản ghi thưởng mà mình là collaborator — collaborator có thể ở
+    // ngoài team mình quản lý nên không lọc được theo 'createdBy' như trên.
+    // Admin/giám đốc đã thấy toàn bộ collection qua useScreenData nên bỏ qua.
+    const [collabBonuses, setCollabBonuses] = useState([]);
+    useEffect(() => {
+        if (!userDetail?.email || isAdmin) { setCollabBonuses([]); return; }
+        const unsub = onSnapshot(
+            query(collection(db, 'commissions'), where('collaboratorEmail', '==', userDetail.email)),
+            (snap) => setCollabBonuses(snap.docs.map(d => ({ ...d.data(), docId: d.id }))),
+            () => { }
+        );
+        return () => unsub();
+    }, [userDetail?.email, isAdmin]);
 
-
-    const getUserData = useCallback(async (email, cache) => {
-        if (!email) return null;
-        if (cache[email]) return cache[email];
-        try {
-            const snap = await getDoc(doc(db, 'users', email));
-            if (snap.exists()) {
-                const data = snap.data();
-                setUserCache(prev => ({ ...prev, [email]: data }));
-                return data;
-            }
-        } catch (_) { }
-        return null;
-    }, []);
-
-    // Tìm advisor cấp 1 (không có advisor trên họ)
-    const findLevel1Advisor = useCallback(async (email, cache) => {
-        let currentEmail = email;
-        let visited = new Set();
-        while (currentEmail) {
-            if (visited.has(currentEmail)) break;
-            visited.add(currentEmail);
-            const userData = await getUserData(currentEmail, cache);
-            if (!userData) break;
-            if (!userData.advisor) return userData; // cấp 1
-            currentEmail = userData.advisor;
-        }
-        return null;
-    }, [getUserData]);
-
-    const fetchData = useCallback(async () => {
-        if (!userDetail?.email) return;
-        try {
-            let rawOrders = [];
-            const localCache = { ...userCache };
-
-            if (isAdmin) {
-                // Admin: lấy tất cả
-                const snap = await getDocs(collection(db, 'orders'));
-                rawOrders = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
-            } else {
-                // ── Phần 1: Đơn của team mình (để tính hoa hồng của mình) ──
-                const l2Snap = await getDocs(
-                    query(collection(db, 'users'), where('advisor', '==', userDetail.email))
-                );
-                const l2Emails = l2Snap.docs.map(d => d.data().email).filter(Boolean);
-
-                let l3Emails = [];
-                for (let i = 0; i < l2Emails.length; i += 10) {
-                    const chunk = l2Emails.slice(i, i + 10);
-                    const s = await getDocs(query(collection(db, 'users'), where('advisor', 'in', chunk)));
-                    s.docs.forEach(d => { if (d.data().email) l3Emails.push(d.data().email); });
-                }
-
-                const teamEmails = [...new Set([userDetail.email, ...l2Emails, ...l3Emails])];
-
-                for (let i = 0; i < teamEmails.length; i += 10) {
-                    const chunk = teamEmails.slice(i, i + 10);
-                    const s = await getDocs(
-                        query(collection(db, 'orders'), where('createdBy', 'in', chunk))
-                    );
-                    s.docs.forEach(d => rawOrders.push({ ...d.data(), docId: d.id }));
-                }
-
-                // ── Phần 2: Đơn của users có collaboration == myEmail (để tính thưởng) ──
-                // Tìm tất cả users mà A là collaboration của họ
-                const collabSnap = await getDocs(
-                    query(collection(db, 'users'), where('collaboration', '==', userDetail.email))
-                );
-                const collabSourceEmails = collabSnap.docs.map(d => d.data().email).filter(Boolean);
-
-                if (collabSourceEmails.length > 0) {
-                    for (let i = 0; i < collabSourceEmails.length; i += 10) {
-                        const chunk = collabSourceEmails.slice(i, i + 10);
-                        const s = await getDocs(
-                            query(collection(db, 'orders'), where('createdBy', 'in', chunk))
-                        );
-                        s.docs.forEach(d => {
-                            // Tránh trùng với đơn đã có trong rawOrders
-                            const exists = rawOrders.some(o => o.id === d.data().id || o.docId === d.id);
-                            if (!exists) rawOrders.push({ ...d.data(), docId: d.id });
-                        });
-                    }
-                }
-            }
-
-            // Hoa hồng: chỉ customer pay
-            const commissionEligible = rawOrders.filter(o =>
-                o.status === 'Đã thanh toán' &&
-                o.paymentMethod === 'customer'
-            );
-
-            // Thưởng: tất cả đơn đã thanh toán, không phân biệt payment
-            const bonusEligible = rawOrders.filter(o =>
-                o.status === 'Đã thanh toán'
-            );
-
-            // Gộp, dedup theo id — đơn nào đủ điều kiện cả 2 thì tính cả 2
-            const allEligible = [...new Map(
-                [...commissionEligible, ...bonusEligible].map(o => [o.id, o])
-            ).values()];
-
-            const enriched = await Promise.all(allEligible.map(async (o) => {
-                const creatorEmail = o.createdBy;
-                const creatorData = await getUserData(creatorEmail, localCache);
-                if (!creatorData) return null;
-
-                const creatorRole = getRoleFromUserData(creatorData);
-
-                let basePriceField = 'price';
-                if (creatorData.advisor) {
-                    const level1 = await findLevel1Advisor(creatorData.advisor, localCache);
-                    if (level1) basePriceField = getRolePriceField(getRoleFromUserData(level1));
-                } else {
-                    basePriceField = getRolePriceField(creatorRole);
-                }
-
-                const items = o.items || [];
-                const totalValue = items.reduce(
-                    (s, p) => s + parseFloat(p.price || 0) * parseFloat(p.qty || 1), 0
-                );
-
-                // Hoa hồng: chỉ tính nếu đơn đủ điều kiện customer pay
-                const isCommissionEligible = o.paymentMethod === 'customer';
-                const commission = isCommissionEligible ? calcCommission(items, basePriceField) : 0;
-
-                // Thưởng: tính cho tất cả
-                const collaboratorEmail = creatorData.collaboration || null;
-                let bonusAmount = 0;
-                if (collaboratorEmail) {
-                    // Xác định price field để tính giá nhập
-                    let bonusPriceField = 'price'; // fallback
-
-                    if (o.rootAdvisor) {
-                        // Có rootAdvisor → lấy role của rootAdvisor
-                        const rootAdvisorData = await getUserData(o.rootAdvisor, localCache);
-                        if (rootAdvisorData) {
-                            bonusPriceField = getRolePriceField(getRoleFromUserData(rootAdvisorData));
-                        }
-                    } else {
-                        // Không có rootAdvisor → dùng role của người tạo đơn (creatorData)
-                        bonusPriceField = getRolePriceField(creatorRole);
-                    }
-
-                    bonusAmount = calcBonus(items, bonusPriceField);
-                }
-                return {
-                    ...o,
-                    sellerEmail: creatorEmail,
-                    totalValue,
-                    commission,
-                    bonusAmount,
-                    collaboratorEmail,
-                    basePriceField,
-                    commissionStatus: o.commissionStatus || 'pending',
-                    bonusStatus: o.bonusStatus || 'pending',
-                };
-            }));
-
-
-
-            const validOrders = enriched
-                .filter(Boolean)
-                .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-
-            setOrders(validOrders);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
-    }, [userDetail?.email, isAdmin, findLevel1Advisor, getUserData]);
-
-    useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
+    // Gộp 2 nguồn, dedup theo orderId
+    const orders = useMemo(() => {
+        const map = new Map(teamCommissions.map(o => [o.orderId || o.id, o]));
+        collabBonuses.forEach(o => map.set(o.orderId || o.id, o));
+        return [...map.values()];
+    }, [teamCommissions, collabBonuses]);
 
     const handleApprove = useCallback((r) => {
         if (!userDetail?.email) return;
@@ -541,10 +332,7 @@ export default function CommissionScreen() {
             `Trả ${fmt(amount)} cho ${targetEmail || '—'}?\n\nĐơn: #${r.id}\nKhách hàng: ${r.customer || '—'}`,
             async () => {
                 try {
-                    await updateDoc(doc(db, 'orders', r.id), { [statusField]: 'paid' });
-                    setOrders(prev => prev.map(o =>
-                        o.id === r.id ? { ...o, [statusField]: 'paid' } : o
-                    ));
+                    await updateDoc(doc(db, 'commissions', r.orderId || r.id), { [statusField]: 'paid' });
                     if (targetEmail && targetEmail !== userDetail?.email) {
                         await createNotification({
                             userEmail: targetEmail,
@@ -557,11 +345,10 @@ export default function CommissionScreen() {
                     }
                 } catch (e) {
                     console.error('handleApprove error:', e);
-                    fetchData();
                 }
             }
         );
-    }, [userDetail?.email, fetchData]);
+    }, [userDetail?.email]);
 
     // ── Records theo mainTab ──────────────────────────────────
     const commRecords = useMemo(() => {
@@ -663,7 +450,7 @@ export default function CommissionScreen() {
             <ScrollView
                 showsVerticalScrollIndicator={true}
                 contentContainerStyle={S.scroll}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
             >
                 <View style={S.statsRow}>
                     <StatCard label="Chờ giải ngân" value={fmtShort(pendingCount)} color="#D97706" borderColor="#FDE68A" />
@@ -720,7 +507,7 @@ export default function CommissionScreen() {
                         </View>
                     ) : (
                         <>
-                            <TableHeader isAdmin={isAdmin} canPay={canPay} />
+                            <TableHeader isAdmin={isAdmin} canPay={canPay} mainTab={mainTab} />
                             {filteredRecords.slice(0, 20).map((r, i) => (
                                 <CommRowDesktop key={`${r.id}-${r.recordType}-${i}`} r={r} isAdmin={isAdmin} canPay={canPay} onApprove={handleApprove} odd={i % 2 === 1} />
                             ))}

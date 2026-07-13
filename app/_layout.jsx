@@ -1,10 +1,11 @@
 import { useIdleReload } from '@/components/Hooks/useIdleReload';
+import { cleanupStaleCaches } from '@/components/Utils/cleanupStaleCaches';
 import auth, { db } from "@/config/firebaseConfig";
 import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, View } from 'react-native';
 import { UserDetailContext } from "../context/UserDetailContext";
@@ -71,33 +72,45 @@ export default function RootLayout() {
     "outfit-light": require("./../assets/fonts/Oswald-Bold.ttf"),
   });
 
-  if (Platform.OS === 'web') {
-    useIdleReload(); // chỉ chạy trên web
-  }
+  useIdleReload(); // hook tự no-op trên native, chỉ chạy logic trên web
+
+  // Dọn Service Worker cũ + Cache Storage ngay khi app khởi động (mọi kiểu load,
+  // không chỉ riêng lúc idle-reload) — tránh SW cũ chặn request font gây mất icon
+  // khi user tự F5/Ctrl+R thay vì đợi idle-timer trong useIdleReload.js
+  useEffect(() => { cleanupStaleCaches(); }, []);
 
   // ── Auth state listener ───────────────────────────────────
+  // Lắng nghe realtime doc users/{email} để role/verified/quyền cập nhật
+  // ngay khi admin sửa, không cần user đăng xuất/đăng nhập lại.
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
+    let unsubUserDoc = null;
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (unsubUserDoc) { unsubUserDoc(); unsubUserDoc = null; }
+
       if (user) {
-        try {
-          const snap = await getDoc(doc(db, "users", user.email));
-          if (snap.exists()) {
-            setUserDetail(snap.data());
-            console.log("data", snap.data())
-          } else {
-            // Auth có nhưng chưa điền thông tin (bỏ dở bước 2)
-            setUserDetail({ email: user.email, _incomplete: true });
+        unsubUserDoc = onSnapshot(
+          doc(db, "users", user.email),
+          (snap) => {
+            if (snap.exists()) {
+              setUserDetail(snap.data());
+            } else {
+              // Auth có nhưng chưa điền thông tin (bỏ dở bước 2)
+              setUserDetail({ email: user.email, _incomplete: true });
+            }
+            setAuthChecked(true);
+          },
+          (e) => {
+            console.error("Lỗi lấy user:", e);
+            setUserDetail(null);
+            setAuthChecked(true);
           }
-        } catch (e) {
-          console.error("Lỗi lấy user:", e);
-          setUserDetail(null);
-        }
+        );
       } else {
         setUserDetail(null);
+        setAuthChecked(true);
       }
-      setAuthChecked(true);
     });
-    return () => unsub();
+    return () => { unsub(); if (unsubUserDoc) unsubUserDoc(); };
   }, []);
 
   // ── Redirect logic ────────────────────────────────────────

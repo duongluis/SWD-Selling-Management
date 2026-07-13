@@ -34,7 +34,7 @@
             "id": 6,
             "name": "Đã thanh toán",
             "type": "Đơn buôn",
-            "changeable": true
+            "changeable": false
         },
         {
             "id": 7,
@@ -78,7 +78,7 @@
             "id": 13,
             "name": "Đã thanh toán",
             "type": "Đơn lẻ",
-            "changeable": true
+            "changeable": false
         },
         {
             "id": 14,
