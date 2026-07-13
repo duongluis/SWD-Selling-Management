@@ -1,8 +1,0 @@
-* LƯU Ý (KHÔNG ĐƯỢC XÓA DÒNG NÀY): chỉ sửa đoạn cần sửa, không sửa lại cả file, sau khi sửa xong thì note lại vào done_log.txt
-* Sửa lại các lỗi sau:
-+ Màn hình đơn hàng đang mặc định bộ lọc ở năm 2026, sửa lại cho lấy tất cả các năm ở mặc định
-+ Các trạng thái đơn hàng ( chờ/đang/đã lắp đặt ) đổi hết sang chờ/đã/đang xử lý
-+ Dịch vụ ở phần đơn hàng đang bị hiển thị sai tên dịch vụ( yêu cầu)
-+ Khi đối tác hoặc ctv không có advisor giới thiệu khách và admin duyệt khách rồi tạo đơn thì đơn hàng được ghi nhận người tạo là admin ( người tạo phải là người giới thiệu khách hoặc người tạo khách mới đúng)
-+ Khi tạo dịch vụ mà chọn đơn hàng có sẵn thì chưa tự động điền sdt của khách hàng 
-+ Khi tạo dịch vụ và đơn hàng đã có khách hàng thì vẫn hiển thị nút Lưu khách hàng, vui lòng sửa lại 
