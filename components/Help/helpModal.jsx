@@ -4,19 +4,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import {
     Animated,
-    Dimensions,
     Image,
     Modal,
-    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
+    useWindowDimensions,
     View,
 } from 'react-native';
 import { useLayout } from '../Main/TabScreenLayout';
 import { HELP_GUIDE } from './helpGuide';
+
+// Kích thước tối thiểu trên desktop — to hơn nếu màn hình còn chỗ, nhưng không nhỏ hơn mức này
+const MIN_MODAL_SIZE = 900;
+const MAX_MODAL_WIDTH = 1300;
+const MAX_MODAL_HEIGHT = 1000;
 
 
 
@@ -65,7 +69,8 @@ export default function HelpModal({ visible, screenKey, onClose }) {
     const slideAnim = useRef(new Animated.Value(30)).current;
     const stepFade = useRef(new Animated.Value(1)).current;
 
-    const isDesktop = useLayout();
+    const { isDesktop } = useLayout();
+    const { width: winW, height: winH } = useWindowDimensions();
     // Reset step về 0 mỗi khi đổi màn hoặc mở lại modal
     useEffect(() => {
         setStep(0);
@@ -85,6 +90,8 @@ export default function HelpModal({ visible, screenKey, onClose }) {
     }, [visible]);
 
     // Guard PHẢI đặt sau tất cả hooks
+    // Trên mobile không hiển thị Help Modal — hướng dẫn chỉ dành cho desktop
+    if (!isDesktop) return null;
     const guide = HELP_GUIDE[screenKey];
     if (!guide) return null;
 
@@ -93,6 +100,12 @@ export default function HelpModal({ visible, screenKey, onClose }) {
     const safeStep = Math.min(step, steps.length - 1);
     const current = steps[safeStep];
     const isLast = safeStep === steps.length - 1;
+
+    // Tối thiểu 900x900, to hơn nếu màn hình còn chỗ (trừ hao lề để không sát viền)
+    const modalWidth = Math.max(MIN_MODAL_SIZE, Math.min(winW - 80, MAX_MODAL_WIDTH));
+    const modalHeight = Math.max(MIN_MODAL_SIZE, Math.min(winH - 80, MAX_MODAL_HEIGHT));
+    // Ảnh minh hoạ chiếm phần lớn modal — scale theo modalHeight thay vì cố định 210px cũ
+    const imgHeight = Math.round(modalHeight * 0.55);
 
     const animateStep = (nextStep) => {
         Animated.timing(stepFade, { toValue: 0, duration: 100, useNativeDriver: true }).start(() => {
@@ -127,7 +140,7 @@ export default function HelpModal({ visible, screenKey, onClose }) {
                 <Animated.View
                     style={[
                         S.card,
-                        isDesktop && S.cardDesktop,
+                        { width: modalWidth, height: modalHeight },
                         { transform: [{ translateY: slideAnim }] },
                     ]}
                 >
@@ -172,7 +185,7 @@ export default function HelpModal({ visible, screenKey, onClose }) {
                     >
                         <Animated.View style={{ opacity: stepFade }}>
                             {/* Image */}
-                            <View style={S.imgWrap}>
+                            <View style={[S.imgWrap, { height: imgHeight }]}>
                                 {current.image ? (
                                     <Image
                                         source={current.image}
@@ -249,27 +262,20 @@ export default function HelpModal({ visible, screenKey, onClose }) {
 }
 
 // ── Styles ───────────────────────────────────────────────────
-const MODAL_W = Math.min(Dimensions.get('window').width * 0.96, 580);
-
+// Modal này chỉ còn render trên desktop (xem guard !isDesktop ở trên) nên overlay/card
+// luôn dùng bố cục desktop (căn giữa); width/height thực tế được set inline theo
+// modalWidth/modalHeight (tính từ kích thước cửa sổ, tối thiểu 900x900).
 const S = StyleSheet.create({
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(15,23,42,0.55)',
         alignItems: 'center',
-        justifyContent: 'flex-end',
-        ...(Platform.OS === 'web' && Dimensions.get('window').width >= 768 && { justifyContent: 'center' }),
+        justifyContent: 'center',
     },
     card: {
-        width: MODAL_W,
-        maxHeight: Dimensions.get('window').height * 0.90,
         backgroundColor: '#fff',
-        borderRadius: 16,
-        overflow: 'hidden',
-        ...(Platform.OS === 'ios' && { marginBottom: 24 }),
-    },
-    cardDesktop: {
         borderRadius: 14,
-        maxHeight: Dimensions.get('window').height * 0.85,
+        overflow: 'hidden',
     },
 
     // Header
@@ -319,7 +325,6 @@ const S = StyleSheet.create({
     // Image
     imgWrap: {
         width: '100%',
-        height: 210,
         borderRadius: 10,
         overflow: 'hidden',
         marginBottom: 14,

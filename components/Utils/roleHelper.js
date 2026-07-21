@@ -22,7 +22,7 @@ export const getRoleLabel = (role) => ({
 export const canAdd = (role) => ['admin', 'daily', 'phantan'].includes(role);
 export const canAddCTV = (role) => ['phantan', 'ctv'].includes(role);
 export const canEdit = (role) => ['admin', 'daily', 'phantan'].includes(role);
-export const canEditConsult = (role) => ['admin', 'daily', 'ctv'].includes(role);
+export const canEditConsult = (role) => ['admin', 'daily'].includes(role);
 export const canDelete = (role) => role === 'admin';
 export const isAdmin = (role) => role === 'admin';
 export const isAdminOrGD = (role) => role === 'admin' || role === 'giamdoc';

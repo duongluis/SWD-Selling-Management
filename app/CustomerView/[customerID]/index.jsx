@@ -120,23 +120,28 @@ export default function CustomerView() {
             if (adminEmail) createNotification({
               userEmail: adminEmail,
               type: 'consult_success',
-              title: 'u thành công',
+              title: 'Tư vấn thành công',
               body: `${userDetail?.name || userDetail?.email} tư vấn thành công: ${name} (${phone})`,
             }).catch(() => { });
           });
         }).catch(() => { });
-        router.push({
-          pathname: '/addCustomer',
-          params: {
-            name: customer.name || '',
-            phone: customer.phone || '',
-            address: customer.address || '',
-            note: customer.note || '',
-            consultCreatedBy: customer.createdBy || '',
-            consultDocId: customer.docId || '',  // ← thêm
-            fromConsult: 'true',
-          },
-        });
+
+        if (role === 'admin') {
+          router.push({
+            pathname: '/addCustomer',
+            params: {
+              name: customer.name || '',
+              phone: customer.phone || '',
+              address: customer.address || '',
+              note: customer.note || '',
+              consultCreatedBy: customer.createdBy || '',
+              consultDocId: customer.docId || '',  // ← thêm
+              fromConsult: 'true',
+            },
+          });
+        } else {
+          showAlert('Đã ghi nhận', 'Tư vấn thành công đã được gửi cho quản trị viên để tạo khách hàng.');
+        }
       }
     } catch (e) { console.error(e); }
     finally { setUpdatingStatus(false); }
@@ -336,7 +341,7 @@ export default function CustomerView() {
                   style={[styles.statusOpt, active && { borderColor: opt.color, backgroundColor: opt.bg }]}
                   onPress={() => handleConsultStatusChange(opt.key)}
                   activeOpacity={0.8}
-                  disabled={updatingStatus || !['pending', 'none'].includes(consultStatus)}
+                  disabled={updatingStatus || !canEdit || !['pending', 'none'].includes(consultStatus)}
                 >
                   <Ionicons name={opt.icon} size={18} color={active ? opt.color : Colors.LightGray} />
                   <Text style={[styles.statusOptText, active && { color: opt.color, fontWeight: '700' }]}>

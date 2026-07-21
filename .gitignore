@@ -50,3 +50,4 @@ prompt.txt
 .claude/settings.json
 cors.json
 done_log.txt
+firestore.rules

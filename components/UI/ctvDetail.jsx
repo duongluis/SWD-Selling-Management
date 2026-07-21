@@ -140,6 +140,10 @@ export default function CtvDetail({ customer, onClose, onUpdated }) {
                         });
                     }).catch(() => { });
 
+                // CTV/Đối tác chỉ được phép tạo GIỚI THIỆU KHÁCH, không được tự tạo khách
+                // hàng thật — việc tạo khách hàng (addCustomer) chỉ dành cho admin, người
+                // sẽ nhận thông báo ở trên và tự xử lý.
+
                 router.push({
                     pathname: '/addCustomer',
                     params: {
@@ -152,6 +156,7 @@ export default function CtvDetail({ customer, onClose, onUpdated }) {
                         fromConsult: 'true',
                     },
                 });
+
             }
         } catch (e) { console.error(e); }
         finally { setUpdatingStatus(false); }

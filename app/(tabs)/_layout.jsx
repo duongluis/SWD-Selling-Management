@@ -333,8 +333,8 @@ const MD = StyleSheet.create({
 });
 
 // ── Mobile Top Bar ────────────────────────────────────────────
-// THAY ĐỔI: thêm onHelpPress prop, thêm nút help, wrap bằng View relative
-function MobileTopBar({ pageLabel, userDetail, onMenuPress, router, role, onHelpPress }) {
+// Không còn nút Help ở đây — Help Modal chỉ dành cho desktop
+function MobileTopBar({ pageLabel, userDetail, onMenuPress, router, role }) {
   return (
     <View style={MB.topBar}>
       <Image source={BANNER_IMAGE} style={MB.topBarBanner} resizeMode="cover" />
@@ -351,11 +351,6 @@ function MobileTopBar({ pageLabel, userDetail, onMenuPress, router, role, onHelp
               <Ionicons name="chatbubbles-outline" size={18} color="#fff" />
             </TouchableOpacity>
             <NotificationPanel bellColor="#fff" bellSize={18} />
-
-            {/* ── Nút Help (mobile) ── */}
-            <TouchableOpacity style={MB.topBarBtn} onPress={onHelpPress}>
-              <Ionicons name="help-circle-outline" size={18} color="#fff" />
-            </TouchableOpacity>
           </>
         )}
 
@@ -573,19 +568,13 @@ export default function TabLayout() {
         {/* ── Mobile topbar float ── */}
         {!isDesktop && (
           <View style={[S.mobileTopBarWrap, { pointerEvents: 'box-none' }]}>
-            {/* Wrap relative để định vị tooltip */}
-            <View style={{ position: 'relative' }}>
-              <MobileTopBar
-                pageLabel={pageLabel}
-                userDetail={userDetail}
-                onMenuPress={() => setDrawerOpen(true)}
-                router={router}
-                role={role}
-                onHelpPress={openHelp}
-              />
-              {/* Tooltip lần đầu — mobile */}
-              <FirstTimeHelpTooltip visible={tooltipVisible} onDismiss={dismissTooltip} />
-            </View>
+            <MobileTopBar
+              pageLabel={pageLabel}
+              userDetail={userDetail}
+              onMenuPress={() => setDrawerOpen(true)}
+              router={router}
+              role={role}
+            />
           </View>
         )}
 

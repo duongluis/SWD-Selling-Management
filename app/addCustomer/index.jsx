@@ -1,8 +1,8 @@
 // app/addCustomer/index.jsx
 
+import HelpButton from '@/components/Help/HelpButton';
 import BgWatermark from '@/components/Main/BgWatermark';
 import { useLayout } from '@/components/Main/TabScreenLayout';
-import HelpButton from '@/components/Help/HelpButton';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,12 +56,13 @@ export default function AddCustomer() {
         await updateDoc(doc(db, 'consult', consultDocId), {
           status: 'pending'
         });
-        router.replace('(tabs)/customerCTV');
       } catch (e) {
         console.error('Rollback lỗi:', e);
       }
+      router.replace('(tabs)/customerctv');
+      return;
     }
-    router.replace('(tabs)/customer');
+    router.replace(fromConsult ? '(tabs)/customerctv' : '(tabs)/customer');
   }
 
 
@@ -75,7 +76,7 @@ export default function AddCustomer() {
       return false;
     } else {
       showAlert("Đã tồn tại khách hàng trên hệ thống, vui lòng liên hệ quản trị viên để biết thêm thông tin ")
-      handleCancel()
+      handleCancel();
       return true;
     }
   };
