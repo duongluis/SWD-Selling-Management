@@ -209,7 +209,7 @@ const OrderTypeField = React.memo(({ ws, orderType, lockedType, setOrderType }) 
 OrderTypeField.displayName = 'OrderTypeField';
 
 // ── CustomerPickerDropdown ────────────────────────────────────
-const CustomerPickerDropdown = React.memo(({ ws, customerList, customerLoading, customerSearch, setCustomerSearch, selectedCustomer, setSelectedCustomer, setDeliveryAddress, setShowCustomerPicker }) => {
+const CustomerPickerDropdown = React.memo(({ ws, customerList, customerLoading, customerSearch, setCustomerSearch, selectedCustomer, setSelectedCustomer, setDeliveryAddress, setShowCustomerPicker, emptyLabel = 'Chưa có khách hàng' }) => {
   const filteredCustomers = customerSearch.trim() === ''
     ? customerList
     : customerList.filter(c => (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone || '').includes(customerSearch));
@@ -230,7 +230,7 @@ const CustomerPickerDropdown = React.memo(({ ws, customerList, customerLoading, 
       {customerLoading
         ? <Text style={ws ? W.dropdownEmpty : styles.dropdownEmpty}>Đang tải...</Text>
         : filteredCustomers.length === 0
-          ? <Text style={ws ? W.dropdownEmpty : styles.dropdownEmpty}>{customerSearch ? 'Không tìm thấy' : 'Chưa có khách hàng'}</Text>
+          ? <Text style={ws ? W.dropdownEmpty : styles.dropdownEmpty}>{customerSearch ? 'Không tìm thấy' : emptyLabel}</Text>
           : <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={true}>
             {filteredCustomers.map((c, i) => (
               <TouchableOpacity key={c.docId || i}
@@ -251,6 +251,55 @@ const CustomerPickerDropdown = React.memo(({ ws, customerList, customerLoading, 
   );
 });
 CustomerPickerDropdown.displayName = 'CustomerPickerDropdown';
+
+// ── AssistedPartnerDropdown ───────────────────────────────────
+// Danh sách Đối tác (phantan) / Đại lý (daily) để admin chọn "Người được hỗ trợ" khi tạo đơn hộ
+const AssistedPartnerDropdown = React.memo(({ ws, partnerList, partnerLoading, partnerSearch, setPartnerSearch, selectedPartner, setSelectedPartner, setShowPartnerPicker }) => {
+  const filteredPartners = partnerSearch.trim() === ''
+    ? partnerList
+    : partnerList.filter(p =>
+      (p.name || '').toLowerCase().includes(partnerSearch.toLowerCase()) ||
+      (p.phone || '').includes(partnerSearch) ||
+      (p.email || '').toLowerCase().includes(partnerSearch.toLowerCase())
+    );
+
+  return (
+    <View style={ws ? W.dropdown : styles.dropdown}>
+      <View style={ws ? W.dropdownSearch : styles.dropdownSearch}>
+        <Ionicons name="search-outline" size={14} color="#94A3B8" />
+        <TextInput
+          style={ws ? W.dropdownSearchInput : styles.dropdownSearchInput}
+          placeholder="Tìm tên, SĐT hoặc email..."
+          placeholderTextColor="#94A3B8"
+          value={partnerSearch}
+          onChangeText={setPartnerSearch}
+        />
+        {partnerSearch.length > 0 && <TouchableOpacity onPress={() => setPartnerSearch('')}><Ionicons name="close-circle" size={14} color="#94A3B8" /></TouchableOpacity>}
+      </View>
+      {partnerLoading
+        ? <Text style={ws ? W.dropdownEmpty : styles.dropdownEmpty}>Đang tải...</Text>
+        : filteredPartners.length === 0
+          ? <Text style={ws ? W.dropdownEmpty : styles.dropdownEmpty}>{partnerSearch ? 'Không tìm thấy' : 'Chưa có đối tác/đại lý nào'}</Text>
+          : <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={true}>
+            {filteredPartners.map((p, i) => (
+              <TouchableOpacity key={p.docId || i}
+                style={[ws ? W.dropdownItem : styles.dropdownItem, selectedPartner?.docId === p.docId && (ws ? W.dropdownItemActive : styles.dropdownItemActive)]}
+                onPress={() => { setSelectedPartner(p); setShowPartnerPicker(false); setPartnerSearch(''); }}
+              >
+                {ws && <View style={W.dropdownAvatar}><Text style={W.dropdownAvatarText}>{(p.name || '?').trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2)}</Text></View>}
+                <View style={{ flex: 1 }}>
+                  <Text style={[ws ? W.dropdownItemText : styles.dropdownItemText, selectedPartner?.docId === p.docId && (ws ? W.dropdownItemTextActive : styles.dropdownItemTextActive)]}>{p.name || p.email}</Text>
+                  <Text style={ws ? W.dropdownItemSub : styles.dropdownItemSub}>{p.phone || p.email} · {getRole(p) === 'daily' ? 'Đại lý' : 'Đối tác'}</Text>
+                </View>
+                {selectedPartner?.docId === p.docId && <Ionicons name="checkmark-circle" size={16} color="#2563EB" />}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+      }
+    </View>
+  );
+});
+AssistedPartnerDropdown.displayName = 'AssistedPartnerDropdown';
 
 // ── AddProductForm ────────────────────────────────────────────
 const AddProductForm = React.memo(({ ws, orderType, catalog, priceField, priceLabel, newProduct, setNewProduct, showProductDrop, setShowProductDrop, onAdd, onCancel }) => {
@@ -494,11 +543,24 @@ export default function AddOrder() {
   const [catalog, setCatalog] = useState([]);
   const [resolvedPriceField, setResolvedPriceField] = useState(getRolePriceField(role));
 
+  // "Người được hỗ trợ" — chỉ admin dùng để tạo đơn hộ Đối tác (xem handleSubmit)
+  const [assistedPartnerList, setAssistedPartnerList] = useState([]);
+  const [assistedPartnerLoading, setAssistedPartnerLoading] = useState(false);
+  const [selectedAssistedPartner, setSelectedAssistedPartner] = useState(null);
+  const [showAssistedPicker, setShowAssistedPicker] = useState(false);
+  const [assistedSearch, setAssistedSearch] = useState('');
+
   // --- 2. CÁC BIẾN TÍNH TOÁN (DÙNG STATE ĐÃ KHAI BÁO) ---
   const [orderId] = useState('ORD-' + Date.now().toString().slice(-6));
-  const hasAdvisor = !!userDetail?.advisor;
-  const isDaily = role === 'daily';
-  const isLevel1 = !userDetail?.advisor;
+  // Admin tạo đơn hộ → toàn bộ quy tắc giá & hình thức thanh toán phải tính theo
+  // người được hỗ trợ, không theo admin. Nếu bỏ trống thì giữ nguyên như cũ.
+  const assistedUser = (role === 'admin' && selectedAssistedPartner) ? selectedAssistedPartner : null;
+  const effectiveUser = assistedUser || userDetail;
+  const effectiveRole = assistedUser ? getRole(assistedUser) : role;
+
+  const hasAdvisor = !!effectiveUser?.advisor;
+  const isDaily = effectiveRole === 'daily';
+  const isLevel1 = !effectiveUser?.advisor;
   const useFixedPrice = isDaily || !isLevel1;
   const fixedPayment = 'company';
 
@@ -575,7 +637,6 @@ export default function AddOrder() {
 
   // --- 3. CÁC CƠ CHẾ XỬ LÝ (SUBMIT, FETCH...) ---
   const handleSetCustomerSearch = useCallback((v) => setCustomerSearch(v), []);
-  const handleSetSelectedCustomer = useCallback((c) => setSelectedCustomer(c), []);
   const handleSetDeliveryAddress = useCallback((v) => setDeliveryAddress(v), []);
   const handleSetShowCustomerPicker = useCallback((v) => setShowCustomerPicker(v), []);
   const handleAddressChange = useCallback((v) => setDeliveryAddress(v), []);
@@ -584,6 +645,68 @@ export default function AddOrder() {
   const handleSetShowProductDrop = useCallback((v) => setShowProductDrop(v), []);
   const handleCancelAddProduct = useCallback(() => { setShowAddProduct(false); setNewProduct({ name: '', qty: '1', price: '', productId: '' }); }, []);
   const handleServiceNoteChange = useCallback((v) => setServiceNote(v), []);
+  const handleSetAssistedSearch = useCallback((v) => setAssistedSearch(v), []);
+  const handleSetShowAssistedPicker = useCallback((v) => setShowAssistedPicker(v), []);
+
+  // Email định danh của 1 user doc — docId của collection 'users' chính là email
+  const emailOf = (u) => (u ? (u.email || u.docId || '') : '');
+  const assistedEmail = emailOf(selectedAssistedPartner);
+
+  // Đã chọn người được hỗ trợ → chỉ cho chọn khách hàng do chính họ tạo,
+  // tránh gán đơn của đối tác này lên khách của đối tác khác.
+  const visibleCustomerList = useMemo(() => {
+    if (role !== 'admin' || !assistedEmail) return customerList;
+    return customerList.filter(c => c.createdBy === assistedEmail);
+  }, [customerList, role, assistedEmail]);
+
+  const customerEmptyLabel = assistedEmail
+    ? `${selectedAssistedPartner?.name || assistedEmail} chưa có khách hàng nào`
+    : 'Chưa có khách hàng';
+
+  // Đổi người được hỗ trợ = đổi bảng giá gốc → sản phẩm đã thêm sẽ giữ giá cũ
+  // và làm sai chênh lệch hoa hồng. Buộc thêm lại sản phẩm giống khi đổi thanh toán.
+  const handleSetSelectedAssistedPartner = useCallback((p) => {
+    // Bỏ trống người được hỗ trợ = đơn thuộc về chính admin
+    const nextOwner = emailOf(p) || userDetail?.email || '';
+    // Khách đang chọn không thuộc chủ đơn mới → bỏ chọn để chọn lại, nếu không
+    // createdBy sẽ trỏ về người này trong khi giá lại tính theo người kia.
+    const customerMismatch = !!selectedCustomer && selectedCustomer.createdBy !== nextOwner;
+
+    const apply = () => {
+      setSelectedAssistedPartner(p);
+      if (customerMismatch) { setSelectedCustomer(null); setDeliveryAddress(''); }
+    };
+
+    if (products.length > 0) {
+      showAlert(
+        'Đổi người được hỗ trợ',
+        'Giá sản phẩm sẽ đổi theo bảng giá của người được hỗ trợ. Vui lòng thêm lại sản phẩm.',
+        () => { setProducts([]); apply(); }
+      );
+      return;
+    }
+    apply();
+  }, [products.length, selectedCustomer, userDetail?.email]);
+
+  // Chọn khách hàng trước → tự điền người được hỗ trợ là người đã tạo khách hàng đó
+  // (chỉ khi người tạo nằm trong danh sách Đối tác/Đại lý).
+  const handleSetSelectedCustomer = useCallback((c) => {
+    setSelectedCustomer(c);
+    if (role !== 'admin' || !c?.createdBy) return;
+
+    const creator = assistedPartnerList.find(p => emailOf(p) === c.createdBy);
+    if (!creator || emailOf(creator) === assistedEmail) return;
+
+    if (products.length > 0) {
+      showAlert(
+        'Cập nhật người được hỗ trợ',
+        `Khách hàng này do ${creator.name || creator.email} tạo. Giá sản phẩm sẽ đổi theo bảng giá của họ, vui lòng thêm lại sản phẩm.`,
+        () => { setProducts([]); setSelectedAssistedPartner(creator); }
+      );
+      return;
+    }
+    setSelectedAssistedPartner(creator);
+  }, [role, assistedPartnerList, assistedEmail, products.length]);
 
   const handleSetPaymentMethod = useCallback((method) => {
     if (products.length > 0) {
@@ -660,21 +783,40 @@ export default function AddOrder() {
     fetchCustomers();
   }, [userDetail?.email, role]);
 
+  // ── Fetch danh sách Đối tác (chỉ admin — dùng cho "Người được hỗ trợ") ──
+  useEffect(() => {
+    if (role !== 'admin') return;
+    const fetchPartners = async () => {
+      setAssistedPartnerLoading(true);
+      try {
+        const { collection, getDocs } = await import('firebase/firestore');
+        const snap = await getDocs(collection(db, 'users'));
+        const list = snap.docs
+          .map(d => ({ docId: d.id, ...d.data() }))
+          .filter(u => ['phantan', 'daily'].includes(getRole(u)));
+        setAssistedPartnerList(list);
+      } catch (e) {
+        console.error('Fetch partner list error:', e);
+      } finally {
+        setAssistedPartnerLoading(false);
+      }
+    };
+    fetchPartners();
+  }, [role]);
+
   useEffect(() => {
     const resolve = async () => {
-      // if (effectivePaymentMethod === 'customer') {
-      //   setResolvedPriceField('price'); // niêm yếtgetRolePriceFieldré
-      //   return;
-      // }
-
-      if (!userDetail?.advisor) {
+      // Giá lấy theo effectiveUser/effectiveRole — tức người được hỗ trợ khi admin tạo đơn hộ.
+      // Đây phải khớp với basePriceField trong commissionCalc.computeOrderCommission,
+      // nếu lệch thì hoa hồng hiển thị sai (chênh lệch giá ảo).
+      if (!effectiveUser?.advisor) {
         // Không có advisor → dùng role của chính mình
-        setResolvedPriceField(getRolePriceField(role));
+        setResolvedPriceField(getRolePriceField(effectiveRole));
         return;
       }
       // Có advisor → tìm advisor cấp 1 (người không có advisor trên họ)
       try {
-        let currentEmail = userDetail.advisor;
+        let currentEmail = effectiveUser.advisor;
         let visited = new Set();
         while (currentEmail) {
           if (visited.has(currentEmail)) break;
@@ -692,12 +834,10 @@ export default function AddOrder() {
       } catch (e) {
         console.warn('resolve advisor price error:', e);
       }
-      setResolvedPriceField(getRolePriceField(role)); // fallback
-
-      setPaymentMethod = { handleSetPaymentMethod }
+      setResolvedPriceField(getRolePriceField(effectiveRole)); // fallback
     };
     resolve();
-  }, [effectivePaymentMethod, userDetail?.advisor, role, paymentMethod]);
+  }, [effectivePaymentMethod, effectiveUser?.advisor, effectiveRole, paymentMethod]);
 
   // ── Fetch catalog (products) ─────────────────────────────────
   useEffect(() => {
@@ -775,18 +915,24 @@ export default function AddOrder() {
       const [orderStatuses] = await Promise.all([fetchStatusList(orderCategory)]);
       const initialOrderStatus = orderStatuses[0]?.name || 'Chờ xác nhận';
 
-      // Nếu admin tạo đơn cho khách của ctv/partner, ghi nhận creator là người tạo khách
-      const customerCreator = selectedCustomer?.createdBy;
-      const isAdminCreatingForOther = role === 'admin' && customerCreator && customerCreator !== userDetail.email;
-
       let effectiveCreatorEmail = userDetail.email;
       let hierarchyUserDetail = userDetail;
-      if (isAdminCreatingForOther) {
-        effectiveCreatorEmail = customerCreator;
-        try {
-          const creatorSnap = await getDoc(doc(db, 'users', customerCreator));
-          if (creatorSnap.exists()) hierarchyUserDetail = creatorSnap.data();
-        } catch (_) { }
+
+      if (role === 'admin' && selectedAssistedPartner?.email) {
+        // Admin tạo đơn hộ — creator là người được hỗ trợ vừa chọn
+        effectiveCreatorEmail = selectedAssistedPartner.email;
+        hierarchyUserDetail = selectedAssistedPartner;
+      } else {
+        // Nếu admin tạo đơn cho khách của ctv/partner, ghi nhận creator là người tạo khách
+        const customerCreator = selectedCustomer?.createdBy;
+        const isAdminCreatingForOther = role === 'admin' && customerCreator && customerCreator !== userDetail.email;
+        if (isAdminCreatingForOther) {
+          effectiveCreatorEmail = customerCreator;
+          try {
+            const creatorSnap = await getDoc(doc(db, 'users', customerCreator));
+            if (creatorSnap.exists()) hierarchyUserDetail = creatorSnap.data();
+          } catch (_) { }
+        }
       }
       const { rootAdvisor, level } = await calculateHierarchy(effectiveCreatorEmail, hierarchyUserDetail);
 
@@ -868,8 +1014,6 @@ export default function AddOrder() {
             </TouchableOpacity>
           </View>
         </View>
-        {console.log("price theo vai tro:", resolvedPriceField)}
-        {console.log("role nguoi dung:", role)}
         <View style={W.grid}>
           <View style={W.col}>
             <View style={W.card}>
@@ -894,6 +1038,46 @@ export default function AddOrder() {
                 <OrderTypeField ws orderType={orderType} lockedType={lockedType} setOrderType={handleSetOrderType} />
               </View>
 
+              {role === 'admin' && (
+                <View style={[W.inputGroup, { zIndex: showAssistedPicker ? 100 : 1 }]}>
+                  <Text style={W.label}>Người được hỗ trợ</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      style={[W.inputBox, { flex: 1 }, showAssistedPicker && W.inputBoxFocus]}
+                      onPress={() => setShowAssistedPicker(p => !p)}
+                      activeOpacity={0.8}
+                    >
+                      {selectedAssistedPartner ? (
+                        <View style={W.selectedCustomer}>
+                          <Text style={W.cAvatarText}>
+                            {(selectedAssistedPartner.name || '?').trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                          </Text>
+                          <View><Text style={W.cName}>{selectedAssistedPartner.name || selectedAssistedPartner.email}</Text></View>
+                        </View>
+                      ) : <Text style={W.inputPlaceholder}>Bỏ trống nếu tự tạo cho mình...</Text>}
+                      <Ionicons name="chevron-down" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                    {selectedAssistedPartner && (
+                      <TouchableOpacity onPress={() => handleSetSelectedAssistedPartner(null)} hitSlop={8}>
+                        <Ionicons name="close-circle" size={20} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {showAssistedPicker && (
+                    <AssistedPartnerDropdown
+                      ws
+                      partnerList={assistedPartnerList}
+                      partnerLoading={assistedPartnerLoading}
+                      partnerSearch={assistedSearch}
+                      setPartnerSearch={handleSetAssistedSearch}
+                      selectedPartner={selectedAssistedPartner}
+                      setSelectedPartner={handleSetSelectedAssistedPartner}
+                      setShowPartnerPicker={handleSetShowAssistedPicker}
+                    />
+                  )}
+                </View>
+              )}
+
               {orderType === 'le' && (
                 <View style={[W.inputGroup, { zIndex: showCustomerPicker ? 100 : 1 }]}>
                   <Text style={W.label}>Khách hàng <Text style={W.req}>*</Text></Text>
@@ -915,7 +1099,7 @@ export default function AddOrder() {
                   {showCustomerPicker && (
                     <CustomerPickerDropdown
                       ws
-                      customerList={customerList}
+                      customerList={visibleCustomerList}
                       customerLoading={customerLoading}
                       customerSearch={customerSearch}
                       setCustomerSearch={handleSetCustomerSearch}
@@ -923,6 +1107,7 @@ export default function AddOrder() {
                       setSelectedCustomer={handleSetSelectedCustomer}
                       setDeliveryAddress={handleSetDeliveryAddress}
                       setShowCustomerPicker={handleSetShowCustomerPicker}
+                      emptyLabel={customerEmptyLabel}
                     />
                   )}
                 </View>
@@ -974,7 +1159,7 @@ export default function AddOrder() {
                   ws
                   orderType={orderType}
                   catalog={catalog}
-                  priceField={getRolePriceField('admin')}
+                  priceField={priceField}
                   priceLabel={priceLabel}
                   newProduct={newProduct}
                   setNewProduct={handleSetNewProduct}
@@ -1064,6 +1249,44 @@ export default function AddOrder() {
                 <OrderTypeField ws={false} orderType={orderType} lockedType={lockedType} setOrderType={handleSetOrderType} />
               </View>
 
+              {role === 'admin' && (
+                <View style={[W.inputGroup, { zIndex: showAssistedPicker ? 100 : 1 }]}>
+                  <Text style={W.label}>Người được hỗ trợ (Đối tác / Đại lý)</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      style={[W.inputBox, { flex: 1 }, showAssistedPicker && W.inputBoxFocus]}
+                      onPress={() => setShowAssistedPicker(p => !p)}
+                      activeOpacity={0.8}
+                    >
+                      {selectedAssistedPartner ? (
+                        <View style={W.selectedCustomer}>
+                          <View style={W.cAvatar}><Text style={W.cAvatarText}>{(selectedAssistedPartner.name || '?').trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2)}</Text></View>
+                          <View><Text style={W.cName}>{selectedAssistedPartner.name || selectedAssistedPartner.email}</Text></View>
+                        </View>
+                      ) : <Text style={W.inputPlaceholder}>Bỏ trống nếu tự tạo cho mình...</Text>}
+                      <Ionicons name="chevron-down" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                    {selectedAssistedPartner && (
+                      <TouchableOpacity onPress={() => handleSetSelectedAssistedPartner(null)} hitSlop={8}>
+                        <Ionicons name="close-circle" size={20} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {showAssistedPicker && (
+                    <AssistedPartnerDropdown
+                      ws={false}
+                      partnerList={assistedPartnerList}
+                      partnerLoading={assistedPartnerLoading}
+                      partnerSearch={assistedSearch}
+                      setPartnerSearch={handleSetAssistedSearch}
+                      selectedPartner={selectedAssistedPartner}
+                      setSelectedPartner={handleSetSelectedAssistedPartner}
+                      setShowPartnerPicker={handleSetShowAssistedPicker}
+                    />
+                  )}
+                </View>
+              )}
+
               {orderType === 'le' && (
                 <View style={[W.inputGroup, { zIndex: showCustomerPicker ? 100 : 1 }]}>
                   <Text style={W.label}>Khách hàng <Text style={W.req}>*</Text></Text>
@@ -1083,7 +1306,7 @@ export default function AddOrder() {
                   {showCustomerPicker && (
                     <CustomerPickerDropdown
                       ws={false}
-                      customerList={customerList}
+                      customerList={visibleCustomerList}
                       customerLoading={customerLoading}
                       customerSearch={customerSearch}
                       setCustomerSearch={handleSetCustomerSearch}
@@ -1091,6 +1314,7 @@ export default function AddOrder() {
                       setSelectedCustomer={handleSetSelectedCustomer}
                       setDeliveryAddress={handleSetDeliveryAddress}
                       setShowCustomerPicker={handleSetShowCustomerPicker}
+                      emptyLabel={customerEmptyLabel}
                     />
                   )}
                 </View>

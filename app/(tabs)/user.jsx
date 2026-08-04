@@ -5,6 +5,7 @@ import { useSearch } from '@/components/Hooks/useSearch';
 import EmptyState from '@/components/Main/EmptyState';
 import ScreenHeader from '@/components/Main/ScreenHeader';
 import TabScreenLayout from '@/components/Main/TabScreenLayout';
+import CreateAccountModal from '@/components/UI/CreateAccountModal';
 import FilterChips from '@/components/UI/FilterChips';
 import StatBar from '@/components/UI/StatBar';
 import UserDetail from '@/components/UI/UserDetail';
@@ -137,8 +138,10 @@ export default function UsersScreen() {
     const { query, setQuery, result } = useSearch(data, ['name', 'email', 'phone']);
     const [filter, setFilter] = useState('all');
     const [selected, setSelected] = useState(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
 
     const canAccess = isAdminOrGD(role);
+    const canCreateAccount = role === 'admin'; // chỉ admin được tạo tài khoản hộ
     const { isDesktop } = useLayout();
     const { styles: cardStyles } = useCardStyles();
     const { styles: tableStyles } = useTableStyles();
@@ -173,6 +176,10 @@ export default function UsersScreen() {
                 searchValue={query}
                 onSearchChange={setQuery}
                 searchPlaceholder="Tìm tên, email..."
+                actionLabel="Tạo tài khoản hộ"
+                actionIcon="person-add"
+                canAccess={canCreateAccount}
+                onAction={() => setShowCreateModal(true)}
             />
             <StatBar stats={statCards} />
             <FilterChips options={FILTERS} value={filter} onChange={f => { setFilter(f); setSelected(null); }} />
@@ -227,6 +234,14 @@ export default function UsersScreen() {
                         </View>
                     </View>
                 </Modal>
+            )}
+
+            {canCreateAccount && (
+                <CreateAccountModal
+                    visible={showCreateModal}
+                    onClose={() => setShowCreateModal(false)}
+                    onCreated={() => refresh()}
+                />
             )}
         </TabScreenLayout>
     );

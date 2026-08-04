@@ -3,12 +3,13 @@
 import HelpButton from '@/components/Help/HelpButton';
 import BgWatermark from '@/components/Main/BgWatermark';
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import { getRole } from '@/components/Utils/roleHelper';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
-import { useContext, useState } from 'react';
+import { memo, useContext, useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -26,6 +27,53 @@ import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { db } from '../../config/firebaseConfig';
 
+// ── AssistedPersonDropdown ──────────────────────────────────────
+// Danh sách Đối tác (phantan) / Đại lý (daily) để admin chọn "Người được hỗ trợ" khi tạo khách hộ
+const AssistedPersonDropdown = memo(({ ws, personList, personLoading, personSearch, setPersonSearch, selectedPerson, setSelectedPerson, setShowPersonPicker }) => {
+  const filteredPersons = personSearch.trim() === ''
+    ? personList
+    : personList.filter(p =>
+      (p.name || '').toLowerCase().includes(personSearch.toLowerCase()) ||
+      (p.phone || '').includes(personSearch) ||
+      (p.email || '').toLowerCase().includes(personSearch.toLowerCase())
+    );
+
+  return (
+    <View style={ws ? W.dropdown : styles.dropdown}>
+      <View style={ws ? W.dropdownSearch : styles.dropdownSearch}>
+        <Ionicons name="search-outline" size={14} color="#94A3B8" />
+        <TextInput
+          style={ws ? W.dropdownSearchInput : styles.dropdownSearchInput}
+          placeholder="Tìm tên, SĐT hoặc email..."
+          placeholderTextColor="#94A3B8"
+          value={personSearch}
+          onChangeText={setPersonSearch}
+        />
+        {personSearch.length > 0 && <TouchableOpacity onPress={() => setPersonSearch('')}><Ionicons name="close-circle" size={14} color="#94A3B8" /></TouchableOpacity>}
+      </View>
+      {personLoading
+        ? <Text style={ws ? W.dropdownEmpty : styles.dropdownEmpty}>Đang tải...</Text>
+        : filteredPersons.length === 0
+          ? <Text style={ws ? W.dropdownEmpty : styles.dropdownEmpty}>{personSearch ? 'Không tìm thấy' : 'Chưa có đối tác/đại lý nào'}</Text>
+          : <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={true}>
+            {filteredPersons.map((p, i) => (
+              <TouchableOpacity key={p.docId || i}
+                style={[ws ? W.dropdownItem : styles.dropdownItem, selectedPerson?.docId === p.docId && (ws ? W.dropdownItemActive : styles.dropdownItemActive)]}
+                onPress={() => { setSelectedPerson(p); setShowPersonPicker(false); setPersonSearch(''); }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[ws ? W.dropdownItemText : styles.dropdownItemText, selectedPerson?.docId === p.docId && (ws ? W.dropdownItemTextActive : styles.dropdownItemTextActive)]}>{p.name || p.email}</Text>
+                  <Text style={ws ? W.dropdownItemSub : styles.dropdownItemSub}>{p.phone || p.email} · {getRole(p) === 'daily' ? 'Đại lý' : 'Đối tác'}</Text>
+                </View>
+                {selectedPerson?.docId === p.docId && <Ionicons name="checkmark-circle" size={16} color="#2563EB" />}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+      }
+    </View>
+  );
+});
+AssistedPersonDropdown.displayName = 'AssistedPersonDropdown';
 
 export default function AddCustomer() {
   const router = useRouter();
@@ -33,6 +81,7 @@ export default function AddCustomer() {
   const insets = useSafeAreaInsets();
   const { userDetail, setUserDetail } = useContext(UserDetailContext);
   const params = useLocalSearchParams();
+  const role = getRole(userDetail);
 
   const consultCreatedBy = params.consultCreatedBy || '';
 
@@ -47,6 +96,33 @@ export default function AddCustomer() {
     note: params.note || '',
   });
   const [submitting, setSubmitting] = useState(false);
+
+  // "Người được hỗ trợ" — chỉ admin dùng để tạo khách hộ Đối tác/Đại lý (xem handleSave)
+  const [assistedList, setAssistedList] = useState([]);
+  const [assistedLoading, setAssistedLoading] = useState(false);
+  const [selectedAssisted, setSelectedAssisted] = useState(null);
+  const [showAssistedPicker, setShowAssistedPicker] = useState(false);
+  const [assistedSearch, setAssistedSearch] = useState('');
+
+  // ── Fetch danh sách Đối tác/Đại lý (chỉ admin — dùng cho "Người được hỗ trợ") ──
+  useEffect(() => {
+    if (role !== 'admin') return;
+    const fetchAssisted = async () => {
+      setAssistedLoading(true);
+      try {
+        const snap = await getDocs(collection(db, 'users'));
+        const list = snap.docs
+          .map(d => ({ docId: d.id, ...d.data() }))
+          .filter(u => ['phantan', 'daily'].includes(getRole(u)));
+        setAssistedList(list);
+      } catch (e) {
+        console.error('Fetch assisted list error:', e);
+      } finally {
+        setAssistedLoading(false);
+      }
+    };
+    fetchAssisted();
+  }, [role]);
 
   const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
@@ -115,8 +191,19 @@ export default function AddCustomer() {
     if (await checkingDuplicate()) return;
 
     try {
+      // Admin tạo khách hộ → creator/hierarchy lấy theo người được hỗ trợ vừa chọn,
+      // nếu bỏ trống thì giữ nguyên logic cũ (consultCreatedBy hoặc chính người tạo)
+      let effectiveCreatorEmail = consultCreatedBy || userDetail?.email;
+      let hierarchyEmail = userDetail.email;
+      let hierarchyUserDetail = userDetail;
+      if (role === 'admin' && selectedAssisted?.email) {
+        effectiveCreatorEmail = selectedAssisted.email;
+        hierarchyEmail = selectedAssisted.email;
+        hierarchyUserDetail = selectedAssisted;
+      }
+
       // Tính rootAdvisor và level trước khi tạo object
-      const { rootAdvisor, level } = await calculateHierarchy(userDetail.email, userDetail);
+      const { rootAdvisor, level } = await calculateHierarchy(hierarchyEmail, hierarchyUserDetail);
 
       const newCustomer = {
         id: Date.now().toString(),
@@ -128,7 +215,7 @@ export default function AddCustomer() {
         note: form.note?.trim() || '',
         rootAdvisor: rootAdvisor,
         level: level,
-        createdBy: consultCreatedBy || userDetail?.email,
+        createdBy: effectiveCreatorEmail,
       };
 
       await setDoc(doc(db, 'customers', newCustomer.phone), newCustomer, { merge: true });
@@ -179,6 +266,46 @@ export default function AddCustomer() {
                 <Text style={W.cardTitle}>Thông tin cá nhân</Text>
                 <Text style={W.cardRequired}>* Bắt buộc</Text>
               </View>
+
+              {role === 'admin' && (
+                <View style={[W.inputGroup, { zIndex: showAssistedPicker ? 100 : 1 }]}>
+                  <Text style={W.label}>Người được hỗ trợ (Đối tác / Đại lý)</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      style={[W.inputBox, { flex: 1 }]}
+                      onPress={() => setShowAssistedPicker(p => !p)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="people-outline" size={16} color="#94A3B8" />
+                      {selectedAssisted ? (
+                        <Text style={[W.input, { fontWeight: '700', color: '#2563EB' }]} numberOfLines={1}>
+                          {selectedAssisted.name || selectedAssisted.email}
+                        </Text>
+                      ) : (
+                        <Text style={[W.input, { color: '#94A3B8' }]}>Bỏ trống nếu tự tạo cho mình...</Text>
+                      )}
+                      <Ionicons name="chevron-down" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                    {selectedAssisted && (
+                      <TouchableOpacity onPress={() => setSelectedAssisted(null)} hitSlop={8}>
+                        <Ionicons name="close-circle" size={20} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {showAssistedPicker && (
+                    <AssistedPersonDropdown
+                      ws
+                      personList={assistedList}
+                      personLoading={assistedLoading}
+                      personSearch={assistedSearch}
+                      setPersonSearch={setAssistedSearch}
+                      selectedPerson={selectedAssisted}
+                      setSelectedPerson={setSelectedAssisted}
+                      setShowPersonPicker={setShowAssistedPicker}
+                    />
+                  )}
+                </View>
+              )}
 
               {/* Tên + SĐT — 2 cột */}
               <View style={W.row2}>
@@ -345,6 +472,40 @@ export default function AddCustomer() {
                 <Ionicons name="person-circle-outline" size={20} color={Colors.Primary} />
                 <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
               </View>
+              {role === 'admin' && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Người được hỗ trợ </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      style={[styles.input, styles.pickerBox]}
+                      onPress={() => setShowAssistedPicker(p => !p)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={selectedAssisted ? styles.pickerValue : styles.pickerPlaceholder} numberOfLines={1}>
+                        {selectedAssisted ? (selectedAssisted.name || selectedAssisted.email) : 'Bỏ trống nếu tự tạo cho mình...'}
+                      </Text>
+                      <Ionicons name="chevron-down" size={16} color={Colors.Gray} />
+                    </TouchableOpacity>
+                    {selectedAssisted && (
+                      <TouchableOpacity onPress={() => setSelectedAssisted(null)} hitSlop={8}>
+                        <Ionicons name="close-circle" size={20} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {showAssistedPicker && (
+                    <AssistedPersonDropdown
+                      ws={false}
+                      personList={assistedList}
+                      personLoading={assistedLoading}
+                      personSearch={assistedSearch}
+                      setPersonSearch={setAssistedSearch}
+                      selectedPerson={selectedAssisted}
+                      setSelectedPerson={setSelectedAssisted}
+                      setShowPersonPicker={setShowAssistedPicker}
+                    />
+                  )}
+                </View>
+              )}
               {[
                 { label: 'Họ và tên', field: 'name', placeholder: 'Nguyễn Văn A', required: true },
                 { label: 'Số điện thoại', field: 'phone', placeholder: '0901 234 567', required: true, keyboard: 'phone-pad' },
@@ -517,6 +678,17 @@ const W = StyleSheet.create({
     fontWeight: '500',
   },
 
+  // Dropdown ("Người được hỗ trợ")
+  dropdown: { backgroundColor: '#FFF', borderRadius: 10, marginTop: 4, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12, elevation: 4, overflow: 'hidden' },
+  dropdownSearch: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  dropdownSearchInput: { flex: 1, fontSize: 13, color: '#0F172A' },
+  dropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  dropdownItemActive: { backgroundColor: '#EFF6FF' },
+  dropdownItemText: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  dropdownItemTextActive: { color: '#2563EB' },
+  dropdownItemSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+  dropdownEmpty: { padding: 16, fontSize: 13, color: '#94A3B8', textAlign: 'center' },
+
   // Preview
   previewAvatar: {
     width: 56,
@@ -613,6 +785,21 @@ const styles = StyleSheet.create({
   required: { color: Colors.Danger },
   input: { backgroundColor: Colors.Background, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.TextPrimary, borderWidth: 1, borderColor: Colors.Border },
   textArea: { backgroundColor: Colors.Background, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.TextPrimary, borderWidth: 1, borderColor: Colors.Border, minHeight: 100 },
+
+  // Picker + Dropdown ("Người được hỗ trợ")
+  pickerBox: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pickerValue: { fontSize: 14, color: Colors.TextPrimary, fontWeight: '600', flex: 1 },
+  pickerPlaceholder: { fontSize: 14, color: Colors.TextPlaceholder, flex: 1 },
+  dropdown: { backgroundColor: Colors.White, borderRadius: 10, marginTop: 4, borderWidth: 1, borderColor: Colors.Border, overflow: 'hidden' },
+  dropdownSearch: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.Border },
+  dropdownSearchInput: { flex: 1, fontSize: 13, color: Colors.TextPrimary },
+  dropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.Border },
+  dropdownItemActive: { backgroundColor: '#EFF6FF' },
+  dropdownItemText: { fontSize: 14, color: Colors.TextPrimary, fontWeight: '500', flex: 1 },
+  dropdownItemTextActive: { color: '#2563EB', fontWeight: '700' },
+  dropdownItemSub: { fontSize: 11, color: Colors.Gray, marginTop: 1 },
+  dropdownEmpty: { padding: 14, fontSize: 13, color: Colors.Gray, textAlign: 'center' },
+
   saveBtn: { backgroundColor: Colors.Primary, borderRadius: 14, paddingVertical: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12, shadowColor: Colors.Primary, shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
   saveBtnText: { color: Colors.White, fontSize: 15, fontWeight: '700', marginLeft: 6 },
   cancelBtn: { alignItems: 'center', paddingVertical: 12 },
