@@ -18,8 +18,8 @@ import { showAlert } from '../../../components/Main/showAlert';
 import { showSuccess } from '../../../components/Main/showSuccess';
 import { db } from '../../../config/firebaseConfig';
 
-import { useLayout } from '@/components/Main/TabScreenLayout';
 import HelpButton from '@/components/Help/HelpButton';
+import { useLayout } from '@/components/Main/TabScreenLayout';
 
 const toDateStr = (d) => {
     const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
@@ -97,7 +97,7 @@ export default function EditOrder() {
     const { isDesktop } = useLayout();
 
     const existing = params.orderParam ? JSON.parse(params.orderParam) : {};
-    const phone = existing.customerPhone || existing._phone || '';
+    const phone = existing.customerPhone || existing.phone || '';
 
     const _role = (userDetail?.role || userDetail?.member || '').toLowerCase();
     const isAdmin = _role === 'admin';

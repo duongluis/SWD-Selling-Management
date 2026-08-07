@@ -80,116 +80,209 @@ async function exportPDF(htmlContent, isDesktop) {
 }
 
 function buildPDFHtml({ order, seller, items: itemsProp, disc, total, discAmt, logoBase64 }) {
-    const items = Array.isArray(itemsProp) ? itemsProp : [];      // ✅ guard
+    const items = Array.isArray(itemsProp) ? itemsProp : [];
     const hdNum = `HD-${new Date().getFullYear()}-${(order.id || '001').slice(-6).padStart(6, '0')}`;
     const today = new Date().toLocaleDateString('vi-VN');
-    const rows = items.map((p, i) => `
-    <tr>
-      <td style="text-align:center;color:#94a3b8">${i + 1}</td>
-      <td>${p.name || ''}</td>
-      <td style="text-align:center">${fmtN(p.qty)}</td>
-      <td style="text-align:right">${fmt(p.price)}</td>
-      <td style="text-align:right;font-weight:600">${fmt((p.price || 0) * (p.qty || 1))}</td>
-      <td style="color:#64748b;font-style:italic">${p.note || '—'}</td>
-    </tr>`).join('');
+    const subtotal = items.reduce((s, p) => s + (p.price || 0) * (p.qty || 1), 0);
+
+    // ── Gom nhóm theo category (nếu có), fallback về 1 nhóm chung ──
+    const groups = {};
+    items.forEach((p) => {
+        const cat = p.category || 'SẢN PHẨM / DỊCH VỤ';
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(p);
+    });
+    const groupKeys = Object.keys(groups);
+
+    let stt = 0;
+    const groupsHtml = groupKeys.map((cat, gi) => {
+        const rows = groups[cat].map((p) => {
+            stt += 1;
+            const lineTotal = (p.price || 0) * (p.qty || 1);
+            return `
+            <tr>
+                <td class="c">${stt}</td>
+                <td>${p.name || ''}</td>
+                <td class="c">${fmtN(p.qty)}</td>
+                <td class="c">${p.unit || 'Cái'}</td>
+                <td class="r">${p.price ? fmtN(p.price) : '—'}</td>
+                <td class="r b">${lineTotal ? fmtN(lineTotal) : 'Đã bao gồm'}</td>
+                <td class="note">${p.note || ''}</td>
+            </tr>`;
+        }).join('');
+
+        return `
+        <tr class="groupRow">
+            <td colspan="7">${['I', 'II', 'III', 'IV', 'V'][gi] || gi + 1}. ${cat.toUpperCase()}</td>
+        </tr>
+        ${rows}`;
+    }).join('');
+
+    //header fix cứng hoặc tùy chỉnh theo từng người
+    // <p class="companyName">${seller?.name || 'CÔNG TY CỔ PHẦN SPRING WATER DELIVERY'}</p>
+    //     <div class="companyLine">Địa chỉ: ${seller?.address || 'Số 4 Ngõ 102 Kim Giang, P. Đại Kim, Q. Hoàng Mai, Tp. Hà Nội'}</div>
+    // <div class="companyLine">Hotline: ${seller?.hotline || seller?.phone || '0329 111 000'} &nbsp;·&nbsp; Email: ${seller?.email || '—'}</div>
+    // <div class="companyLine">MST: ${seller?.taxCode || '0110873471'}</div>
 
     return `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8">
-<title>Hợp đồng ${hdNum}</title>
+
 <style>
-  body{font-family:Arial,sans-serif;margin:0;padding:32px;color:#0f172a;font-size:13px;position:relative}
-.watermark{
-  position:fixed;
-  top:40%; left:50%;
-  transform:translate(-50%,-50%);
-  width:80%;
-  opacity:0.1;
-  pointer-events:none;
-  z-index:0;
-  object-fit:contain;
-}
-body>*:not(.watermark){position:relative;z-index:1}
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; margin: 0; padding: 28px 32px; color: #0F172A; font-size: 12.5px; position: relative; }
+  .watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%,-50%); width: 70%; opacity: 0.06; pointer-events: none; z-index: 0; }
+  body > *:not(.watermark) { position: relative; z-index: 1; }
 
-.header{text-align:center;margin-bottom:20px}
-h1{font-size:20px;font-weight:700;margin:0 0 4px;text-align:center}
-.sub{color:#64748b;font-size:12px;text-align:center}
-.badge{display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;background:'transparent';color:#065f46;border:1px solid #a7f3d0}
+  /* Header */
+  .headerRow { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #185FA5; padding-bottom: 10px; margin-bottom: 14px; }
+  .logo { width: 64px; height: 64px; object-fit: contain; }
+  .companyBlock { flex: 1; text-align: center; }
+  .companyName { font-size: 15px; font-weight: 700; color: #0F172A; margin: 0 0 3px; }
+  .companyLine { font-size: 11px; color: #334155; line-height: 1.5; }
 
-.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:90px 0 20px}
+  /* Title */
+  .titleBlock { text-align: center; margin: 14px 0 18px; }
+  .titleMain { font-size: 20px; font-weight: 800; letter-spacing: .04em; margin: 0; color: #0F172A; }
+  .titleSub { font-size: 15px; font-weight: 700; margin: 2px 0 0; color: #0F172A; }
 
-.party{background:'transparent';border-radius:8px;padding:14px;border:1px solid #e2e8f0}
-.party-title{font-size:10px;font-weight:700;letter-spacing:.06em;color:#185fa5;text-transform:uppercase;margin-bottom:8px}
-.party-name{font-size:15px;font-weight:700;margin-bottom:4px}
-.party-detail{font-size:11px;color:#64748b;line-height:1.6}
-table{width:100%;border-collapse:collapse;margin:12px 0}
-th{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#94a3b8;padding:10px 12px;text-align:left;background:'transparent';border-bottom:1px solid #e2e8f0}
-td{padding:10px 12px;border-bottom:1px solid #f1f5f9}
-tr:last-child td{border-bottom:none}
-.tfoot td{background:'transparent';font-weight:600;font-size:13px;border-top:1px solid #e2e8f0}
-.total-row td{background:'transparent';font-size:15px;font-weight:700;color:#185fa5}
-.info-box{background:'transparent';border-radius:8px;padding:12px;margin:16px 0;font-size:12px;color:#64748b}
-.terms{font-size:11px;color:#94a3b8;line-height:1.7;margin:12px 0}
+  /* Info block */
+  .infoGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 12px; margin-bottom: 10px; }
+  .infoGrid .label { color: #64748B; }
+  .infoGrid .val { font-weight: 700; }
+  .greeting { font-size: 12px; margin: 10px 0 4px; }
+  .greeting b { color: #185FA5; }
+  .introText { font-size: 11.5px; color: #475569; line-height: 1.6; margin-bottom: 14px; }
 
-.sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px}
-.sig-col{border-top:1px solid #cbd5e1;padding-top:10px;text-align:center}
-.sig-label{font-size:11px;color:#64748b;margin-bottom:40px}
-.sig-name{font-size:13px;font-weight:700}
-@media print{body{padding:16px}}
+  /* Table */
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 16px; }
+  thead th {
+    background: #DCE9F7; color: #0F172A; font-size: 11px; font-weight: 700;
+    padding: 8px 6px; border: 1px solid #94A3B8; text-align: center;
+  }
+  td { padding: 7px 6px; border: 1px solid #CBD5E1; font-size: 11.5px; vertical-align: middle; }
+  .c { text-align: center; }
+  .r { text-align: right; }
+  .b { font-weight: 700; }
+  .note { color: #64748B; font-style: italic; font-size: 10.5px; }
+  .groupRow td { background: #185FA5; color: #fff; font-weight: 700; font-size: 11.5px; padding: 6px 8px; border: 1px solid #185FA5; }
+
+  .sumRow td { background: #F1F5F9; font-weight: 700; border: 1px solid #94A3B8; }
+  .sumRow .r { font-size: 12.5px; }
+  .totalRow td { background: #DCE9F7; font-weight: 800; font-size: 13px; border: 1px solid #185FA5; }
+  .payRow td { background: #FDECEC; color: #B91C1C; font-weight: 800; font-size: 12px; border: 1px solid #F3B4B4; }
+
+  /* Terms + bank */
+  .sectionTitle { font-size: 12px; font-weight: 700; color: #0F172A; margin: 14px 0 6px; }
+  .terms { font-size: 11px; color: #334155; line-height: 1.8; }
+  .terms li { margin-bottom: 2px; }
+  .terms .highlight { color: #B91C1C; font-weight: 700; }
+
+  .bankTable { width: 60%; margin-top: 8px; border-collapse: collapse; }
+  .bankTable td { border: 1px solid #CBD5E1; padding: 6px 10px; font-size: 11.5px; }
+  .bankTable td:first-child { background: #F8FAFC; font-weight: 600; width: 40%; }
+
+  /* Signature */
+  .closing { font-size: 11.5px; font-style: italic; color: #185FA5; margin-top: 18px; text-align: center; }
+  .sigBlock { text-align: right; margin-top: 8px; }
+  .sigLabel { font-size: 11px; color: #64748B; }
+  .sigName { font-size: 12.5px; font-weight: 700; margin-top: 46px; }
+
+  @media print { body { padding: 16px 20px; } }
 </style></head><body>
 ${logoBase64 ? `<img class="watermark" src="${logoBase64}" alt="" />` : ''}
 
-<div class="header">
-  <h1>BÁO GIÁ HỆ THỐNG LỌC TỔNG SINH HOẠT</h1>
-  <div class="sub">Số HĐ: ${hdNum} &nbsp;·&nbsp; Ngày ${today} &nbsp;·&nbsp; 
+<div class="headerRow">
+  ${logoBase64 ? `<img class="logo" src="${logoBase64}" alt="logo" />` : ''}
+  <div class="companyBlock">
+    <p class="companyName">CÔNG TY CỔ PHẦN SPRING WATER DELIVERY</p>
+    <div class="companyLine">Địa chỉ: ${'Số 4 Ngõ 102 Kim Giang, P. Đại Kim, Q. Hoàng Mai, Tp. Hà Nội'}</div>
+    <div class="companyLine">Hotline: ${'0329 111 000'} &nbsp;·&nbsp; Email: ${seller?.email || '—'}</div>
+    <div class="companyLine">MST: ${seller?.taxCode || '0110873471'}</div>
+  </div>
+</div>
 
+<div class="titleBlock">
+  <p class="titleMain">BÁO GIÁ</p>
+  <p class="titleSub">HỆ THỐNG LỌC TỔNG NƯỚC SINH HOẠT</p>
+</div>
+
+<div class="infoGrid">
+  <div>
+    <div><span class="label">Kính gửi:</span> <span class="val">${order.customer || '—'}</span></div>
+    <div><span class="label">SĐT:</span> ${order.phone || '—'}</div>
+    <div><span class="label">Địa chỉ:</span> ${order.address || '—'}</div>
+  </div>
+  <div>
+    <div><span class="label">Người gửi:</span> <span class="val">${seller?.name || '—'}</span></div>
+    <div><span class="label">SĐT:</span> ${seller?.phone || '—'}</div>
+    <div><span class="label">Số HĐ:</span> ${hdNum} &nbsp;·&nbsp; Ngày ${today}</div>
   </div>
 </div>
-<div class="parties">
-  <div class="party">
-    <div class="party-title">Bên nhận (A)</div>
-    <div class="party-name">${order.customer || '—'}</div>
-    <div class="party-detail">SĐT: ${order.phone || '—'}<br>Địa chỉ: ${order.address || '—'}</div>
-  </div>
-  <div class="party">
-    <div class="party-title">Bên gửi (B)</div>
-    <div class="party-name">${seller?.name || 'SWD Company'}</div>
-    <div class="party-detail">SĐT: ${seller?.phone || '—'}<br>Email: ${seller?.email || '—'}</div>
-  </div>
-</div>
-<table style>
-  <thead><tr>
-    <th style="width:30px">#</th>
-    <th>Sản phẩm</th>
-    <th style="width:60px;text-align:center">SL</th>
-    <th style="width:110px;text-align:righ">Đơn giá</th>
-    <th style="width:120px;text-align:right">Thành tiền</th>
-    <th style="width:120px">Ghi chú</th>
-  </tr></thead>
-  <tbody>${rows}</tbody>
-  <tfoot>
-    <tr class="tfoot"><td colspan="4">Chiết khấu${disc > 0 ? ` (${disc}%)` : ''}</td><td style="text-align:right;color:#a32d2d">- ${fmt(discAmt)}</td><td></td></tr>
-    <tr class="total-row"><td colspan="4">Tổng thanh toán</td><td style="text-align:right">${fmt(total)}</td><td></td></tr>
-  </tfoot>
+
+<p class="introText">
+  Chúng tôi chân thành cảm ơn sự quan tâm của Quý khách hàng đối với sản phẩm và dịch vụ của
+  ${seller?.name || 'SWD'}. Hân hạnh gửi tới Quý khách hàng báo giá hệ thống lọc nước sinh hoạt như sau:
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:26px">STT</th>
+      <th>Hạng mục</th>
+      <th style="width:50px">Số lượng</th>
+      <th style="width:50px">Đơn vị</th>
+      <th style="width:100px">Đơn giá (VNĐ)</th>
+      <th style="width:110px">Thành tiền (VNĐ)</th>
+      <th style="width:130px">Ghi chú</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${groupsHtml}
+    <tr class="sumRow">
+      <td colspan="5">Tổng cộng</td>
+      <td class="r">${fmtN(subtotal)}</td>
+      <td></td>
+    </tr>
+    ${disc > 0 ? `
+    <tr class="sumRow">
+      <td colspan="5">Chiết khấu (${disc}%)</td>
+      <td class="r" style="color:#B91C1C">- ${fmtN(discAmt)}</td>
+      <td></td>
+    </tr>` : ''}
+    <tr class="totalRow">
+      <td colspan="5">Thành tiền</td>
+      <td class="r">${fmtN(total)}</td>
+      <td></td>
+    </tr>
+    <tr class="payRow">
+      <td colspan="5">Thanh toán 100% trước khi lắp đặt</td>
+      <td class="r">${fmtN(total)}</td>
+      <td></td>
+    </tr>
+  </tbody>
 </table>
-<div class="info-box">
-  ${order.note ? '<br>Ghi chú: ' + order.note : '<br>Ghi chú: Không có'}
+
+<p class="sectionTitle">Điều khoản thanh toán:</p>
+<ul class="terms">
+  <li>Báo giá trên đã bao gồm thuế VAT (nếu có).</li>
+  <li>Báo giá này có hiệu lực trong vòng 30 ngày kể từ ngày gửi.</li>
+  <li class="highlight">Thanh toán 100% giá trị hợp đồng trước khi lắp đặt.</li>
+  ${order.note ? `<li>Ghi chú: ${order.note}</li>` : ''}
+</ul>
+
+<p class="sectionTitle">Thông tin tài khoản thanh toán:</p>
+<table class="bankTable">
+  <tr><td>Tên tài khoản</td><td>${seller?.bankAccountName || seller?.name || '—'}</td></tr>
+  <tr><td>Số tài khoản</td><td>${seller?.bankAccountNumber || '—'}</td></tr>
+  <tr><td>Ngân hàng</td><td>${seller?.bankName || '—'}</td></tr>
+</table>
+
+<p class="closing">Rất chân thành cảm ơn sự tin tưởng của Quý khách hàng dành cho ${seller?.name || 'chúng tôi'}!</p>
+
+<div class="sigBlock">
+  <div class="sigLabel">Người gửi</div>
+  <div class="sigName">${seller?.name || '—'}</div>
 </div>
-<div class="terms">
-  ${order.orderType === 'buon'
-            ? 'Thanh toán toàn bộ trước khi giao hàng. Hàng hoá được kiểm tra tại thời điểm giao nhận. Mọi khiếu nại cần phản ánh trong vòng 24 giờ kể từ khi nhận hàng.'
-            : 'Thanh toán khi nhận hàng hoặc chuyển khoản trước. Lắp đặt miễn phí trong vòng 24 giờ kể từ khi giao hàng thành công.'}
-</div>
-<div class="sig">
-  <div class="sig-col">
-    <div class="sig-label">Đại diện bên mua</div>
-    <div class="sig-name">${order.customer || '—'}</div>
-    <div style="font-size:11px;color:#94a3b8">Ký và ghi rõ họ tên</div>
-  </div>
-  <div class="sig-col">
-    <div class="sig-label">Đại diện bên bán</div>
-    <div class="sig-name">${seller?.name || 'SWD Company'}</div>
-    <div style="font-size:11px;color:#94a3b8">Ký và đóng dấu</div>
-  </div>
-</div>
+
 </body></html>`;
 }
 

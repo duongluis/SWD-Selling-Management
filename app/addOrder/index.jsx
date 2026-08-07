@@ -576,17 +576,36 @@ export default function AddOrder() {
   }, [serviceTypesList, orderType]);
 
   const effectivePaymentMethod = useFixedPrice ? fixedPayment : paymentMethod;
-  const priceField = resolvedPriceField;
+  // Giá bán chịu 2 yếu tố:
+  //  1. Hình thức thanh toán — khách hàng tự thanh toán thì bán theo giá niêm yết
+  //     (phần chênh với giá vai trò chính là hoa hồng, xem commissionCalc.calcCommission).
+  //  2. Vai trò người tạo đơn / người được hỗ trợ — người bán thanh toán thì lấy
+  //     giá vai trò (resolvedPriceField: giá đại lý/đối tác/CTV, hoặc của advisor cấp 1).
+  const priceField = effectivePaymentMethod === 'customer' ? 'price' : resolvedPriceField;
   const priceLabel = effectivePaymentMethod === 'customer' ? 'Giá sản phẩm' : 'Giá sản phẩm';
   // ? 'Giá sản phẩm'
   // : PRICE_FIELD_TO_LABEL[resolvedPriceField] ?? 'Giá niêm yết';
 
   const lockedType = ROLE_ORDER_TYPE[role] !== null;
   const handleSetOrderType = useCallback((type) => {
-    setOrderType(type);
-    setPaymentMethod(type === 'buon' ? 'company' : 'customer');
-    setSelectedServices([]);
-  }, []);
+    const nextPayment = type === 'buon' ? 'company' : 'customer';
+    const apply = () => {
+      setOrderType(type);
+      setPaymentMethod(nextPayment);
+      setSelectedServices([]);
+    };
+    // Đổi loại đơn kéo theo đổi hình thức thanh toán → đổi bảng giá. Sản phẩm đã thêm
+    // vẫn giữ giá cũ nên phải thêm lại, nếu không hoa hồng sẽ lệch.
+    if (products.length > 0 && nextPayment !== paymentMethod) {
+      showAlert(
+        'Đổi loại đơn hàng',
+        'Hình thức thanh toán và giá sản phẩm sẽ thay đổi. Vui lòng thêm lại sản phẩm.',
+        () => { setProducts([]); apply(); }
+      );
+      return;
+    }
+    apply();
+  }, [products.length, paymentMethod]);
 
   const calculateHierarchy = async (userEmail, userDetail) => {
     let rootAdvisor = userEmail;
@@ -634,6 +653,17 @@ export default function AddOrder() {
   const removeProduct = useCallback((id) => {
     setProducts(prev => prev.filter(p => p.id !== id));
   }, []);
+
+  // Form "Thêm sản phẩm" đang mở mà bảng giá đổi (đổi hình thức thanh toán / người được
+  // hỗ trợ / loại đơn) → sản phẩm đang chọn vẫn giữ giá cũ và sẽ được thêm vào với giá sai.
+  // Các handler chỉ xoá `products` nên không chạm tới được, phải tự tính lại ở đây.
+  useEffect(() => {
+    if (!newProduct.productId) return;
+    const p = catalog.find(c => String(c.id || c.docId) === newProduct.productId);
+    if (!p) return;
+    const nextPrice = String(p[priceField] || p.price || 0);
+    setNewProduct(prev => (prev.price === nextPrice ? prev : { ...prev, price: nextPrice }));
+  }, [priceField, catalog, newProduct.productId]);
 
   // --- 3. CÁC CƠ CHẾ XỬ LÝ (SUBMIT, FETCH...) ---
   const handleSetCustomerSearch = useCallback((v) => setCustomerSearch(v), []);
@@ -837,7 +867,7 @@ export default function AddOrder() {
       setResolvedPriceField(getRolePriceField(effectiveRole)); // fallback
     };
     resolve();
-  }, [effectivePaymentMethod, effectiveUser?.advisor, effectiveRole, paymentMethod]);
+  }, [effectiveUser?.advisor, effectiveRole]);
 
   // ── Fetch catalog (products) ─────────────────────────────────
   useEffect(() => {
@@ -1204,7 +1234,7 @@ export default function AddOrder() {
                 useFixedPrice={useFixedPrice}
                 fixedPayment={fixedPayment}
                 paymentMethod={paymentMethod}
-                setPaymentMethod={setPaymentMethod}
+                setPaymentMethod={handleSetPaymentMethod}
               />
             )}
 
@@ -1391,7 +1421,7 @@ export default function AddOrder() {
                   useFixedPrice={useFixedPrice}
                   fixedPayment={fixedPayment}
                   paymentMethod={paymentMethod}
-                  setPaymentMethod={setPaymentMethod}
+                  setPaymentMethod={handleSetPaymentMethod}
                 />
               )}
 

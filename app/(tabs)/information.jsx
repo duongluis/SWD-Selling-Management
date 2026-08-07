@@ -91,6 +91,35 @@ function ModalWrapper({ visible, onClose, isDesktop, maxWidth = 680, children })
     );
 }
 
+const InputBox = ({ fkey, placeholder, keyboardType = 'default', multiline = false, form, set }) => (
+    <View style={[F.input, multiline && { minHeight: 72, alignItems: 'flex-start' }]}>
+        <TextInput
+            style={[F.inputText, multiline && { textAlignVertical: 'top' }]}
+            placeholder={placeholder || ''}
+            placeholderTextColor="#94A3B8"
+            value={String(form[fkey] || '')}
+            onChangeText={v => set(fkey, v)}
+            keyboardType={keyboardType}
+            multiline={multiline}
+        />
+    </View>
+);
+
+const MoneyInput = ({ fkey, label, color, form, set }) => (
+    <View style={[F.input, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+        <View style={[F.moneyDot, { backgroundColor: color }]} />
+        <TextInput
+            style={[F.inputText, { flex: 1 }]}
+            placeholder={label}
+            placeholderTextColor="#94A3B8"
+            value={form[fkey] ? String(form[fkey]) : ''}
+            onChangeText={v => set(fkey, v.replace(/\D/g, ''))}// có thể là nguyên nhân
+            keyboardType="numeric"
+        />
+        <Text style={{ fontSize: 11, color: '#94A3B8' }}>đ</Text>
+    </View>
+);
+
 // ── Create/Edit Product Modal ─────────────────────────────────
 const PRODUCT_EMPTY = {
     name: '', capacity: '', technology: '', made_in: 'Việt Nam',
@@ -131,6 +160,8 @@ function ProductModal({ visible, onClose, onSaved, existingCount, editData = nul
     const handleSave = async () => {
         if (!form.name.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên sản phẩm'); return; }
         if (!form.price) { showAlert('Thông báo', 'Vui lòng nhập giá niêm yết'); return; }
+        const price = form.price;
+        price
         setSaving(true);
         try {
             const payload = {
@@ -181,34 +212,7 @@ function ProductModal({ visible, onClose, onSaved, existingCount, editData = nul
         finally { setSaving(false); }
     };
 
-    const InputBox = ({ fkey, placeholder, keyboardType = 'default', multiline = false }) => (
-        <View style={[F.input, multiline && { minHeight: 72, alignItems: 'flex-start' }]}>
-            <TextInput
-                style={[F.inputText, multiline && { textAlignVertical: 'top' }]}
-                placeholder={placeholder || ''}
-                placeholderTextColor="#94A3B8"
-                value={String(form[fkey] || '')}
-                onChangeText={v => set(fkey, v)}
-                keyboardType={keyboardType}
-                multiline={multiline}
-            />
-        </View>
-    );
 
-    const MoneyInput = ({ fkey, label, color }) => (
-        <View style={[F.input, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-            <View style={[F.moneyDot, { backgroundColor: color }]} />
-            <TextInput
-                style={[F.inputText, { flex: 1 }]}
-                placeholder={label}
-                placeholderTextColor="#94A3B8"
-                value={form[fkey] ? String(form[fkey]) : ''}
-                onChangeText={v => set(fkey, v.replace(/\D/g, ''))}
-                keyboardType="numeric"
-            />
-            <Text style={{ fontSize: 11, color: '#94A3B8' }}>đ</Text>
-        </View>
-    );
 
     const content = (
         <View style={F.modalInner}>
@@ -227,37 +231,37 @@ function ProductModal({ visible, onClose, onSaved, existingCount, editData = nul
 
             <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={F.scrollBody}>
                 <Text style={F.section}>Thông tin cơ bản</Text>
-                <FormRow label="Tên sản phẩm" required><InputBox fkey="name" placeholder="VD: Máy F3000A" /></FormRow>
-                <FormRow label="Công suất lọc"><InputBox fkey="capacity" placeholder="VD: 3000 lít/giờ" /></FormRow>
-                <FormRow label="Công nghệ"><InputBox fkey="technology" placeholder="VD: Golden Panthera" /></FormRow>
-                <FormRow label="Xuất xứ"><InputBox fkey="made_in" placeholder="VD: Việt Nam" /></FormRow>
-                <FormRow label="Nguồn nước xử lý"><InputBox fkey="water_source" placeholder="VD: Nước từ thủy cục" multiline /></FormRow>
-                <FormRow label="Tiêu chuẩn nước"><InputBox fkey="water_certificate" placeholder="VD: QCVN 01/2018/BYT" multiline /></FormRow>
+                <FormRow label="Tên sản phẩm" required><InputBox fkey="name" placeholder="VD: Máy F3000A" form={form} set={set} /></FormRow>
+                <FormRow label="Công suất lọc"><InputBox fkey="capacity" placeholder="VD: 3000 lít/giờ" form={form} set={set} /></FormRow>
+                <FormRow label="Công nghệ"><InputBox fkey="technology" placeholder="VD: Golden Panthera" form={form} set={set} /></FormRow>
+                <FormRow label="Xuất xứ"><InputBox fkey="made_in" placeholder="VD: Việt Nam" form={form} set={set} /></FormRow>
+                <FormRow label="Nguồn nước xử lý"><InputBox fkey="water_source" placeholder="VD: Nước từ thủy cục" multiline form={form} set={set} /></FormRow>
+                <FormRow label="Tiêu chuẩn nước"><InputBox fkey="water_certificate" placeholder="VD: QCVN 01/2018/BYT" multiline form={form} set={set} /></FormRow>
 
                 <Text style={F.section}>Bảng giá</Text>
-                <FormRow label="Giá niêm yết" required><MoneyInput fkey="price" label="Giá niêm yết" color="#64748B" /></FormRow>
-                <FormRow label="Giá đại lý"><MoneyInput fkey="price_a" label="Giá đại lý" color="#2563EB" /></FormRow>
-                <FormRow label="Giá đối tác"><MoneyInput fkey="price_p" label="Giá đối tác" color="#7C3AED" /></FormRow>
-                <FormRow label="Giá CTV"><MoneyInput fkey="price_c" label="Giá CTV" color="#059669" /></FormRow>
+                <FormRow label="Giá niêm yết" required><MoneyInput fkey="price" label="Giá niêm yết" color="#64748B" form={form} set={set} /></FormRow>
+                <FormRow label="Giá đại lý"><MoneyInput fkey="price_a" label="Giá đại lý" color="#2563EB" form={form} set={set} /></FormRow>
+                <FormRow label="Giá đối tác"><MoneyInput fkey="price_p" label="Giá đối tác" color="#7C3AED" form={form} set={set} /></FormRow>
+                <FormRow label="Giá CTV"><MoneyInput fkey="price_c" label="Giá CTV" color="#059669" form={form} set={set} /></FormRow>
 
                 <Text style={F.section}>Thông số kỹ thuật</Text>
-                <FormRow label="Điện áp"><InputBox fkey="electric_requirement" placeholder="220 Vac / 50-60Hz" /></FormRow>
-                <FormRow label="Công suất lọc"><InputBox fkey="using_electric_capacity" placeholder="VD: 1,2 W" /></FormRow>
-                <FormRow label="Công suất nghỉ"><InputBox fkey="electric_capacity" placeholder="VD: 0 W" /></FormRow>
-                <FormRow label="Công nghệ màng"><InputBox fkey="sorting_tech" placeholder="VD: Ultra Filtration" /></FormRow>
-                <FormRow label="Vật liệu màng"><InputBox fkey="pipe_material" placeholder="VD: PVC" /></FormRow>
-                <FormRow label="Xuất xứ màng"><InputBox fkey="pipe_original" placeholder="VD: Trung Quốc" /></FormRow>
-                <FormRow label="Đường kính ống v/r"><InputBox fkey="pipe_diameter" placeholder="VD: ¾ inch" /></FormRow>
-                <FormRow label="Đường kính ống thải"><InputBox fkey="drain_pipe_diameter" placeholder="VD: 10 mm" /></FormRow>
-                <FormRow label="Lượng nước thải"><InputBox fkey="drain_water" placeholder="VD: 0,2%" /></FormRow>
+                <FormRow label="Điện áp"><InputBox fkey="electric_requirement" placeholder="220 Vac / 50-60Hz" form={form} set={set} /></FormRow>
+                <FormRow label="Công suất lọc"><InputBox fkey="using_electric_capacity" placeholder="VD: 1,2 W" form={form} set={set} /></FormRow>
+                <FormRow label="Công suất nghỉ"><InputBox fkey="electric_capacity" placeholder="VD: 0 W" form={form} set={set} /></FormRow>
+                <FormRow label="Công nghệ màng"><InputBox fkey="sorting_tech" placeholder="VD: Ultra Filtration" form={form} set={set} /></FormRow>
+                <FormRow label="Vật liệu màng"><InputBox fkey="pipe_material" placeholder="VD: PVC" form={form} set={set} /></FormRow>
+                <FormRow label="Xuất xứ màng"><InputBox fkey="pipe_original" placeholder="VD: Trung Quốc" form={form} set={set} /></FormRow>
+                <FormRow label="Đường kính ống v/r"><InputBox fkey="pipe_diameter" placeholder="VD: ¾ inch" form={form} set={set} /></FormRow>
+                <FormRow label="Đường kính ống thải"><InputBox fkey="drain_pipe_diameter" placeholder="VD: 10 mm" form={form} set={set} /></FormRow>
+                <FormRow label="Lượng nước thải"><InputBox fkey="drain_water" placeholder="VD: 0,2%" form={form} set={set} /></FormRow>
 
                 <Text style={F.section}>Thông tin vật lý</Text>
-                <FormRow label="Kích thước"><InputBox fkey="dimension" placeholder="VD: 45 x 30 x 14 (cm)" /></FormRow>
-                <FormRow label="Màu sắc"><InputBox fkey="color" placeholder="VD: Ghi xám" /></FormRow>
-                <FormRow label="Trọng lượng"><InputBox fkey="weight" placeholder="VD: 14 Kg" /></FormRow>
-                <FormRow label="Tuổi thọ"><InputBox fkey="life_style" placeholder="VD: > 3 năm" /></FormRow>
-                <FormRow label="Bảo hành"><InputBox fkey="guarantee" placeholder="VD: 12 tháng linh kiện" multiline /></FormRow>
-                <FormRow label="Vị trí lắp đặt"><InputBox fkey="recommend_location" placeholder="VD: Trong nhà, dưới mái che" multiline /></FormRow>
+                <FormRow label="Kích thước"><InputBox fkey="dimension" placeholder="VD: 45 x 30 x 14 (cm)" form={form} set={set} /></FormRow>
+                <FormRow label="Màu sắc"><InputBox fkey="color" placeholder="VD: Ghi xám" form={form} set={set} /></FormRow>
+                <FormRow label="Trọng lượng"><InputBox fkey="weight" placeholder="VD: 14 Kg" form={form} set={set} /></FormRow>
+                <FormRow label="Tuổi thọ"><InputBox fkey="life_style" placeholder="VD: > 3 năm" form={form} set={set} /></FormRow>
+                <FormRow label="Bảo hành"><InputBox fkey="guarantee" placeholder="VD: 12 tháng linh kiện" multiline form={form} set={set} /></FormRow>
+                <FormRow label="Vị trí lắp đặt"><InputBox fkey="recommend_location" placeholder="VD: Trong nhà, dưới mái che" multiline form={form} set={set} /></FormRow>
                 <View style={{ height: 16 }} />
             </ScrollView>
 

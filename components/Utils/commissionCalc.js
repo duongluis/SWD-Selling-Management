@@ -40,13 +40,13 @@ export function calcCommission(items = [], basePriceField = 'price') {
 }
 
 /**
- * bonus = 1% × Σ price_field_role_collab_i × qty_i
+ * bonus = 1% × Σ price_field_role_collab_i × qty_i / 1,08 ( bỏ VAT )
  */
 export function calcBonus(items = [], collabPriceField = 'price') {
     return items.reduce((sum, p) => {
         const rolePrice = parseFloat(p[collabPriceField] || p.price || 0);
         const qty = parseFloat(p.qty || 1);
-        return sum + rolePrice * qty * 0.01;
+        return sum + rolePrice * qty / 1.08 * 0.01;
     }, 0);
 }
 

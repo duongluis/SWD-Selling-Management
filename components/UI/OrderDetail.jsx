@@ -706,6 +706,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                                 },
                             })}
                         >
+                            {console.log('localOrder : ', JSON.stringify(localOrder))}
                             <Ionicons name="create-outline" size={13} color="#2563EB" />
                             <Text style={DP.aBtnText}>Sửa</Text>
                         </TouchableOpacity>
