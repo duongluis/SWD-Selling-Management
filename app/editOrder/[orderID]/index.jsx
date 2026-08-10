@@ -104,6 +104,7 @@ export default function EditOrder() {
     const isCTV = ['cộng tác viên', 'ctv', 'collaborator'].includes(_role);
 
     const canEdit = isAdmin || !isCTV;
+    const canEditPrice = isAdmin;
 
     const [orderDate, setOrderDate] = useState(existing.createdAt || '');
     const [deliveryAddress, setDeliveryAddress] = useState(existing.address || '');
@@ -113,6 +114,9 @@ export default function EditOrder() {
 
     const updateItemQty = (id, qty) =>
         setItems(prev => prev.map(p => p.id === id ? { ...p, qty: Math.max(1, parseInt(qty) || 1) } : p));
+    const updateItemPrice = (id, price) =>
+        setItems(prev => prev.map(p => p.id === id ? { ...p, price: Math.max(0, parseInt(price) || 0) } : p));
+
     const removeItem = (id) => {
         if (items.length <= 1) { showAlert('Thông báo', 'Đơn hàng phải có ít nhất 1 sản phẩm'); return; }
         setItems(prev => prev.filter(p => p.id !== id));
@@ -229,9 +233,24 @@ export default function EditOrder() {
                 {items.map((item, i) => (
                     <View key={item.id || i} style={S.itemRow}>
                         <View style={S.itemIcon}><Ionicons name="water-outline" size={14} color="#2563EB" /></View>
+
                         <View style={{ flex: 1 }}>
                             <Text style={S.itemName} numberOfLines={1}>{item.name}</Text>
-                            <Text style={S.itemPrice}>{fmt(item.price)}</Text>
+                            {canEditPrice ? (
+                                <View style={S.priceEditRow}>
+                                    <TextInput
+                                        style={S.priceInput}
+                                        keyboardType="numeric"
+                                        placeholder="Giá..."
+                                        placeholderTextColor="#B0B0C8"
+                                        value={item.price ? String(item.price) : ''}
+                                        onChangeText={(v) => updateItemPrice(item.id || String(i), v.replace(/\D/g, ''))}
+                                    />
+                                    <Text style={S.priceUnit}>đ</Text>
+                                </View>
+                            ) : (
+                                <Text style={S.itemPrice}>{fmt(item.price)}</Text>
+                            )}
                         </View>
                         {canEdit ? (
                             <View style={S.qtyBox}>
@@ -409,7 +428,21 @@ export default function EditOrder() {
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <Text style={W.itemName} numberOfLines={1}>{item.name}</Text>
-                                        <Text style={W.itemPrice}>{fmt(item.price)} / cái</Text>
+                                        {canEditPrice ? (
+                                            <View style={W.priceEditRow}>
+                                                <TextInput
+                                                    style={W.priceInput}
+                                                    keyboardType="numeric"
+                                                    placeholder="Giá..."
+                                                    placeholderTextColor="#94A3B8"
+                                                    value={item.price ? String(item.price) : ''}
+                                                    onChangeText={(v) => updateItemPrice(item.id || String(i), v.replace(/\D/g, ''))}
+                                                />
+                                                <Text style={W.priceUnit}>đ / cái</Text>
+                                            </View>
+                                        ) : (
+                                            <Text style={W.itemPrice}>{fmt(item.price)} / cái</Text>
+                                        )}
                                     </View>
 
                                     {canEdit ? (
@@ -561,6 +594,9 @@ const W = StyleSheet.create({
 
     submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 14, shadowColor: '#2563EB', shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
     submitBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+    priceEditRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+    priceInput: { fontSize: 12, color: '#0F172A', fontWeight: '600', borderBottomWidth: 1, borderBottomColor: '#CBD5E1', paddingVertical: 2, minWidth: 80 },
+    priceUnit: { fontSize: 11, color: '#64748B' },
 });
 
 // ── Mobile Styles ─────────────────────────────────────────────
@@ -587,4 +623,7 @@ const S = StyleSheet.create({
     totalValue: { fontSize: 18, fontWeight: '900', color: '#fff', letterSpacing: -0.5 },
     submitBtn: { backgroundColor: '#2563EB', borderRadius: 14, paddingVertical: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 8, marginBottom: 20, shadowColor: '#2563EB', shadowOpacity: 0.35, shadowRadius: 10, elevation: 5 },
     submitBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+    priceEditRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+    priceInput: { fontSize: 12, color: '#0F172A', fontWeight: '600', borderBottomWidth: 1, borderBottomColor: '#CBD5E1', paddingVertical: 2, minWidth: 70 },
+    priceUnit: { fontSize: 11, color: '#64748B' },
 });

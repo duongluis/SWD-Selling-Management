@@ -159,6 +159,36 @@ const ProductDropdown = React.memo(({ catalog, onSelect }) => {
   );
 });
 ProductDropdown.displayName = 'ProductDropdown';
+
+const ServiceDropdown = React.memo(({ catalog, onSelect }) => {
+  const [search, setSearch] = useState('');
+  const filtered = catalog.filter(s => (s.name || '').toLowerCase().includes(search.toLowerCase()));
+  return (
+    <View style={PD.wrap}>
+      <View style={PD.searchRow}>
+        <Ionicons name="search-outline" size={14} color="#94A3B8" />
+        <TextInput style={PD.searchInput} placeholder="Tìm dịch vụ..." placeholderTextColor="#94A3B8" value={search} onChangeText={setSearch} autoFocus />
+        {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={14} color="#94A3B8" /></TouchableOpacity>}
+      </View>
+      <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={true}>
+        {filtered.length === 0
+          ? <Text style={PD.empty}>Không tìm thấy</Text>
+          : filtered.map(item => (
+            <TouchableOpacity key={String(item.type || item.docId)} style={PD.item} onPress={() => onSelect(item)} activeOpacity={0.7}>
+              <View style={PD.icon}><Ionicons name="construct-outline" size={13} color="#2563EB" /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={PD.name} numberOfLines={1}>{item.name}</Text>
+                {item.description ? <Text style={PD.cap} numberOfLines={1}>{item.description}</Text> : null}
+              </View>
+              {!!item.price && <Text style={PD.cap}>{fmt(item.price)}</Text>}
+            </TouchableOpacity>
+          ))}
+      </ScrollView>
+    </View>
+  );
+});
+ServiceDropdown.displayName = 'ServiceDropdown';
+
 const PD = StyleSheet.create({
   wrap: { backgroundColor: '#FFF', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginTop: 4, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 10, elevation: 6, overflow: 'hidden', zIndex: 99 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
@@ -370,60 +400,181 @@ const AddProductForm = React.memo(({ ws, orderType, catalog, priceField, priceLa
 });
 AddProductForm.displayName = 'AddProductForm';
 
-// ── ServiceList ───────────────────────────────────────────────
-const ServiceList = React.memo(({ ws, serviceTypesList = [], selectedServices, setSelectedServices, serviceNote, onServiceNoteChange, orderType, deliveryAddress, onAddressChange }) => {
+// AddServiceForm
+const AddServiceForm = React.memo(({ ws, catalog, newService, setNewService, showServiceDrop, setShowServiceDrop, onAdd, onCancel }) => {
+  const handleSelect = useCallback((svc) => {
+    setNewService({
+      type: svc.type,
+      name: svc.name,
+      qty: '1',
+      price: String(svc.price || 0),
+      included: false,
+      unit: svc.unit || 'Gói',
+    });
+    setShowServiceDrop(false);
+  }, [setNewService, setShowServiceDrop]);
 
-  // useCallback phải gọi trước mọi return sớm (serviceTypesList rỗng lúc đầu rồi mới có
-  // dữ liệu từ Firestore) để không lệch số lượng hook giữa các lần render
-  const toggleService = useCallback((svcType) => {
-    setSelectedServices(prev =>
-      prev.includes(svcType) ? prev.filter(t => t !== svcType) : [...prev, svcType]
-    );
-  }, [setSelectedServices]);
+  return (
+    <View style={ws ? W.addForm : styles.addProductForm}>
+      <View>
+        <TouchableOpacity style={ws ? W.addInput : styles.addProductInput} onPress={() => setShowServiceDrop(!showServiceDrop)} activeOpacity={0.8}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="construct-outline" size={14} color={newService.name ? '#0F172A' : '#94A3B8'} />
+            <Text style={{ fontSize: 14, color: newService.name ? '#0F172A' : '#94A3B8', flex: 1 }} numberOfLines={1}>
+              {newService.name || 'Bấm để chọn dịch vụ...'}
+            </Text>
+            <Ionicons name={showServiceDrop ? 'chevron-up' : 'chevron-down'} size={14} color="#94A3B8" />
+          </View>
+        </TouchableOpacity>
+        {showServiceDrop && <ServiceDropdown catalog={catalog} onSelect={handleSelect} />}
+      </View>
 
-  if (!serviceTypesList || serviceTypesList.length === 0) return null;
+      <View style={ws ? W.addRow : styles.addProductRow}>
+        <TextInput
+          style={[ws ? W.addInput : styles.addProductInput, { flex: 1, marginRight: 8 }]}
+          placeholder="Số lượng"
+          placeholderTextColor="#B0B0C8"
+          keyboardType="numeric"
+          value={newService.qty}
+          onChangeText={v => setNewService(p => ({ ...p, qty: v }))}
+        />
+        <View style={[
+          ws ? W.addInput : styles.addProductInput,
+          { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 6 },
+          newService.included && { backgroundColor: '#F1F5F9' },
+        ]}>
+          <Ionicons name={newService.included ? 'lock-closed-outline' : 'create-outline'} size={13} color={newService.included ? '#94A3B8' : '#2563EB'} />
+          <TextInput
+            style={{ flex: 1, fontSize: 14, color: newService.included ? '#94A3B8' : '#0F172A', fontWeight: '500' }}
+            placeholder={newService.included ? 'Bao gồm' : 'Giá dịch vụ...'}
+            placeholderTextColor="#94A3B8"
+            keyboardType="numeric"
+            editable={!newService.included}
+            value={newService.included ? '' : newService.price}
+            onChangeText={v => setNewService(p => ({ ...p, price: v.replace(/\D/g, '') }))}
+          />
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2, paddingVertical: 4 }}
+        onPress={() => setNewService(p => ({ ...p, included: !p.included }))}
+        activeOpacity={0.7}
+      >
+        <Ionicons name={newService.included ? 'checkbox' : 'square-outline'} size={17} color={newService.included ? '#2563EB' : '#94A3B8'} />
+        <Text style={{ fontSize: 12, color: newService.included ? '#2563EB' : '#64748B', fontWeight: newService.included ? '700' : '500' }}>
+          Bao gồm (miễn phí)
+        </Text>
+      </TouchableOpacity>
+
+      <View style={ws ? W.addActions : styles.addProductActions}>
+        <TouchableOpacity style={ws ? W.addCancel : styles.addProductCancel} onPress={onCancel}>
+          <Text style={ws ? W.addCancelText : styles.addProductCancelText}>Hủy</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={ws ? W.addConfirm : styles.addProductConfirm} onPress={onAdd}>
+          <Text style={ws ? W.addConfirmText : styles.addProductConfirmText}>Thêm</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+AddServiceForm.displayName = 'AddServiceForm';
+
+// ServiceSection
+const ServicesSection = React.memo(({
+  ws, catalogServices, orderServices,
+  showAddService, setShowAddService,
+  newService, setNewService, showServiceDrop, setShowServiceDrop,
+  onAddService, onRemoveService, onToggleIncluded,
+  serviceNote, onServiceNoteChange, deliveryAddress, onAddressChange,
+}) => {
+  if (!catalogServices || catalogServices.length === 0) return null;
+
+  const hasDelivery = orderServices.some(s => (s.name || '').toLowerCase().includes('giao hàng') || s.type === 'DELIVERY');
+  const servicesTotal = orderServices.reduce((s, sv) => s + (sv.included ? 0 : (parseInt(sv.price) || 0) * (parseInt(sv.qty) || 1)), 0);
 
   return (
     <View style={ws ? W.autoSvcCard : styles.autoSvcCard}>
-      <Text style={[ws ? W.cardTitle : styles.sectionTitle, { marginBottom: 12 }]}>Dịch vụ tự động tạo</Text>
-      {serviceTypesList.map(svc => {
-        const isSelected = selectedServices.includes(svc.type);
-        const isDelivery = svc.name?.toLowerCase().includes('giao hàng');
-        const orderKey = isDelivery ? 'buon'
-          : svc.name?.toLowerCase().includes('lắp đặt') ? 'le'
-            : null;
-        const cfg = orderKey ? ORDER_TYPES[orderKey] : {};
-        return (
-          <React.Fragment key={svc.type}>
-            <TouchableOpacity style={[ws ? W.serviceRow : styles.serviceRow]} onPress={() => toggleService(svc.type)} activeOpacity={0.8}>
-              <View style={[ws ? W.serviceIcon : styles.serviceIcon, { backgroundColor: isSelected ? cfg.svcBg || '#EFF6FF' : '#F1F5F9' }]}>
-                <Ionicons name={cfg.svcIcon || 'construct-outline'} size={18} color={isSelected ? cfg.svcColor || '#2563EB' : '#94A3B8'} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[ws ? W.serviceName : styles.serviceName]}>{svc.name || svc.type}</Text>
-                {svc.description && <Text style={[ws ? W.serviceDesc : styles.serviceDesc]}>{svc.description}</Text>}
-              </View>
-              <View style={[ws ? W.toggleSwitch : styles.toggleSwitch, isSelected && (ws ? W.toggleOn : styles.toggleOn)]}>
-                <View style={[ws ? W.toggleThumb : styles.toggleThumb, isSelected && (ws ? W.toggleThumbOn : styles.toggleThumbOn)]} />
-              </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, ...(ws ? {} : { paddingHorizontal: 14, paddingTop: 14 }) }}>
+        <Text style={[ws ? W.cardTitle : styles.sectionTitle, { flex: 1, marginBottom: 0, paddingHorizontal: 0, paddingTop: 0 }]}>Dịch vụ</Text>
+        {orderServices.length > 0 && (
+          <View style={ws ? W.productCount : { backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 }}>
+            <Text style={ws ? W.productCountText : { fontSize: 11, fontWeight: '700', color: '#2563EB' }}>{orderServices.length}</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={ws ? {} : { paddingHorizontal: 14 }}>
+        {orderServices.map(sv => (
+          <View key={sv.id} style={ws ? W.productRow : styles.productItem}>
+            <View style={ws ? W.productIcon : { width: 28, height: 28, borderRadius: 7, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="construct-outline" size={14} color="#2563EB" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={ws ? W.productName : styles.productItemName} numberOfLines={1}>{sv.name}</Text>
+              <Text style={ws ? W.productMeta : styles.productItemMeta}>
+                x{sv.qty} · {sv.included ? 'Bao gồm' : fmt(sv.price)}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => onToggleIncluded(sv.id)} hitSlop={6} style={{ marginRight: 4 }}>
+              <Ionicons name={sv.included ? 'checkbox' : 'square-outline'} size={17} color={sv.included ? '#2563EB' : '#CBD5E1'} />
             </TouchableOpacity>
-            {isDelivery && isSelected && (
-              <View style={[ws ? W.inputGroup : styles.inputGroup, { marginTop: -4, marginBottom: 12 }]}>
-                <Text style={ws ? W.svcLabel : styles.svcLabel}>Địa chỉ giao hàng</Text>
-                <View style={ws ? W.inputBox : styles.inputBox}>
-                  <TextInput
-                    style={ws ? W.input : styles.input}
-                    placeholder="Nhập địa chỉ giao hàng..."
-                    placeholderTextColor="#94A3B8"
-                    value={deliveryAddress}
-                    onChangeText={onAddressChange}
-                  />
-                </View>
-              </View>
-            )}
-          </React.Fragment>
-        );
-      })}
+            <Text style={ws ? W.productTotal : styles.productItemTotal}>
+              {sv.included ? 'Bao gồm' : fmt(sv.price * sv.qty)}
+            </Text>
+            <TouchableOpacity onPress={() => onRemoveService(sv.id)} style={ws ? W.removeBtn : undefined}>
+              <Ionicons name="trash-outline" size={ws ? 14 : 18} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+        ))}
+
+        {showAddService ? (
+          <AddServiceForm
+            ws={ws}
+            catalog={catalogServices}
+            newService={newService}
+            setNewService={setNewService}
+            showServiceDrop={showServiceDrop}
+            setShowServiceDrop={setShowServiceDrop}
+            onAdd={onAddService}
+            onCancel={() => setShowAddService(false)}
+          />
+        ) : (
+          <TouchableOpacity style={ws ? W.addProductBtn : styles.addProductBtn} onPress={() => setShowAddService(true)}>
+            <Ionicons name="add" size={16} color="#2563EB" />
+            <Text style={ws ? W.addProductBtnText : styles.addProductBtnText}>Thêm dịch vụ</Text>
+          </TouchableOpacity>
+        )}
+
+        {orderServices.length > 0 && (ws ? (
+          <View style={W.totalBox}>
+            <View style={W.totalRow}><Text style={W.totalLabel}>Số dịch vụ</Text><Text style={W.totalValue}>{orderServices.length} mục</Text></View>
+            <View style={W.totalDivider} />
+            <View style={W.totalRow}><Text style={W.totalLabelBig}>Tổng dịch vụ</Text><Text style={W.totalAmountBig}>{fmt(servicesTotal)}</Text></View>
+          </View>
+        ) : (
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Tổng dịch vụ</Text>
+            <Text style={styles.totalAmount}>{fmt(servicesTotal)}</Text>
+          </View>
+        ))}
+      </View>
+
+      {hasDelivery && (
+        <View style={[ws ? W.inputGroup : styles.inputGroup, { marginTop: 12, ...(ws ? {} : { paddingHorizontal: 14 }) }]}>
+          <Text style={ws ? W.svcLabel : styles.svcLabel}>Địa chỉ giao hàng</Text>
+          <View style={ws ? W.inputBox : styles.inputBox}>
+            <TextInput
+              style={ws ? W.input : styles.input}
+              placeholder="Nhập địa chỉ giao hàng..."
+              placeholderTextColor="#94A3B8"
+              value={deliveryAddress}
+              onChangeText={onAddressChange}
+            />
+          </View>
+        </View>
+      )}
+
       <Text style={[ws ? W.svcLabel : styles.svcLabel, { marginTop: 12 }]}>Ghi chú cho các dịch vụ</Text>
       <View style={[ws ? W.inputBox : styles.svcNoteBox, { alignItems: 'flex-start', minHeight: 60 }]}>
         <TextInput
@@ -438,7 +589,7 @@ const ServiceList = React.memo(({ ws, serviceTypesList = [], selectedServices, s
     </View>
   );
 });
-ServiceList.displayName = 'ServiceList';
+ServicesSection.displayName = 'ServicesSection';
 
 // ── PaymentMethodField ────────────────────────────────────────
 const PaymentMethodField = React.memo(({ ws, orderType, useFixedPrice, fixedPayment, paymentMethod, setPaymentMethod }) => {
@@ -523,7 +674,11 @@ export default function AddOrder() {
   // --- 1. ĐƯA TẤT CẢ STATE LÊN ĐẦU ĐỂ TRÁNH LỖI INITIALIZATION ---
   const [serviceTypesList, setServiceTypesList] = useState([]); // Chuyển lên đầu
   const [orderType, setOrderType] = useState(ROLE_ORDER_TYPE[role] || 'le');
-  const [selectedServices, setSelectedServices] = useState([]);
+  // const [selectedServices, setSelectedServices] = useState([]);
+  const [orderServices, setOrderServices] = useState([]); // [{ id, type, name, qty, price, included, unit }]
+  const [showAddService, setShowAddService] = useState(false);
+  const [showServiceDrop, setShowServiceDrop] = useState(false);
+  const [newService, setNewService] = useState({ type: '', name: '', qty: '1', price: '', included: false, unit: 'Gói' });
   const [orderDate, setOrderDate] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -592,7 +747,8 @@ export default function AddOrder() {
     const apply = () => {
       setOrderType(type);
       setPaymentMethod(nextPayment);
-      setSelectedServices([]);
+      // setSelectedServices([]);
+      setOrderServices([]);
     };
     // Đổi loại đơn kéo theo đổi hình thức thanh toán → đổi bảng giá. Sản phẩm đã thêm
     // vẫn giữ giá cũ nên phải thêm lại, nếu không hoa hồng sẽ lệch.
@@ -633,6 +789,15 @@ export default function AddOrder() {
     products.reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0)
     , [products]);
 
+  const servicesAmount = useMemo(() =>
+    orderServices.reduce((s, sv) => s + (sv.included ? 0 : PARSE(sv.price) * PARSE(sv.qty || 1)), 0)
+    , [orderServices]);
+
+  // ✅ NEW: tổng cộng sản phẩm + dịch vụ — dùng để hiển thị tổng cuối và lưu vào đơn hàng
+  const grandTotal = useMemo(() =>
+    totalAmount + servicesAmount
+    , [totalAmount, servicesAmount]);
+
   // Thêm sản phẩm
   const addProduct = useCallback(() => {
     if (!newProduct.name || !newProduct.price) {
@@ -652,6 +817,49 @@ export default function AddOrder() {
   // Xóa sản phẩm
   const removeProduct = useCallback((id) => {
     setProducts(prev => prev.filter(p => p.id !== id));
+  }, []);
+
+  const handleSelectService = useCallback((svc) => {
+    setNewService({
+      type: svc.type,
+      name: svc.name,
+      qty: '1',
+      price: String(svc.price || 0),
+      included: false,
+      unit: svc.unit || 'Gói',
+    });
+    setShowServiceDrop(false);
+  }, []);
+
+  const addServiceItem = useCallback(() => {
+    if (!newService.name) { showAlert('Thông báo', 'Vui lòng chọn dịch vụ'); return; }
+    if (!newService.included && !newService.price) {
+      showAlert('Thông báo', 'Vui lòng nhập giá dịch vụ hoặc bật "Bao gồm"');
+      return;
+    }
+    setOrderServices(prev => [...prev, {
+      ...newService,
+      id: Date.now().toString(),
+      qty: parseInt(newService.qty) || 1,
+      price: newService.included ? 0 : (parseInt(newService.price) || 0),
+    }]);
+    setShowAddService(false);
+    setNewService({ type: '', name: '', qty: '1', price: '', included: false, unit: 'Gói' });
+  }, [newService]);
+
+  const removeServiceItem = useCallback((id) => {
+    setOrderServices(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  const toggleServiceIncluded = useCallback((id) => {
+    setOrderServices(prev => prev.map(s => s.id === id ? { ...s, included: !s.included } : s));
+  }, []);
+
+  const handleSetShowServiceDrop = useCallback((v) => setShowServiceDrop(v), []);
+  const handleSetNewService = useCallback((v) => setNewService(v), []);
+  const handleCancelAddService = useCallback(() => {
+    setShowAddService(false);
+    setNewService({ type: '', name: '', qty: '1', price: '', included: false, unit: 'Gói' });
   }, []);
 
   // Form "Thêm sản phẩm" đang mở mà bảng giá đổi (đổi hình thức thanh toán / người được
@@ -966,6 +1174,16 @@ export default function AddOrder() {
       }
       const { rootAdvisor, level } = await calculateHierarchy(effectiveCreatorEmail, hierarchyUserDetail);
 
+      const serviceItems = orderServices.map(sv => ({
+        id: sv.id,
+        name: sv.name,
+        qty: sv.qty,
+        price: sv.included ? 0 : (parseInt(sv.price) || 0),
+        included: sv.included,
+        isService: true,
+        serviceType: sv.type,
+      }));
+
       const newOrder = {
         id: orderId,
         orderType,
@@ -973,7 +1191,10 @@ export default function AddOrder() {
         customer: finalCustomerName,
         phone: finalCustomerPhone,
         customerId: selectedCustomer?.docId || '',
-        items: products,
+        items: [...products, ...serviceItems],
+        productAmount: totalAmount,      // ✅ NEW: tổng riêng sản phẩm (không đổi ý nghĩa totalAmount cũ)
+        servicesAmount,                  // ✅ NEW: tổng riêng dịch vụ
+        totalAmount: grandTotal,         // ✅ NEW: tổng cuối cùng lưu vào đơn hàng
         createdAt: orderDate,
         address: deliveryAddress || userDetail?.address || '',
         note: notes,
@@ -986,26 +1207,60 @@ export default function AddOrder() {
       await setDoc(doc(db, 'orders', orderId), newOrder);
 
       // Sửa lỗi Typo và Crash tại đây:
-      if (selectedServices.length > 0) {
+      // if (selectedServices.length > 0) {
+      //   const svcStatusMap = {};
+      //   for (const svcType of selectedServices) {
+      //     const svcCategory = SERVICE_TYPE_TO_CATEGORY[svcType]
+      //       || (orderType === 'buon' ? 'DELIVERY' : 'INSTALLATION');
+      //     const statuses = await fetchStatusList(svcCategory);
+      //     svcStatusMap[svcType] = statuses[0]?.name || 'Chờ xử lý';
+      //   }
+      //   await Promise.all(selectedServices.map(async (svcType) => {
+      //     const svcId = `SV-${Date.now().toString().slice(-6)}-${svcType}`;
+      //     return setDoc(doc(db, 'service', svcId), {
+      //       id: svcId,
+      //       type: svcType,
+      //       orderId,
+      //       orderItems: products,
+      //       customer: finalCustomerName, // Dùng biến safe
+      //       phone: finalCustomerPhone,   // Dùng biến safe
+      //       address: deliveryAddress || userDetail?.address || '',
+      //       note: serviceNote,
+      //       status: svcStatusMap[svcType],
+      //       createdBy: userDetail?.email || '',
+      //       createdAt: new Date().toISOString(),
+      //       autoAssigned: true,
+      //       orderType,
+      //     });
+      //   }));
+      // }
+
+      if (orderServices.length > 0) {
         const svcStatusMap = {};
-        for (const svcType of selectedServices) {
-          const svcCategory = SERVICE_TYPE_TO_CATEGORY[svcType]
+        for (const sv of orderServices) {
+          const svcCategory = SERVICE_TYPE_TO_CATEGORY[sv.type]
             || (orderType === 'buon' ? 'DELIVERY' : 'INSTALLATION');
-          const statuses = await fetchStatusList(svcCategory);
-          svcStatusMap[svcType] = statuses[0]?.name || 'Chờ xử lý';
+          if (!svcStatusMap[sv.type]) {
+            const statuses = await fetchStatusList(svcCategory);
+            svcStatusMap[sv.type] = statuses[0]?.name || 'Chờ xử lý';
+          }
         }
-        await Promise.all(selectedServices.map(async (svcType) => {
-          const svcId = `SV-${Date.now().toString().slice(-6)}-${svcType}`;
+        await Promise.all(orderServices.map(async (sv) => {
+          const svcId = `SV-${Date.now().toString().slice(-6)}-${sv.type}`;
           return setDoc(doc(db, 'service', svcId), {
             id: svcId,
-            type: svcType,
+            type: sv.type,
+            name: sv.name,
+            qty: sv.qty,
+            price: sv.price,
+            included: sv.included,
             orderId,
             orderItems: products,
-            customer: finalCustomerName, // Dùng biến safe
-            phone: finalCustomerPhone,   // Dùng biến safe
+            customer: finalCustomerName,
+            phone: finalCustomerPhone,
             address: deliveryAddress || userDetail?.address || '',
             note: serviceNote,
-            status: svcStatusMap[svcType],
+            status: svcStatusMap[sv.type],
             createdBy: userDetail?.email || '',
             createdAt: new Date().toISOString(),
             autoAssigned: true,
@@ -1173,7 +1428,13 @@ export default function AddOrder() {
               <View style={W.cardHeader}>
                 <Ionicons name="cube-outline" size={16} color="#2563EB" />
                 <Text style={W.cardTitle}>Sản phẩm</Text>
-                {products.length > 0 && <View style={W.productCount}><Text style={W.productCountText}>{products.length}</Text></View>}
+                {products.length > 0 && (
+                  <View style={W.totalBox}>
+                    <View style={W.totalRow}><Text style={W.totalLabel}>Số mặt hàng</Text><Text style={W.totalValue}>{products.length} loại</Text></View>
+                    <View style={W.totalDivider} />
+                    <View style={W.totalRow}><Text style={W.totalLabelBig}>Tổng cộng</Text><Text style={W.totalAmountBig}>{fmt(totalAmount)}</Text></View>
+                  </View>
+                )}
                 {/* <View style={W.roleBadge}><Ionicons name="pricetag-outline" size={11} color="#059669" /><Text style={W.roleBadgeText}>{priceLabel}</Text></View> */}
               </View>
               {products.map(p => (
@@ -1213,17 +1474,49 @@ export default function AddOrder() {
               )}
             </View>
 
-            <ServiceList
+            {/* <ServiceList
               ws={isDesktop}
               serviceTypesList={filteredServiceTypes} // <-- Dùng list đã lọc
-              selectedServices={selectedServices}
+              selectedServices={ServicesSection}
               setSelectedServices={setSelectedServices}
               serviceNote={serviceNote}
               onServiceNoteChange={handleServiceNoteChange}
               orderType={orderType}
               deliveryAddress={deliveryAddress}
               onAddressChange={handleAddressChange}
+            /> */}
+
+            <ServicesSection
+              ws={isDesktop}
+              catalogServices={filteredServiceTypes}
+              orderServices={orderServices}
+              showAddService={showAddService}
+              setShowAddService={setShowAddService}
+              newService={newService}
+              setNewService={handleSetNewService}
+              showServiceDrop={showServiceDrop}
+              setShowServiceDrop={handleSetShowServiceDrop}
+              onAddService={addServiceItem}
+              onRemoveService={removeServiceItem}
+              onToggleIncluded={toggleServiceIncluded}
+              serviceNote={serviceNote}
+              onServiceNoteChange={handleServiceNoteChange}
+              deliveryAddress={deliveryAddress}
+              onAddressChange={handleAddressChange}
             />
+
+            {orderServices.length > 0 && (
+              <View style={W.card}>
+                <View style={W.cardHeader}>
+                  <Ionicons name="calculator-outline" size={16} color="#2563EB" />
+                  <Text style={W.cardTitle}>Tổng thanh toán</Text>
+                </View>
+                <View style={W.totalRow}><Text style={W.totalLabel}>Tiền sản phẩm</Text><Text style={W.totalValue}>{fmt(totalAmount)}</Text></View>
+                <View style={W.totalRow}><Text style={W.totalLabel}>Tiền dịch vụ</Text><Text style={W.totalValue}>{fmt(servicesAmount)}</Text></View>
+                <View style={W.totalDivider} />
+                <View style={W.totalRow}><Text style={W.totalLabelBig}>Tổng cộng</Text><Text style={W.totalAmountBig}>{fmt(grandTotal)}</Text></View>
+              </View>
+            )}
 
             {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
             {isLevel1 && (
@@ -1400,7 +1693,7 @@ export default function AddOrder() {
                 </View>
               </View>
 
-              <ServiceList
+              {/* <ServiceList
                 ws={isDesktop}
                 serviceTypesList={filteredServiceTypes} // <-- Dùng list đã lọc
                 selectedServices={selectedServices}
@@ -1410,7 +1703,44 @@ export default function AddOrder() {
                 orderType={orderType}
                 deliveryAddress={deliveryAddress}
                 onAddressChange={handleAddressChange}
+              /> */}
+
+              <ServicesSection
+                ws={isDesktop}
+                catalogServices={filteredServiceTypes}
+                orderServices={orderServices}
+                showAddService={showAddService}
+                setShowAddService={setShowAddService}
+                newService={newService}
+                setNewService={handleSetNewService}
+                showServiceDrop={showServiceDrop}
+                setShowServiceDrop={handleSetShowServiceDrop}
+                onAddService={addServiceItem}
+                onRemoveService={removeServiceItem}
+                onToggleIncluded={toggleServiceIncluded}
+                serviceNote={serviceNote}
+                onServiceNoteChange={handleServiceNoteChange}
+                deliveryAddress={deliveryAddress}
+                onAddressChange={handleAddressChange}
               />
+
+              {orderServices.length > 0 && (
+                <View style={[styles.productSection, { paddingHorizontal: 14, paddingVertical: 12 }]}>
+                  <Text style={[styles.sectionTitle, { paddingHorizontal: 0, paddingTop: 0, marginBottom: 8 }]}>Tổng thanh toán</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: '#64748B' }}>Tiền sản phẩm</Text>
+                    <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '600' }}>{fmt(totalAmount)}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 12, color: '#64748B' }}>Tiền dịch vụ</Text>
+                    <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '600' }}>{fmt(servicesAmount)}</Text>
+                  </View>
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>Tổng cộng</Text>
+                    <Text style={styles.totalAmount}>{fmt(grandTotal)}</Text>
+                  </View>
+                </View>
+              )}
 
               {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
               {/* {isLevel1 && ( */}

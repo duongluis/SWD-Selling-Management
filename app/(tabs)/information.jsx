@@ -293,7 +293,7 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
     const { isDesktop } = useLayout();
     const isEdit = !!editData;
     const [name, setName] = useState('');
-    // const [price, setPrice] = useState('');
+    const [price, setPrice] = useState('');
     const [color, setColor] = useState(COLOR_OPTIONS[0]);
     const [hasMachine, setHasMachine] = useState(false);
     const [canAddInOrder, setCanAddInOrder] = useState(true);
@@ -302,13 +302,13 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
     useEffect(() => {
         if (editData) {
             setName(editData.name || '');
-            // setPrice(editData.price ? String(editData.price) : '');
+            setPrice(editData.price ? String(editData.price) : '');
             setColor(editData.color || COLOR_OPTIONS[0]);
             setHasMachine(editData.hasMachine || false);
             setCanAddInOrder(editData.canAddInOrder !== false);
         } else {
             setName('');
-            // setPrice('');
+            setPrice('');
             setColor(COLOR_OPTIONS[0]);
             setHasMachine(false); setCanAddInOrder(true);
         }
@@ -316,7 +316,7 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
 
     const resetForm = () => {
         setName('');
-        // setPrice('');
+        setPrice('');
         setColor(COLOR_OPTIONS[0]);
         setHasMachine(false); setCanAddInOrder(true);
     };
@@ -325,13 +325,13 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
 
     const handleSave = async () => {
         if (!name.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên dịch vụ'); return; }
-        // if (!price) { showAlert('Thông báo', 'Vui lòng nhập giá dịch vụ'); return; }
+        if (!price) { showAlert('Thông báo', 'Vui lòng nhập giá dịch vụ'); return; }
         setSaving(true);
         try {
             const payload = {
                 id: isEdit ? editData.id : existingCount + 1,
                 name: name.trim(),
-                // price: parseMoney(price),    
+                price: parseMoney(price),
                 color,
                 hasMachine,
                 canAddInOrder,
@@ -391,7 +391,7 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
                     {isEdit && <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Tên dịch vụ không thể thay đổi sau khi tạo</Text>}
                 </FormRow>
 
-                {/* <FormRow label="Giá dịch vụ" required>
+                <FormRow label="Giá dịch vụ" required>
                     <View style={[F.input, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
                         <View style={[F.moneyDot, { backgroundColor: color }]} />
                         <TextInput
@@ -404,7 +404,7 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
                         />
                         <Text style={{ fontSize: 11, color: '#94A3B8' }}>đ</Text>
                     </View>
-                </FormRow> */}
+                </FormRow>
 
                 <FormRow label="Màu hiển thị">
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>

@@ -17,11 +17,12 @@ import {
     View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { db } from '../../config/firebaseConfig';
 import HelpButton from '../../components/Help/HelpButton';
+import { db } from '../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
 
+import BANKS from '../../config/banks.json';
 
 function getInitials(name) {
     if (!name) return 'U';
@@ -112,27 +113,66 @@ export default function EditProfileScreen() {
     const set = f => v => setForm(p => ({ ...p, [f]: v }));
 
     const isCompany = userDetail?.bizModel === 'company';
+    const [selectedBank, setSelectedBank] = useState(
+        userDetail?.bank ? BANKS.find(b => b.id === userDetail.bank.id) || null : null
+    );
+    const [showBankDrop, setShowBankDrop] = useState(false);
+    const [bankSearch, setBankSearch] = useState('');
+    const [accountNo, setAccountNo] = useState(userDetail?.bank?.accountNo || '');
+    const [accountNoErr, setAccountNoErr] = useState('');
+    const [accountName, setAccountName] = useState(userDetail?.bank?.accountName || '');
+
+    const filteredBanks = BANKS.filter(b =>
+        b.name.toLowerCase().includes(bankSearch.toLowerCase()) ||
+        b.shortName.toLowerCase().includes(bankSearch.toLowerCase())
+    );
 
     useEffect(() => {
-        if (userDetail) setForm({
-            name: userDetail.name || '',
-            phone: userDetail.phone || '',
-            address: userDetail.address || '',
-            title: userDetail.title || '',
-            contactName: userDetail.contactName || '',
-            contactPhone: userDetail.contactPhone || '',
-        });
+        if (userDetail) {
+            setForm({
+                name: userDetail.name || '',
+                phone: userDetail.phone || '',
+                address: userDetail.address || '',
+                title: userDetail.title || '',
+                contactName: userDetail.contactName || '',
+                contactPhone: userDetail.contactPhone || '',
+            });
+            setSelectedBank(userDetail.bank ? BANKS.find(b => b.id === userDetail.bank.id) || null : null);
+            setAccountNo(userDetail.bank?.accountNo || '');
+            setAccountName(userDetail.bank?.accountName || '');
+        }
     }, [userDetail]);
+
+    const handleAccountNoChange = (text) => {
+        const digits = text.replace(/\D/g, '');
+        setAccountNo(digits);
+        if (selectedBank && digits.length > 0) {
+            const { minLen, maxLen } = selectedBank;
+            if (digits.length < minLen || digits.length > maxLen) {
+                setAccountNoErr(`Số TK ${selectedBank.name} phải có ${minLen === maxLen ? minLen : `${minLen}–${maxLen}`} chữ số`);
+            } else setAccountNoErr('');
+        } else setAccountNoErr('');
+    };
+
 
     const handleSave = async () => {
         if (!form.name?.trim()) { showInfo('Thiếu thông tin', 'Vui lòng nhập họ tên'); return; }
+
+        // Validate ngân hàng (không bắt buộc, nhưng nếu đã nhập 1 phần thì phải đủ)
+        const bankTouched = selectedBank || accountNo.trim() || accountName.trim();
+        if (bankTouched) {
+            if (!selectedBank) { showInfo('Thiếu thông tin', 'Vui lòng chọn ngân hàng'); return; }
+            if (!accountNo.trim()) { showInfo('Thiếu thông tin', 'Vui lòng nhập số tài khoản'); return; }
+            if (accountNoErr) { showInfo('Lỗi', accountNoErr); return; }
+            if (!accountName.trim()) { showInfo('Thiếu thông tin', 'Vui lòng nhập tên chủ tài khoản'); return; }
+        }
+
         setSaving(true);
         try {
             const payload = {
                 name: form.name.trim(),
                 phone: form.phone.trim(),
                 address: form.address.trim(),
-                // title không thay đổi, giữ nguyên giá trị cũ
                 notifyPush,
                 notifyEmail,
                 updatedAt: new Date().toISOString(),
@@ -140,6 +180,14 @@ export default function EditProfileScreen() {
             if (isCompany) {
                 payload.contactName = form.contactName.trim();
                 payload.contactPhone = form.contactPhone.trim();
+            }
+            if (bankTouched) {
+                payload.bank = {
+                    id: selectedBank.id,
+                    name: selectedBank.name,
+                    accountNo: accountNo.trim(),
+                    accountName: accountName.trim(),
+                };
             }
             await updateDoc(doc(db, 'users', userDetail.email), payload);
             setUserDetail?.(prev => ({ ...prev, ...payload }));
@@ -243,8 +291,98 @@ export default function EditProfileScreen() {
                                             <EditInput label="Số điện thoại người liên hệ" value={form.contactPhone} onChange={set('contactPhone')} keyboardType="phone-pad" />
                                         </>
                                     )}
+                                    <View style={{ height: 8 }} />
+                                    <Text style={[EI.label, { color: '#2563EB', marginTop: 4 }]}>Thông tin ngân hàng (nhận hoa hồng/thanh toán)</Text>
+
+                                    <View style={EI.wrap}>
+                                        <Text style={EI.label}>Ngân hàng</Text>
+                                        <TouchableOpacity
+                                            style={[BK.inputBox, showBankDrop && { borderColor: '#2563EB' }]}
+                                            onPress={() => setShowBankDrop(p => !p)}
+                                            activeOpacity={0.8}
+                                        >
+                                            {selectedBank ? (
+                                                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                    <View style={BK.bankTag}><Text style={BK.bankTagText}>{selectedBank.shortName}</Text></View>
+                                                    <Text style={{ flex: 1, fontSize: 14, color: '#0F172A', fontWeight: '600' }}>{selectedBank.name}</Text>
+                                                    <TouchableOpacity onPress={() => { setSelectedBank(null); setAccountNo(''); setAccountNoErr(''); }}>
+                                                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            ) : (
+                                                <>
+                                                    <Ionicons name="search-outline" size={15} color="#94A3B8" />
+                                                    <Text style={{ flex: 1, fontSize: 14, color: '#94A3B8' }}>Tìm và chọn ngân hàng...</Text>
+                                                    <Ionicons name={showBankDrop ? 'chevron-up' : 'chevron-down'} size={15} color="#94A3B8" />
+                                                </>
+                                            )}
+                                        </TouchableOpacity>
+
+                                        {showBankDrop && (
+                                            <View style={BK.drop}>
+                                                <View style={BK.dropSearchRow}>
+                                                    <Ionicons name="search-outline" size={13} color="#94A3B8" />
+                                                    <TextInput
+                                                        style={{ flex: 1, fontSize: 13, color: '#0F172A' }}
+                                                        placeholder="Tên ngân hàng..."
+                                                        placeholderTextColor="#94A3B8"
+                                                        value={bankSearch}
+                                                        onChangeText={setBankSearch}
+                                                        autoFocus
+                                                    />
+                                                </View>
+                                                <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={true}>
+                                                    {filteredBanks.map(b => (
+                                                        <TouchableOpacity
+                                                            key={b.id}
+                                                            style={[BK.dropItem, selectedBank?.id === b.id && BK.dropActive]}
+                                                            onPress={() => { setSelectedBank(b); setShowBankDrop(false); setBankSearch(''); setAccountNo(''); setAccountNoErr(''); }}
+                                                            activeOpacity={0.7}
+                                                        >
+                                                            <View style={BK.bankTagSm}><Text style={BK.bankTagSmText}>{b.shortName}</Text></View>
+                                                            <Text style={[BK.dropText, selectedBank?.id === b.id && { color: '#2563EB', fontWeight: '700' }]}>{b.name}</Text>
+                                                            {selectedBank?.id === b.id && <Ionicons name="checkmark-circle" size={14} color="#2563EB" />}
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </ScrollView>
+                                            </View>
+                                        )}
+                                    </View>
+
+                                    <View style={EI.wrap}>
+                                        <Text style={EI.label}>Số tài khoản</Text>
+                                        {selectedBank && (
+                                            <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 6 }}>
+                                                {selectedBank.minLen === selectedBank.maxLen ? `${selectedBank.minLen} chữ số` : `${selectedBank.minLen}–${selectedBank.maxLen} chữ số`}
+                                            </Text>
+                                        )}
+                                        <TextInput
+                                            style={[EI.input, accountNoErr && { borderColor: '#EF4444' }]}
+                                            placeholder="Nhập số tài khoản..."
+                                            placeholderTextColor="#CBD5E1"
+                                            keyboardType="numeric"
+                                            value={accountNo}
+                                            onChangeText={handleAccountNoChange}
+                                            editable={!!selectedBank}
+                                        />
+                                        {accountNoErr ? <Text style={{ fontSize: 11, color: '#EF4444', marginTop: 4 }}>{accountNoErr}</Text> : null}
+                                    </View>
+
+                                    <EditInput
+                                        label="Tên chủ tài khoản"
+                                        value={accountName}
+                                        onChange={t => setAccountName(t.toUpperCase())}
+                                    />
+
                                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-                                        <TouchableOpacity style={S.cancelBtn} onPress={() => setEditing(false)}>
+                                        <TouchableOpacity style={S.cancelBtn} onPress={() => {
+                                            setEditing(false);
+                                            setSelectedBank(userDetail?.bank ? BANKS.find(b => b.id === userDetail.bank.id) || null : null);
+                                            setAccountNo(userDetail?.bank?.accountNo || '');
+                                            setAccountName(userDetail?.bank?.accountName || '');
+                                            setAccountNoErr('');
+                                            setShowBankDrop(false);
+                                        }}>
                                             <Text style={S.cancelBtnText}>Huỷ</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity style={S.saveBtn} onPress={handleSave} disabled={saving}>
@@ -271,6 +409,15 @@ export default function EditProfileScreen() {
                                                 <InfoField label="Người liên hệ" value={`${userDetail.contactName || ''} ${userDetail.contactPhone ? `· ${userDetail.contactPhone}` : ''}`.trim()} />
                                             </View>
                                         )}
+                                        {userDetail?.bank && (
+                                            <View style={{ width: '100%', marginTop: 8 }}>
+                                                <InfoField
+                                                    label="Ngân hàng"
+                                                    value={`${userDetail.bank.name} · ${userDetail.bank.accountNo} · ${userDetail.bank.accountName}`}
+                                                />
+                                            </View>
+                                        )}
+
                                     </View>
                                 )}
                             </View>
@@ -383,4 +530,17 @@ const S = StyleSheet.create({
     dangerSub: { fontSize: 12, color: '#64748B', marginTop: 4, lineHeight: 18 },
     dangerBtn: { paddingHorizontal: 20, paddingVertical: 12, backgroundColor: '#EF4444', borderRadius: 10, flexShrink: 0 },
     dangerBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+});
+
+const BK = StyleSheet.create({
+    inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 10, paddingHorizontal: 13, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 8 },
+    bankTag: { backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+    bankTagText: { fontSize: 11, fontWeight: '800', color: '#2563EB' },
+    bankTagSm: { backgroundColor: '#EFF6FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    bankTagSmText: { fontSize: 10, fontWeight: '800', color: '#2563EB' },
+    drop: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', marginTop: 4, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 10, elevation: 6 },
+    dropSearchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    dropItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+    dropActive: { backgroundColor: '#EFF6FF' },
+    dropText: { flex: 1, fontSize: 13, color: '#374151', fontWeight: '500' },
 });
