@@ -12,7 +12,7 @@ import statusConfig from '@/config/status.json';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator, Dimensions, Modal, Platform, ScrollView, StyleSheet,
@@ -402,6 +402,8 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     const [qrString, setQrString] = useState('');
     const [bankInfo, setBankInfo] = useState(null);
     const [adminBank, setAdminBank] = useState(null);
+    const [deleting, setDeleting] = useState(false);
+
 
     useEffect(() => {
         if (!localOrder) return;
@@ -579,6 +581,50 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
         }
     };
 
+    const handleDeleteOrder = () => {
+        if (!admin || !localOrder) return;
+        showAlert(
+            'Xoá đơn hàng',
+            `Bạn có chắc muốn xoá đơn #${localOrder.id}? Hành động này sẽ xoá vĩnh viễn đơn hàng${services.length > 0 ? ` và ${services.length} dịch vụ đi kèm` : ''}. Không thể hoàn tác.`,
+            async () => {
+                setDeleting(true);
+                try {
+                    // 1. Xoá toàn bộ service gắn với đơn (query lại để chắc chắn không sót
+                    //    dịch vụ nào phát sinh sau lần fetch gần nhất)
+                    const svcSnap = await getDocs(
+                        query(collection(db, 'service'), where('orderId', '==', localOrder.id))
+                    );
+                    await Promise.all(svcSnap.docs.map(d => deleteDoc(doc(db, 'service', d.id))));
+
+                    // 2. Xoá đơn hàng
+                    await deleteDoc(doc(db, 'orders', localOrder.id));
+
+                    // 3. Thông báo người tạo đơn (nếu không phải chính admin đang thao tác)
+                    if (orderCreator && orderCreator !== userDetail?.email) {
+                        const roomId = getSupportRoomId(orderCreator);
+                        await createNotification({
+                            userEmail: orderCreator,
+                            type: 'order_deleted',
+                            title: '🗑️ Đơn hàng đã bị xoá',
+                            body: `Đơn #${localOrder.id} (KH: ${localOrder.customer || '—'}) đã bị admin xoá khỏi hệ thống`,
+                            orderId: localOrder.id,
+                            roomId,
+                            path: '/(tabs)/order',
+                        }).catch(() => { });
+                    }
+
+                    // 4. Báo cho parent biết để cập nhật lại danh sách, rồi đóng panel
+                    onUpdated?.({ ...localOrder, _deleted: true });
+                    onClose?.();
+                } catch (e) {
+                    showAlert('Lỗi', 'Không thể xoá đơn hàng: ' + e.message);
+                } finally {
+                    setDeleting(false);
+                }
+            }
+        );
+    };
+
     const handleStatusChange = async (newStatus) => {
         if (!admin || !localOrder) return;
         showAlert('Cập nhật trạng thái', `Chuyển sang "${newStatus}"?`, async () => {
@@ -709,6 +755,20 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                             {console.log('localOrder : ', JSON.stringify(localOrder))}
                             <Ionicons name="create-outline" size={13} color="#2563EB" />
                             <Text style={DP.aBtnText}>Sửa</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {admin && (
+                        <TouchableOpacity
+                            style={[DP.aBtn, DP.aBtnDanger]}
+                            onPress={handleDeleteOrder}
+                            disabled={deleting}
+                        >
+                            {deleting
+                                ? <ActivityIndicator size="small" color="#EF4444" style={{ width: 13 }} />
+                                : <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                            }
+                            <Text style={[DP.aBtnText, DP.aBtnDangerText]}>{deleting ? 'Đang xoá...' : 'Xoá đơn'}</Text>
                         </TouchableOpacity>
                     )}
 
@@ -910,6 +970,8 @@ const DP = StyleSheet.create({
     actions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingTop: 4 },
     aBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
     aBtnText: { fontSize: 12, fontWeight: '600', color: '#2563EB' },
+    aBtnDanger: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' },
+    aBtnDangerText: { color: '#EF4444' },
     infoGrid: { flexDirection: 'row', paddingVertical: 14 },
     infoCol: { flex: 1, paddingHorizontal: 14, gap: 6 },
     infoColLabel: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },

@@ -375,10 +375,14 @@ export default function OrderScreen() {
   useEffect(() => {
     if (selected) {
       const latest = data.find(o => o.id === selected.id);
-      if (latest) setSelected(latest);
+      if (latest) {
+        setSelected(latest);
+      } else {
+
+        setSelected(null);
+      }
     }
   }, [data]);
-
 
 
   const totalRevenue = useMemo(() =>
@@ -672,7 +676,17 @@ export default function OrderScreen() {
             order={selected}
             role={role}
             onClose={() => setSelected(null)}
-            onUpdated={updated => { setSelected(updated); refresh(); }}
+            onUpdated={updated => {
+              if (updated?._deleted) {
+                // Không set selected = updated (order đã xoá) — để useEffect ở trên
+                // hoặc onClose (đã gọi từ OrderDetail) xử lý việc đóng panel.
+                setSelected(null);
+                refresh();
+                return;
+              }
+              setSelected(updated);
+              refresh();
+            }}
           />
         )}
       </View>

@@ -546,7 +546,7 @@ const ServicesSection = React.memo(({
           </TouchableOpacity>
         )}
 
-        {orderServices.length > 0 && (ws ? (
+        {/* {orderServices.length > 0 && (ws ? (
           <View style={W.totalBox}>
             <View style={W.totalRow}><Text style={W.totalLabel}>Số dịch vụ</Text><Text style={W.totalValue}>{orderServices.length} mục</Text></View>
             <View style={W.totalDivider} />
@@ -557,7 +557,7 @@ const ServicesSection = React.memo(({
             <Text style={styles.totalLabel}>Tổng dịch vụ</Text>
             <Text style={styles.totalAmount}>{fmt(servicesTotal)}</Text>
           </View>
-        ))}
+        ))} */}
       </View>
 
       {hasDelivery && (
@@ -1428,13 +1428,13 @@ export default function AddOrder() {
               <View style={W.cardHeader}>
                 <Ionicons name="cube-outline" size={16} color="#2563EB" />
                 <Text style={W.cardTitle}>Sản phẩm</Text>
-                {products.length > 0 && (
+                {/* {products.length > 0 && (
                   <View style={W.totalBox}>
                     <View style={W.totalRow}><Text style={W.totalLabel}>Số mặt hàng</Text><Text style={W.totalValue}>{products.length} loại</Text></View>
                     <View style={W.totalDivider} />
                     <View style={W.totalRow}><Text style={W.totalLabelBig}>Tổng cộng</Text><Text style={W.totalAmountBig}>{fmt(totalAmount)}</Text></View>
                   </View>
-                )}
+                )} */}
                 {/* <View style={W.roleBadge}><Ionicons name="pricetag-outline" size={11} color="#059669" /><Text style={W.roleBadgeText}>{priceLabel}</Text></View> */}
               </View>
               {products.map(p => (
@@ -1465,13 +1465,13 @@ export default function AddOrder() {
                   <Text style={W.addProductBtnText}>Thêm sản phẩm</Text>
                 </TouchableOpacity>
               )}
-              {products.length > 0 && (
+              {/* {products.length > 0 && (
                 <View style={W.totalBox}>
                   <View style={W.totalRow}><Text style={W.totalLabel}>Số mặt hàng</Text><Text style={W.totalValue}>{products.length} loại</Text></View>
                   <View style={W.totalDivider} />
                   <View style={W.totalRow}><Text style={W.totalLabelBig}>Tổng cộng</Text><Text style={W.totalAmountBig}>{fmt(totalAmount)}</Text></View>
                 </View>
-              )}
+              )} */}
             </View>
 
             {/* <ServiceList
