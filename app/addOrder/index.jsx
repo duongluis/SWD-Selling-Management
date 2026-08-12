@@ -1,4 +1,5 @@
 import BgWatermark from '@/components/Main/BgWatermark';
+import { formatThousand, parseThousand } from '@/components/Utils/formatNumber';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -21,7 +22,6 @@ import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { useLayout } from '../../components/Main/TabScreenLayout';
 import { db } from '../../config/firebaseConfig';
-
 
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 
@@ -337,11 +337,11 @@ const AddProductForm = React.memo(({ ws, orderType, catalog, priceField, priceLa
     setNewProduct({
       name: p.name,
       qty: '1',
-      price: String(p[priceField] || p.price || 0),
+      price: String(p[priceField] || p.price || 0),   // ✅ lưu số thô
       basePrice: p.price || 0,
-      price_a: p.price_a || 0,   // ← thêm
-      price_p: p.price_p || 0,   // ← thêm
-      price_c: p.price_c || 0,   // ← thêm
+      price_a: p.price_a || 0,
+      price_p: p.price_p || 0,
+      price_c: p.price_c || 0,
       productId: String(p.id || p.docId),
     });
     setShowProductDrop(false);
@@ -376,14 +376,15 @@ const AddProductForm = React.memo(({ ws, orderType, catalog, priceField, priceLa
               placeholder={newProduct.basePrice ? fmt(newProduct.basePrice) : priceLabel}
               placeholderTextColor="#94A3B8"
               keyboardType="numeric"
-              value={newProduct.price}
-              onChangeText={v => setNewProduct(p => ({ ...p, price: v.replace(/\D/g, '') }))}
+              value={formatThousand(newProduct.price)}
+              onChangeText={v => setNewProduct(p => ({ ...p, price: parseThousand(v) }))}
             />
           </View>
         ) : (
           <View style={[ws ? W.addInput : styles.addProductInput, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9' }]}>
             <Ionicons name="lock-closed-outline" size={13} color="#94A3B8" />
-            <Text style={{ flex: 1, fontSize: 14, color: newProduct.price ? '#0F172A' : '#94A3B8' }}>{newProduct.price ? fmt(parseInt(newProduct.price)) : priceLabel}</Text>
+            <Text style={{ flex: 1, fontSize: 14, color: newProduct.price ? '#0F172A' : '#94A3B8' }}>
+              {newProduct.price ? fmt(Number(parseThousand(newProduct.price))) : priceLabel}</Text>
           </View>
         )}
       </View>
@@ -450,8 +451,8 @@ const AddServiceForm = React.memo(({ ws, catalog, newService, setNewService, sho
             placeholderTextColor="#94A3B8"
             keyboardType="numeric"
             editable={!newService.included}
-            value={newService.included ? '' : newService.price}
-            onChangeText={v => setNewService(p => ({ ...p, price: v.replace(/\D/g, '') }))}
+            value={newService.included ? '' : formatThousand(newService.price)}
+            onChangeText={v => setNewService(p => ({ ...p, price: parseThousand(v) }))}
           />
         </View>
       </View>

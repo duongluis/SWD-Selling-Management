@@ -31,7 +31,7 @@ function TableHead({ tableStyles }) {
       <View style={{ width: 46 }} />
       <Text style={[tableStyles.th, { flex: 2 }]}>Khách hàng</Text>
       <Text style={[tableStyles.th, { flex: 1 }]}>Điện thoại</Text>
-      <Text style={[tableStyles.th, { flex: 1 }]}>Ngày tạo</Text>
+      <Text style={[tableStyles.th, { flex: 1 }]}>Thời gian tạo</Text>
       <Text style={[tableStyles.th, { flex: 1.2 }]}>Tạo bởi</Text>
       <View style={{ width: 20 }} />
     </View>

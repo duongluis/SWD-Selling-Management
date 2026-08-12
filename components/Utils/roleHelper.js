@@ -11,7 +11,7 @@ export const getRole = (userDetail) => {
 /** Tên hiển thị */
 export const getRoleLabel = (role) => ({
     admin: 'Quản trị viên',
-    daily: 'Đại lý',
+    daily: 'Đại lý',
     phantan: 'Đối tác',
     ctv: 'Cộng tác viên',
     giamdoc: 'Giám đốc',

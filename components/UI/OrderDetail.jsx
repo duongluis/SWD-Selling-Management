@@ -731,7 +731,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                             onPress={() => router.push({
                                 pathname: '/chat/[roomID]',
                                 params: {
-                                    roomID: getSupportRoomId(localOrder.id),
+                                    roomID: getSupportRoomId(orderCreator || localOrder.createdBy),
                                     orderId: localOrder.id,
                                 },
                             })}

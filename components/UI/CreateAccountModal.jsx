@@ -5,6 +5,7 @@
 import { showAlert } from '@/components/Main/showAlert';
 import { showSuccess } from '@/components/Main/showSuccess';
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import { createSupportRoom } from '@/components/Utils/chatService';
 import { db, firebaseConfig } from '@/config/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import bcrypt from 'bcryptjs';
@@ -60,10 +61,12 @@ export default function CreateAccountModal({ visible, onClose, onCreated }) {
 
         setSubmitting(true);
 
+
         // Dùng 1 Firebase App phụ (secondary instance) để tạo tài khoản — tránh
         // createUserWithEmailAndPassword tự động đăng nhập vào tài khoản mới đó
         // trên CHÍNH phiên hiện tại của admin (hành vi mặc định của Firebase Auth
         // client SDK), khiến admin bị đăng xuất khỏi tài khoản của mình.
+
         const secondaryApp = initializeApp(firebaseConfig, `create-account-${Date.now()}`);
         const secondaryAuth = getAuth(secondaryApp);
 
@@ -100,6 +103,11 @@ export default function CreateAccountModal({ visible, onClose, onCreated }) {
             }
 
             await setDoc(doc(db, 'users', normalizedEmail), payload);
+
+            createSupportRoom({
+                userEmail: normalizedEmail,
+                userName: trimmedName || normalizedEmail,
+            }).catch(err => console.warn('Lỗi tạo phòng support:', err));
 
             showSuccess('Đã tạo tài khoản!', `${normalizedEmail} có thể đăng nhập ngay bằng mật khẩu đã nhập.`, () => { });
             onCreated?.(payload);

@@ -22,6 +22,7 @@ import {
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import { useCardStyles } from '@/components/Styles/cardStyles';
 import { useTableStyles } from '@/components/Styles/tableStyles';
+import { createSupportRoom } from '@/components/Utils/chatService';
 
 const AVATAR_COLORS = ['#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2'];
 

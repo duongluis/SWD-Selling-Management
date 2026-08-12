@@ -7,7 +7,9 @@ export const fmtNumber = (n) =>
 export const fmtDate = (str) => {
     if (!str) return '—';
     try {
-        return new Date(str).toLocaleDateString('vi-VN');
+        return new Date(str).toLocaleString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh'
+        });
     } catch { return str; }
 };
 

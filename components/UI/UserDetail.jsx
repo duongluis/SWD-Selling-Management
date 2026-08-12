@@ -1,13 +1,13 @@
 // components/UI/UserDetail.jsx — updated with collaboration feature
 
 import { showAlert } from '@/components/Main/showAlert';
-import { createSupportRoom } from '@/components/Utils/chatService';
+import { createSupportRoom, getSupportRoomId } from '@/components/Utils/chatService';
 import { fmtCurrency, fmtDate, fmtPhone } from '@/components/Utils/formatters';
 import { db } from '@/config/firebaseConfig';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
     Dimensions,
@@ -215,8 +215,27 @@ export default function UserDetail({ user, onClose, onUpdated }) {
     const [local, setLocal] = useState(null);
     const [approving, setApproving] = useState(false);
     const [tab, setTab] = useState('info');
+    const [hasRoom, setHasRoom] = useState(null); // null = đang kiểm tra, true/false = kết quả
+    const [creatingRoom, setCreatingRoom] = useState(false);
 
     useEffect(() => { if (user) setLocal(user); }, [user]);
+    useEffect(() => {
+        if (!local?.email) { setHasRoom(null); return; }
+        let cancelled = false;
+        setHasRoom(null); // reset về "đang kiểm tra" khi đổi user
+        const check = async () => {
+            try {
+                const roomId = getSupportRoomId(local.email);
+                const snap = await getDoc(doc(db, 'chatRooms', roomId));
+                if (!cancelled) setHasRoom(snap.exists());
+            } catch (e) {
+                if (!cancelled) setHasRoom(false);
+            }
+        };
+        check();
+        return () => { cancelled = true; };
+    }, [local?.email]);
+
     if (!user || !local) return null;
 
     const color = hashColor(local.email);
@@ -235,6 +254,22 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                 onUpdated?.(next);
             } catch (e) { showAlert('Lỗi', e.message); }
         });
+    };
+
+    const handleCreateRoom = async () => {
+        if (!local?.email) return;
+        setCreatingRoom(true);
+        try {
+            await createSupportRoom({
+                userEmail: local.email,
+                userName: local.name || local.companyName || local.email,
+            });
+            setHasRoom(true);
+        } catch (e) {
+            showAlert('Lỗi', 'Không thể tạo phòng chat: ' + e.message);
+        } finally {
+            setCreatingRoom(false);
+        }
     };
 
     const handleApprove = () => {
@@ -295,6 +330,22 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                             <Text style={[S.aBtnText, { color: '#059669' }]}>{approving ? 'Đang xử lý...' : 'Phê duyệt'}</Text>
                         </TouchableOpacity>
                     )}
+                    {/* {isAdminUser && (
+                        <>
+                            <TouchableOpacity
+                                style={[S.aBtn, locked ? { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' } : { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
+                                onPress={handleLock}>
+                                <Ionicons name={locked ? 'lock-open-outline' : 'lock-closed-outline'} size={13} color={locked ? '#059669' : '#DC2626'} />
+                                <Text style={[S.aBtnText, { color: locked ? '#059669' : '#DC2626' }]}>{locked ? 'Mở khóa' : 'Khóa TK'}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={S.aBtn}
+                                onPress={() => router.push({ pathname: '/editUser/[userEmail]', params: { userEmail: local.email, userParam: JSON.stringify(local) } })}>
+                                <Ionicons name="create-outline" size={13} color="#2563EB" />
+                                <Text style={S.aBtnText}>Chỉnh sửa</Text>
+                            </TouchableOpacity>
+                        </>
+                    )} */}
                     {isAdminUser && (
                         <>
                             <TouchableOpacity
@@ -309,6 +360,20 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                                 <Ionicons name="create-outline" size={13} color="#2563EB" />
                                 <Text style={S.aBtnText}>Chỉnh sửa</Text>
                             </TouchableOpacity>
+
+                            {/* Chỉ hiện khi đã xác định được là CHƯA có phòng chat */}
+                            {hasRoom === false && (
+                                <TouchableOpacity
+                                    style={[S.aBtn, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' }]}
+                                    onPress={handleCreateRoom}
+                                    disabled={creatingRoom}
+                                >
+                                    <Ionicons name={creatingRoom ? 'sync-outline' : 'chatbubbles-outline'} size={13} color="#7C3AED" />
+                                    <Text style={[S.aBtnText, { color: '#7C3AED' }]}>
+                                        {creatingRoom ? 'Đang tạo...' : 'Tạo phòng chat'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </>
                     )}
                 </View>
@@ -329,6 +394,8 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                     ))}
                 </View>
             )}
+
+
 
             {/* Content theo tab */}
             {tab === 'nickname' ? (

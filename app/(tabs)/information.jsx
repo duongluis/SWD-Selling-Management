@@ -2,6 +2,7 @@ import BgWatermark from '@/components/Main/BgWatermark';
 import { showAlert } from '@/components/Main/showAlert';
 import { showSuccess } from '@/components/Main/showSuccess';
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import { formatThousand, parseThousand } from '@/components/Utils/formatNumber';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -398,8 +399,8 @@ function ServiceModal({ visible, onClose, onSaved, existingCount, editData = nul
                             style={[F.inputText, { flex: 1 }]}
                             placeholder="Nhập số tiền..."
                             placeholderTextColor="#94A3B8"
-                            value={price}
-                            onChangeText={v => setPrice(v.replace(/\D/g, ''))}
+                            value={formatThousand(price)}
+                            onChangeText={v => setPrice(parseThousand(v))}
                             keyboardType="numeric"
                         />
                         <Text style={{ fontSize: 11, color: '#94A3B8' }}>đ</Text>
