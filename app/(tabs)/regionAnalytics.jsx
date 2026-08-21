@@ -1,6 +1,7 @@
 // app/(tabs)/regionReport.jsx — Báo cáo khu vực
 
 import TabScreenLayout from '@/components/Main/TabScreenLayout';
+import { productItems, productTotal } from '@/components/Utils/orderItems';
 import { getRole, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -159,11 +160,10 @@ export default function RegionReportScreen() {
             const region = getRegion(addr);
             if (!map[region]) map[region] = { revenue: 0, orders: 0, customerCount: 0, users: [], products: {} };
 
-            const val = (o.items || []).reduce((s, p) =>
-                s + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0);
+            const val = productTotal(o);
             map[region].revenue += val;
             map[region].orders += 1;
-            (o.items || []).forEach(p => {
+            productItems(o).forEach(p => {
                 if (!map[region].products[p.name]) map[region].products[p.name] = 0;
                 map[region].products[p.name] += parseFloat(p.qty || 1);
             });

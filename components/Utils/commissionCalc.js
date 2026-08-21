@@ -5,6 +5,7 @@
 
 import { db } from '@/config/firebaseConfig';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { productItems } from './orderItems';
 
 export const normalizePhone = (p) => String(p || '').replace(/\D/g, '');
 export const normalizeName = (n) => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -12,6 +13,7 @@ export const normalizeName = (n) => String(n || '').trim().toLowerCase().replace
 export const getRoleFromUserData = (u) => {
     const r = (u?.role || u?.member || '').toLowerCase();
     if (r === 'admin') return 'admin';
+    if (['sale', 'nhân viên bán hàng'].includes(r)) return 'sale';
     if (['đại lý', 'daily', 'dealer'].includes(r)) return 'daily';
     if (['đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
     if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
@@ -22,6 +24,7 @@ export const getRolePriceField = (role) => ({
     daily: 'price_a',
     phantan: 'price_p',
     ctv: 'price_c',
+    sale: 'price_s',
 }[role] || 'price');
 
 /**
@@ -33,6 +36,8 @@ export function calcCommission(items = [], basePriceField = 'price') {
             const sellPrice = parseFloat(p.price || 0);
             const basePrice = parseFloat(p[basePriceField] || p.basePrice || p.price || 0);
             const qty = parseFloat(p.qty || 1);
+            // Không nhân 0.7 ở đây: phần chia 70/30 cho đơn sale được áp 1 lần duy nhất
+            // tại computeOrderCommission (visibleCommission).
             return sum + (sellPrice - basePrice) * qty;
         }, 0),
         0
@@ -80,6 +85,7 @@ async function findLevel1Advisor(email) {
     return null;
 }
 
+
 /**
  * Tính toàn bộ dữ liệu hoa hồng/thưởng cho 1 đơn hàng đã "Đã thanh toán".
  * Trả về payload sẵn sàng ghi vào collection 'commissions' (docId = order.id).
@@ -90,8 +96,8 @@ export async function computeOrderCommission(order) {
     if (!creatorData) return null;
 
     const creatorRole = getRoleFromUserData(creatorData);
+    const isSaleOrder = creatorRole === 'sale';   // ← chỉ đơn của sale mới bị chia
 
-    // Khách được giới thiệu (consult) đã tư vấn thành công → tính theo giá CTV
     let isReferredSuccess = false;
     try {
         const successConsultSnap = await getDocs(
@@ -107,6 +113,8 @@ export async function computeOrderCommission(order) {
     let basePriceField = 'price';
     if (isReferredSuccess) {
         basePriceField = 'price_c';
+    } else if (isSaleOrder) {
+        basePriceField = 'price_s';
     } else if (creatorData.advisor) {
         const level1 = await findLevel1Advisor(creatorData.advisor);
         if (level1) basePriceField = getRolePriceField(getRoleFromUserData(level1));
@@ -114,16 +122,27 @@ export async function computeOrderCommission(order) {
         basePriceField = getRolePriceField(creatorRole);
     }
 
-    const items = order.items || [];
+    // Chỉ sản phẩm — hoa hồng và doanh thu không tính tiền dịch vụ.
+    const items = productItems(order);
     const totalValue = items.reduce(
         (s, p) => s + parseFloat(p.price || 0) * parseFloat(p.qty || 1), 0
     );
 
-    // Hoa hồng: chỉ tính nếu đơn khách hàng tự thanh toán
     const isCommissionEligible = order.paymentMethod === 'customer';
-    const commission = isCommissionEligible ? calcCommission(items, basePriceField) : 0;
+    const totalCommission = isCommissionEligible ? calcCommission(items, basePriceField) : 0;
 
-    // Thưởng: tính cho collaborator của người tạo đơn (nếu có)
+    // calcCommission có chuỗi fallback `p[basePriceField] || p.basePrice || p.price`.
+    // Nếu bảng giá productPrice thiếu (hoặc để 0) trường giá gốc của vai trò — vd đơn sale
+    // mà sản phẩm chưa điền price_s — thì basePrice tụt về đúng giá bán, chênh lệch thành 0
+    // và hoa hồng ra 0 y hệt trường hợp "đúng là không có hoa hồng". Cờ này để phân biệt.
+    const missingBasePrice = isCommissionEligible
+        && basePriceField !== 'price'
+        && items.some(p => !(parseFloat(p[basePriceField]) > 0));
+
+    // Đơn của sale → chỉ ghi 70% công khai trước, 30% còn lại sinh ra khi admin duyệt trả.
+    // Đơn của role khác → ghi đủ 100% như trước, không chia.
+    const visibleCommission = isSaleOrder ? Math.round(totalCommission * 0.7) : totalCommission;
+
     const collaboratorEmail = creatorData.collaboration || null;
     let bonusAmount = 0;
     if (collaboratorEmail) {
@@ -140,21 +159,26 @@ export async function computeOrderCommission(order) {
     return {
         orderId: order.id,
         id: order.id,
-        createdBy: creatorEmail,          // để useScreenData lọc theo team (createdBy in [...])
+        createdBy: creatorEmail,
         sellerEmail: creatorEmail,
         rootAdvisor: order.rootAdvisor || creatorEmail,
         customer: order.customer || '',
         phone: order.phone || '',
         orderType: order.orderType || null,
         paymentMethod: order.paymentMethod || null,
-        createdAt: order.createdAt || null, // ngày giao đơn, để sort/hiển thị giống các bản ghi khác
+        createdAt: order.createdAt || null,
         paidAt: new Date().toISOString(),
         totalValue,
         basePriceField,
-        commission,
+        missingBasePrice,
+        commission: visibleCommission,
+        commissionTotal: totalCommission,
         commissionStatus: 'pending',
         collaboratorEmail,
         bonusAmount,
         bonusStatus: 'pending',
+        adminOnly: false,
+        creatorRole,
+        splitEligible: isSaleOrder,
     };
 }

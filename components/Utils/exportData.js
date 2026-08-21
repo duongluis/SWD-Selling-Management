@@ -4,6 +4,7 @@
 
 import { db } from '@/config/firebaseConfig';
 import { collection, getDocs } from 'firebase/firestore';
+import { productItems } from './orderItems';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ function formatCustomers(customers) {
 
 function formatOrders(orders) {
     return orders.map((o, i) => {
-        const items = o.items || [];
+        const items = productItems(o);   // bỏ dòng dịch vụ của đơn cũ
         const totalRevenue = items.reduce((s, p) => s + fmtNum(p.price) * fmtNum(p.qty), 0);
         const commission = items.reduce((s, p) => {
             const sell = fmtNum(p.price);

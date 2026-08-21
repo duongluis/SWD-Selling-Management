@@ -137,6 +137,8 @@ export default function CustomerCTVScreen() {
                         customer={selected}
                         onClose={() => setSelected(null)}
                         onUpdated={(updated) => setSelected(updated)}
+                        /* consults dùng static fetch (không realtime) nên phải refresh tay */
+                        onDeleted={() => { setSelected(null); refresh(); }}
                     />
                 )}
             </View>

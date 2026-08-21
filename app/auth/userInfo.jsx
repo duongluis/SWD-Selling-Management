@@ -63,6 +63,19 @@ const ROLES = [
             '• Giới hạn phạm vi thị trường',
         ],
     },
+    {
+        key: 'sale',
+        label: 'Nhân viên bán hàng',
+        icon: 'cash-outline',
+        color: '#F59E0B',
+        bg: '#ECFDF5',
+        desc: 'Giới thiệu sản phẩm và bán hàng',
+        bulletPoints: [
+            '• Cam kết sản lượng',
+            '• Chốt đơn và gặp mặt khách hàng',
+            '• Giới hạn phạm vi thị trường',
+        ],
+    }
 ];
 const BIZ_MODELS = [
     { key: 'company', label: 'Công ty / Hộ kinh doanh', icon: 'business-outline', color: '#0F172A', bg: '#F1F5F9', desc: 'Có đăng ký kinh doanh' },
@@ -227,7 +240,7 @@ export default function UserInfoView() {
     const [frozenNeedsBank, setFrozenNeedsBank] = useState(false);
 
     const isDaiLy = role === 'daily';
-    const needsBank = (role === 'partner' || role === 'ctv') && !referralCodeInput.trim(); // Có mã giới thiệu thì không cần ngân hàng
+    const needsBank = (role === 'partner' || role === 'ctv' || role === 'sale') && !referralCodeInput.trim(); // Có mã giới thiệu thì không cần ngân hàng
     const rev = parseInt(committedRevenue) || 0;
     const hasReferral = !!referralCodeInput.trim();
 
@@ -341,7 +354,7 @@ export default function UserInfoView() {
         if (!validateStep()) return;
         if (step === 1) {
             // Tại đây referralCodeInput đã nhập xong, freeze luôn
-            setFrozenNeedsBank((role === 'partner' || role === 'ctv') && !referralCodeInput.trim());
+            setFrozenNeedsBank((role === 'partner' || role === 'ctv' || role === 'sale') && !referralCodeInput.trim());
         }
         if (step < TOTAL_STEPS - 1) setStep(s => s + 1);
         else handleSubmit();
@@ -371,7 +384,7 @@ export default function UserInfoView() {
             const email = userCredential.user.email;
 
             const passwordHash = await bcrypt.hash(signUpPassword, 10);
-            const roleMap = { daily: 'đại lý', partner: 'Đối tác', ctv: 'cộng tác viên' };
+            const roleMap = { daily: 'đại lý', partner: 'Đối tác', ctv: 'cộng tác viên', sale: 'Nhân viên bán hàng' };
             const payload = {
                 uid, email,
                 phone: phone.trim(), address: address.trim(),
@@ -409,7 +422,7 @@ export default function UserInfoView() {
             }
 
             // ── Xử lý mã giới thiệu ─────────────────────────────────────────
-            if (role !== 'ctv' && role !== 'partner') {
+            if (role !== 'ctv' && role !== 'partner' && role !== 'sale') {
                 payload.referralCode = generateReferralCode();
             }
             if (role !== 'daily' && referralCodeInput.trim()) {

@@ -17,6 +17,8 @@ import {
     fetchStatusList,
 } from '../../components/Hooks/getStatus';
 import { useCustomers } from '../../components/Hooks/useCustomers';
+import { nextServiceId } from '../../components/Utils/docId';
+import { productItems, productTotal } from '../../components/Utils/orderItems';
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { db } from '../../config/firebaseConfig';
@@ -93,9 +95,8 @@ const OrderPickerDropdown = memo(({
                 : filteredOrders.length === 0
                     ? <Text style={S.pickerEmpty}>{orderSearch ? 'Không tìm thấy' : 'Chưa có đơn hàng nào'}</Text>
                     : filteredOrders.map((order, i) => {
-                        const total = (order.items || []).reduce(
-                            (s, p) => s + ((p.price || 0) * (p.qty || 1)), 0
-                        );
+                        const total = productTotal(order);
+                        const productCount = productItems(order).length;
                         return (
                             <TouchableOpacity key={order.id || i}
                                 style={[S.pickerItem, selectedOrder?.id === order.id && S.pickerItemActive]}
@@ -106,7 +107,7 @@ const OrderPickerDropdown = memo(({
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={S.pickerItemId}>#{order.id}</Text>
-                                    <Text style={S.pickerItemSub}>{order.customer} · {order.items?.length || 0} sản phẩm</Text>
+                                    <Text style={S.pickerItemSub}>{order.customer} · {productCount} sản phẩm</Text>
                                 </View>
                                 <Text style={S.pickerItemAmount}>{fmt(total)}</Text>
                             </TouchableOpacity>
@@ -124,7 +125,7 @@ const MachinePickerSection = memo(({
     selectedMachine, setSelectedMachine, currentTypeCfg
 }) => {
     if (!showMachineSection) return null;
-    const machines = selectedOrder?.items || [];
+    const machines = productItems(selectedOrder);
     return (
         <View style={ws ? W.machineSection : M.machineSection}>
             <View style={ws ? W.machineHeader : M.machineHeader}>
@@ -200,8 +201,10 @@ export default function AddService() {
 
     const { customers } = useCustomers();
     const currentTypeCfg = serviceTypes.find(t => t.key === serviceType);
-    const showMachineSection = currentTypeCfg?.hasMachine && selectedOrder?.items?.length > 0;
-    const [serviceId] = useState('SV-' + Date.now().toString().slice(-6));
+    const orderProducts = productItems(selectedOrder);
+    const showMachineSection = currentTypeCfg?.hasMachine && orderProducts.length > 0;
+    // Mã dịch vụ được cấp tịnh tiến lúc lưu nên chưa biết trước khi submit.
+    const serviceIdPlaceholder = 'Tự động cấp khi lưu';
     // Sau dòng const [updating, setUpdating] = useState(false);
     const [saveAsCustomer, setSaveAsCustomer] = useState(false);
     const [savingCustomer, setSavingCustomer] = useState(false);
@@ -381,12 +384,14 @@ export default function AddService() {
             const category = SERVICE_TYPE_TO_CATEGORY[serviceType] || 'other';
             const statusList = await fetchStatusList(category);
             const initialStatus = statusList[0]?.name || 'Chờ xử lý';
+            // Mã tịnh tiến (SV-000123), cấp lúc lưu — xem components/Utils/docId.js
+            const serviceId = await nextServiceId();
             const newService = {
                 id: serviceId,
                 type: serviceType,
                 name: currentTypeCfg?.name || '',
                 orderId: selectedOrder?.id || null,
-                orderItems: selectedOrder?.items || [],
+                orderItems: productItems(selectedOrder),
                 machineItem: selectedMachine || null,
                 customer: customerName.trim(),
                 phone: customerPhone.replace(/\s+/g, '').trim(),
@@ -468,7 +473,7 @@ export default function AddService() {
                                     <Ionicons name="receipt-outline" size={15} color="#2563EB" />
                                     <View style={{ flex: 1 }}>
                                         <Text style={W.selectedOrderId}>#{selectedOrder.id}</Text>
-                                        <Text style={W.selectedOrderSub}>{selectedOrder.customer} · {selectedOrder.items?.length || 0} sản phẩm</Text>
+                                        <Text style={W.selectedOrderSub}>{selectedOrder.customer} · {orderProducts.length} sản phẩm</Text>
                                     </View>
                                     <TouchableOpacity onPress={() => { setSelectedOrder(null); setCustomerName(''); setCustomerPhone(''); setSelectedMachine(null); }}>
                                         <Ionicons name="close-circle" size={16} color="#94A3B8" />
@@ -505,10 +510,10 @@ export default function AddService() {
                             setSelectedMachine={setSelectedMachine}
                             currentTypeCfg={currentTypeCfg}
                         />
-                        {selectedOrder?.items?.length > 0 && !showMachineSection && (
+                        {orderProducts.length > 0 && !showMachineSection && (
                             <View style={W.orderItemsBox}>
                                 <Text style={W.orderItemsTitle}>Sản phẩm trong đơn:</Text>
-                                {selectedOrder.items.map((item, i) => (
+                                {orderProducts.map((item, i) => (
                                     <View key={i} style={W.orderItemRow}>
                                         <Ionicons name="water-outline" size={13} color="#64748B" />
                                         <Text style={W.orderItemName}>{item.name}</Text>
@@ -583,7 +588,7 @@ export default function AddService() {
                                 <Ionicons name={getIconByName(currentTypeCfg?.name || '')} size={20} color={currentTypeCfg?.color || '#2563EB'} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={W.previewId}>{serviceId}</Text>
+                                <Text style={W.previewId}>{serviceIdPlaceholder}</Text>
                                 <Text style={[W.previewType, { color: currentTypeCfg?.color }]}>{currentTypeCfg?.name}</Text>
                             </View>
                             <View style={[W.statusBadge, { backgroundColor: '#FFFBEB' }]}>
@@ -706,9 +711,9 @@ export default function AddService() {
                                 setSelectedMachine={setSelectedMachine}
                                 currentTypeCfg={currentTypeCfg}
                             />
-                            {selectedOrder?.items?.length > 0 && !showMachineSection && (
+                            {orderProducts.length > 0 && !showMachineSection && (
                                 <View style={M.orderItemsBox}>
-                                    {selectedOrder.items.map((item, i) => (
+                                    {orderProducts.map((item, i) => (
                                         <View key={i} style={M.orderItemRow}>
                                             <Ionicons name="water-outline" size={12} color="#64748B" />
                                             <Text style={M.orderItemName} numberOfLines={1}>{item.name}</Text>

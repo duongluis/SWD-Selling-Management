@@ -5,8 +5,10 @@ import { showAlert } from '@/components/Main/showAlert';
 import { createNotification, getSupportRoomId, sendStatusUpdateMessage } from '@/components/Utils/chatService';
 import { computeOrderCommission } from '@/components/Utils/commissionCalc';
 import { fmtCurrency } from '@/components/Utils/formatters';
+import { linesTotal, productItems, productTotal } from '@/components/Utils/orderItems';
 import { isAdmin as checkAdmin } from '@/components/Utils/roleHelper';
 import { syncServiceStatusFromOrder } from '@/components/Utils/syncOrderStatus';
+import { revertRevenueOnDelete, trackRevenueOnPaid } from '@/components/Utils/trackRevenue';
 import { db } from '@/config/firebaseConfig';
 import statusConfig from '@/config/status.json';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -21,10 +23,15 @@ import {
 import banksData from '../../config/banks.json';
 import { useLayout } from '../Main/TabScreenLayout';
 import { generateVietQR } from '../Utils/vietQR';
+import QRCode from 'react-native-qrcode-svg';
 let QRCodeWeb = null;
 if (Platform.OS === 'web') {
     QRCodeWeb = require('qrcode.react').QRCodeSVG;
 }
+
+// Khối QR chuyển khoản ở cuối panel chi tiết đơn. Đặt true để bật lại.
+// Khi false, effect buildQR cũng không chạy nên không tốn lượt đọc Firestore.
+const SHOW_PAYMENT_QR = false;
 
 
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
@@ -100,7 +107,7 @@ function _buildHandoverHtml({ order, seller, services, logoBase64 }) {
     const currentYear = today.getFullYear();
     const isCompany = seller.bizModel === 'company' || !!seller.taxCode;
     // Rows Sản phẩm
-    const productRows = (order.items || []).map((p, i) => `
+    const productRows = productItems(order).map((p, i) => `
         <tr>
             <td style="text-align:center">${i + 1}</td>
             <td>${p.name}</td>
@@ -401,12 +408,11 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     const [orderCreator, setOrderCreator] = useState(null);
     const [qrString, setQrString] = useState('');
     const [bankInfo, setBankInfo] = useState(null);
-    const [adminBank, setAdminBank] = useState(null);
     const [deleting, setDeleting] = useState(false);
 
 
     useEffect(() => {
-        if (!localOrder) return;
+        if (!SHOW_PAYMENT_QR || !localOrder) return;
 
         const buildQR = async () => {
             let bankAccountNo, bankAccountName, bankId;
@@ -449,9 +455,9 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
 
             setBankInfo({ ...bank, accountNo: bankAccountNo, accountName: bankAccountName });
 
-            const amount = Math.round(
-                (localOrder.items || []).reduce((s, p) => s + (Number(p.price) || 0) * (Number(p.qty) || 1), 0)
-            );
+            // QR là số tiền khách thực trả → sản phẩm + dịch vụ. Khác với doanh thu ghi
+            // nhận (chỉ sản phẩm) nên phải cộng riêng, không dùng lại productTotal.
+            const amount = Math.round(productTotal(localOrder) + linesTotal(services));
             setQrString(generateVietQR({
                 bankBin: bank.bin,
                 bankNumber: bankAccountNo,
@@ -461,7 +467,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
         };
 
         buildQR();
-    }, [localOrder]);
+    }, [localOrder, services]);
 
     // ── Fetch helpers — dùng useCallback để không phụ thuộc closure ──
     const fetchServices = useCallback(async (orderId) => {
@@ -512,9 +518,13 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     if (!order || !localOrder) return null;
 
     // ── Derived values ──
-    const total = (localOrder.items || []).reduce(
-        (s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0
-    );
+    // `items` chỉ còn sản phẩm (dịch vụ nằm ở collection 'service', lấy qua fetchServices).
+    // productItems() vẫn lọc để đơn cũ — vốn nhét dịch vụ chung vào items — không bị
+    // cộng nhầm tiền dịch vụ vào doanh thu.
+    const items = productItems(localOrder);
+    const total = productTotal(localOrder);                 // doanh thu sản phẩm
+    const servicesTotal = linesTotal(services);             // tiền dịch vụ, chỉ hiển thị ở đây
+    const grandTotal = total + servicesTotal;               // số tiền thực thu của khách
     const tcfg = TYPE_CFG[localOrder.orderType];
     const date = localOrder.createdAt
         ? new Date(localOrder.createdAt).toLocaleDateString('vi-VN', {
@@ -527,9 +537,8 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
         })
         : null;
 
-    // Quyền sửa: admin hoặc người tạo đơn, trừ các trạng thái đã khoá
-    const isCreator = !!orderCreator && orderCreator === userDetail?.email;
-
+    // Quyền sửa: admin, hoặc người tạo đơn NHƯNG phải là cấp 1 (không có advisor).
+    // Người tạo đơn ở cấp 2 trở xuống không sửa được đơn của chính mình.
     const isLevel1Creator = localOrder.createdBy === userDetail?.email
         && !userDetail?.advisor;
 
@@ -585,7 +594,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
         if (!admin || !localOrder) return;
         showAlert(
             'Xoá đơn hàng',
-            `Bạn có chắc muốn xoá đơn #${localOrder.id}? Hành động này sẽ xoá vĩnh viễn đơn hàng${services.length > 0 ? ` và ${services.length} dịch vụ đi kèm` : ''}. Không thể hoàn tác.`,
+            `Bạn có chắc muốn xoá đơn #${localOrder.id}? Hành động này sẽ xoá vĩnh viễn đơn hàng${services.length > 0 ? `, ${services.length} dịch vụ đi kèm` : ''} và toàn bộ hoa hồng của đơn. Không thể hoàn tác.`,
             async () => {
                 setDeleting(true);
                 try {
@@ -596,10 +605,26 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                     );
                     await Promise.all(svcSnap.docs.map(d => deleteDoc(doc(db, 'service', d.id))));
 
-                    // 2. Xoá đơn hàng
+                    // 2. Xoá hoa hồng/thưởng của đơn — gồm cả 2 dòng chia "2 phần"/"1 phần"
+                    //    (docId `{orderId}-2`, `{orderId}-3`) sinh ra khi admin duyệt trả.
+                    const commSnap = await getDocs(
+                        query(collection(db, 'commissions'), where('orderId', '==', localOrder.id))
+                    );
+                    const commIds = new Set(commSnap.docs.map(d => d.id));
+                    // Bản ghi cũ có thể thiếu trường orderId nên query không thấy → bổ sung
+                    // theo docId suy ra từ mã đơn. deleteDoc trên doc không tồn tại là no-op.
+                    [localOrder.id, `${localOrder.id}-2`, `${localOrder.id}-3`]
+                        .forEach(id => commIds.add(id));
+                    await Promise.all([...commIds].map(id => deleteDoc(doc(db, 'commissions', id))));
+
+                    // 3. Trừ lại doanh thu đã cộng vào users khi đơn được thanh toán,
+                    //    nếu không "Top nhân viên" ở màn Báo cáo sẽ đếm mãi đơn đã xoá.
+                    await revertRevenueOnDelete(localOrder.createdBy, localOrder);
+
+                    // 4. Xoá đơn hàng
                     await deleteDoc(doc(db, 'orders', localOrder.id));
 
-                    // 3. Thông báo người tạo đơn (nếu không phải chính admin đang thao tác)
+                    // 5. Thông báo người tạo đơn (nếu không phải chính admin đang thao tác)
                     if (orderCreator && orderCreator !== userDetail?.email) {
                         const roomId = getSupportRoomId(orderCreator);
                         await createNotification({
@@ -613,7 +638,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         }).catch(() => { });
                     }
 
-                    // 4. Báo cho parent biết để cập nhật lại danh sách, rồi đóng panel
+                    // 6. Báo cho parent biết để cập nhật lại danh sách, rồi đóng panel
                     onUpdated?.({ ...localOrder, _deleted: true });
                     onClose?.();
                 } catch (e) {
@@ -644,12 +669,44 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                 // Đơn thanh toán lần đầu → ghi 1 document hoa hồng/thưởng vào collection 'commissions'
                 // (chỉ áp dụng cho đơn thanh toán từ nay trở đi, không hồi tố đơn cũ)
                 if (isPaid) {
-                    computeOrderCommission({ ...localOrder, status: newStatus, paymentDate })
-                        .then(payload => {
-                            if (!payload) { console.warn(`Không tính được hoa hồng cho đơn #${localOrder.id}: không tìm thấy người tạo đơn`); return; }
-                            return setDoc(doc(db, 'commissions', localOrder.id), payload);
-                        })
-                        .catch(e => console.error(`Ghi commission cho đơn #${localOrder.id} thất bại:`, e));
+                    // Không fire-and-forget: hoa hồng hỏng thì admin phải biết ngay, chứ
+                    // trước đây lỗi chỉ nằm trong console nên nhìn từ UI như thể tính năng
+                    // không chạy, rất khó lần ra nguyên nhân.
+                    try {
+                        const payload = await computeOrderCommission({ ...localOrder, status: newStatus, paymentDate });
+                        if (!payload) {
+                            showAlert(
+                                'Không ghi được hoa hồng',
+                                `Đơn #${localOrder.id} đã chuyển sang "${newStatus}", nhưng không tìm thấy hồ sơ người tạo đơn (users/${localOrder.createdBy || '—'}). Hoa hồng chưa được tạo.`
+                            );
+                        } else if (payload.missingBasePrice) {
+                            showAlert(
+                                'Thiếu giá gốc trong bảng giá',
+                                `Đơn #${localOrder.id}: có sản phẩm chưa được điền "${payload.basePriceField}" trong bảng giá (productPrice). `
+                                + `Hoa hồng đang bị tính thành 0 vì không có giá gốc để so. Hãy cập nhật bảng giá rồi đặt lại trạng thái đơn.`
+                            );
+                            await setDoc(doc(db, 'commissions', localOrder.id), payload);
+                        } else if (payload.commission <= 0 && payload.bonusAmount <= 0) {
+                            showAlert(
+                                'Hoa hồng bằng 0',
+                                `Đơn #${localOrder.id}: hình thức thanh toán "${payload.paymentMethod}", giá gốc so theo "${payload.basePriceField}". `
+                                + `Hoa hồng chỉ phát sinh khi khách hàng tự thanh toán ("customer") và giá bán cao hơn giá gốc của vai trò.`
+                            );
+                            await setDoc(doc(db, 'commissions', localOrder.id), payload);
+                        } else {
+                            await setDoc(doc(db, 'commissions', localOrder.id), payload);
+                        }
+                    } catch (e) {
+                        console.error(`Ghi commission cho đơn #${localOrder.id} thất bại:`, e);
+                        showAlert('Lỗi ghi hoa hồng', `Đơn #${localOrder.id}: ${e.message}`);
+                    }
+
+                    // Cộng doanh thu vào users/{email}.revenueTotal cho người bán và advisor
+                    // cấp trên. Bảng "Top nhân viên" ở màn Báo cáo đọc đúng trường này —
+                    // trước đây không nơi nào gọi nên bảng đó luôn rỗng.
+                    // trackRevenueOnPaid tự chống cộng trùng qua mảng revenueOrders.
+                    trackRevenueOnPaid(localOrder.createdBy, localOrder, newStatus)
+                        .catch(e => console.error(`Ghi doanh thu cho đơn #${localOrder.id} thất bại:`, e));
                 }
 
                 // Sync service + gửi chat message (fire-and-forget)
@@ -845,8 +902,12 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                             ? <ActivityIndicator size="small" color="#2563EB" style={{ marginTop: 8 }} />
                             : services.length === 0
                                 ? <Text style={DP.noSv}>Chưa có dịch vụ</Text>
-                                : services.slice(0, 2).map((sv, i) => {
+                                : services.map((sv, i) => {
                                     const c = scfg(sv.status);
+                                    // Giá dịch vụ chỉ lộ ở màn chi tiết này — danh sách đơn,
+                                    // báo cáo và hoa hồng đều không tính tới nó.
+                                    const svQty = Number(sv.qty) || 1;
+                                    const svLineTotal = sv.included ? 0 : (Number(sv.price) || 0) * svQty;
                                     return (
                                         <View key={sv.docId || i} style={DP.svRow}>
                                             <Ionicons name="construct-outline" size={13} color="#8B5CF6" />
@@ -863,6 +924,9 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                                                         bao_duong: 'Bảo dưỡng',
                                                         tu_van: 'Tư vấn',
                                                     }[sv.type] || sv.type || 'Dịch vụ'}
+                                                </Text>
+                                                <Text style={DP.svPrice}>
+                                                    x{svQty} · {sv.included ? 'Bao gồm' : fmtCurrency(svLineTotal)}
                                                 </Text>
                                             </View>
                                             <View style={[DP.svStatus, { backgroundColor: c.bg }]}>
@@ -890,10 +954,10 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         </View>
                         <Text style={DP.sectionTitle}>Sản phẩm</Text>
                         <View style={DP.sectionBadge}>
-                            <Text style={DP.sectionBadgeText}>{(localOrder.items || []).length}</Text>
+                            <Text style={DP.sectionBadgeText}>{items.length}</Text>
                         </View>
                     </View>
-                    {(localOrder.items || []).map((p, i) => {
+                    {items.map((p, i) => {
                         const lt = PARSE(p.price) * PARSE(p.qty || 1);
                         return (
                             <View key={i} style={DP.prodRow}>
@@ -917,7 +981,10 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                     )}
                 </View>
 
-                {/* {bankInfo && qrString && (
+                {/* Khối QR chuyển khoản — bật/tắt bằng SHOW_PAYMENT_QR ở đầu file.
+                    Trước đây khối này bị comment nhưng effect buildQR vẫn chạy, tốn 1–2 lượt
+                    đọc Firestore mỗi lần mở đơn để dựng một mã QR không bao giờ hiển thị. */}
+                {SHOW_PAYMENT_QR && bankInfo && qrString && (
                     <View style={DP.qrSection}>
                         <View style={DP.qrHeader}>
                             <Ionicons name="qr-code-outline" size={18} color="#2563EB" />
@@ -935,19 +1002,37 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                                 <Text style={DP.bankName}>{bankInfo.name}</Text>
                                 <Text style={DP.accountNo}>STK: {bankInfo.accountNo}</Text>
                                 <Text style={DP.accountName}>Chủ TK: {bankInfo.accountName}</Text>
-                                <Text style={DP.amount}>Số tiền: {fmtCurrency(total)}</Text>
+                                <Text style={DP.amount}>Số tiền: {fmtCurrency(grandTotal)}</Text>
                                 <Text style={DP.description}>Nội dung: TTDH {localOrder.id}</Text>
                             </View>
                         </View>
                         <Text style={DP.qrNote}>Quét mã QR bằng ứng dụng ngân hàng để thanh toán</Text>
                     </View>
-                )} */}
+                )}
 
-                {/* Total bar */}
-                <View style={DP.totalBar}>
-                    <Text style={DP.totalLabel}>Tổng cộng</Text>
-                    <Text style={DP.totalValue}>{fmtCurrency(total)}</Text>
-                </View>
+                {/* Total bar — tách rõ doanh thu sản phẩm và tiền dịch vụ.
+                    Mọi báo cáo/hoa hồng chỉ dùng `total`; dịch vụ chỉ cộng vào số thực thu. */}
+                {servicesTotal > 0 ? (
+                    <View style={DP.totalBox}>
+                        <View style={DP.totalLine}>
+                            <Text style={DP.totalLineLabel}>Tiền sản phẩm</Text>
+                            <Text style={DP.totalLineValue}>{fmtCurrency(total)}</Text>
+                        </View>
+                        <View style={DP.totalLine}>
+                            <Text style={DP.totalLineLabel}>Tiền dịch vụ</Text>
+                            <Text style={DP.totalLineValue}>{fmtCurrency(servicesTotal)}</Text>
+                        </View>
+                        <View style={DP.totalBar}>
+                            <Text style={DP.totalLabel}>Khách phải trả</Text>
+                            <Text style={DP.totalValue}>{fmtCurrency(grandTotal)}</Text>
+                        </View>
+                    </View>
+                ) : (
+                    <View style={DP.totalBar}>
+                        <Text style={DP.totalLabel}>Tổng cộng</Text>
+                        <Text style={DP.totalValue}>{fmtCurrency(total)}</Text>
+                    </View>
+                )}
 
                 <View style={{ height: 40 }} />
             </ScrollView>
@@ -985,6 +1070,7 @@ const DP = StyleSheet.create({
     svRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, borderTopWidth: 0.5, borderTopColor: '#F8FAFC' },
     svId: { fontSize: 12, fontWeight: '700', color: '#0F172A' },
     svType: { fontSize: 11, color: '#64748B' },
+    svPrice: { fontSize: 11, color: '#8B5CF6', fontWeight: '700', marginTop: 1 },
     svStatus: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
     svStatusText: { fontSize: 10, fontWeight: '700' },
     svLink: { fontSize: 12, color: '#2563EB', fontWeight: '600' },
@@ -1001,6 +1087,10 @@ const DP = StyleSheet.create({
     prodTotal: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
     noteBox: { marginTop: 8, backgroundColor: '#F8FAFC', borderRadius: 8, padding: 10, borderWidth: 0.5, borderColor: '#E2E8F0' },
     noteText: { fontSize: 12, color: '#64748B', lineHeight: 17 },
+    totalBox: { marginTop: 4 },
+    totalLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 16, paddingVertical: 5 },
+    totalLineLabel: { fontSize: 13, color: '#64748B', fontWeight: '500' },
+    totalLineValue: { fontSize: 13, color: '#0F172A', fontWeight: '700' },
     totalBar: { margin: 16, borderRadius: 12, backgroundColor: '#1E3A5F', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 18 },
     totalLabel: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.75)' },
     totalValue: { fontSize: 20, fontWeight: '900', color: '#fff', letterSpacing: -0.5 },

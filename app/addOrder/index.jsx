@@ -18,6 +18,7 @@ import {
   SERVICE_TYPE_TO_CATEGORY,
   fetchStatusList,
 } from '../../components/Hooks/getStatus';
+import { nextOrderId, nextServiceId } from '../../components/Utils/docId';
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { useLayout } from '../../components/Main/TabScreenLayout';
@@ -30,6 +31,7 @@ const PRICE_FIELD_TO_LABEL = {
   'price_a': 'Giá đại lý',
   'price_p': 'Giá đối tác',
   'price_c': 'Giá CTV',
+  'price_s': 'Giá Sale'
 };
 
 // ── Date helpers ─────────────────────────────────────────────
@@ -44,13 +46,13 @@ const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currenc
 const getRole = (u) => {
   const r = (u?.role || u?.member || '').toLowerCase();
   if (r === 'admin') return 'admin';
+  if (['nhân viên bán hàng', 'sale'].includes(r)) return 'sale';
   if (['đại lý', 'daily', 'dealer'].includes(r)) return 'daily';
   if (['đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
   if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
   return 'other';
 };
-const getRolePriceField = (role) => ({ daily: 'price_a', phantan: 'price_p', ctv: 'price_c' }[role] || 'price');
-const ROLE_LABEL = { admin: 'Giá niêm yết', daily: 'Giá đại lý', phantan: 'Giá đối tác', ctv: 'Giá CTV', other: 'Giá niêm yết' };
+const getRolePriceField = (role) => ({ daily: 'price_a', phantan: 'price_p', ctv: 'price_c', sale: 'price_s' }[role] || 'price');
 
 // ── Order type config ─────────────────────────────────────────
 const ORDER_TYPES = {
@@ -67,7 +69,7 @@ const ORDER_TYPES = {
 };
 
 // const ROLE_ORDER_TYPE = { daily: 'buon', phantan: 'le', ctv: 'le', admin: null, other: null };
-const ROLE_ORDER_TYPE = { daily: null, phantan: null, ctv: null, admin: null, other: null };
+const ROLE_ORDER_TYPE = { daily: null, phantan: 'le', ctv: null, admin: null, other: null, sale: 'le' };
 
 
 const PAYMENT_OPTIONS = [
@@ -342,6 +344,7 @@ const AddProductForm = React.memo(({ ws, orderType, catalog, priceField, priceLa
       price_a: p.price_a || 0,
       price_p: p.price_p || 0,
       price_c: p.price_c || 0,
+      price_s: p.price_s || 0,
       productId: String(p.id || p.docId),
     });
     setShowProductDrop(false);
@@ -486,13 +489,12 @@ const ServicesSection = React.memo(({
   ws, catalogServices, orderServices,
   showAddService, setShowAddService,
   newService, setNewService, showServiceDrop, setShowServiceDrop,
-  onAddService, onRemoveService, onToggleIncluded,
+  onAddService, onCancelAddService, onRemoveService, onToggleIncluded,
   serviceNote, onServiceNoteChange, deliveryAddress, onAddressChange,
 }) => {
   if (!catalogServices || catalogServices.length === 0) return null;
 
   const hasDelivery = orderServices.some(s => (s.name || '').toLowerCase().includes('giao hàng') || s.type === 'DELIVERY');
-  const servicesTotal = orderServices.reduce((s, sv) => s + (sv.included ? 0 : (parseInt(sv.price) || 0) * (parseInt(sv.qty) || 1)), 0);
 
   return (
     <View style={ws ? W.autoSvcCard : styles.autoSvcCard}>
@@ -538,7 +540,9 @@ const ServicesSection = React.memo(({
             showServiceDrop={showServiceDrop}
             setShowServiceDrop={setShowServiceDrop}
             onAdd={onAddService}
-            onCancel={() => setShowAddService(false)}
+            /* Huỷ phải xoá luôn dòng dịch vụ đang nhập dở, nếu không lần mở form sau
+               vẫn còn tên/giá cũ và dễ thêm nhầm. */
+            onCancel={onCancelAddService}
           />
         ) : (
           <TouchableOpacity style={ws ? W.addProductBtn : styles.addProductBtn} onPress={() => setShowAddService(true)}>
@@ -675,7 +679,6 @@ export default function AddOrder() {
   // --- 1. ĐƯA TẤT CẢ STATE LÊN ĐẦU ĐỂ TRÁNH LỖI INITIALIZATION ---
   const [serviceTypesList, setServiceTypesList] = useState([]); // Chuyển lên đầu
   const [orderType, setOrderType] = useState(ROLE_ORDER_TYPE[role] || 'le');
-  // const [selectedServices, setSelectedServices] = useState([]);
   const [orderServices, setOrderServices] = useState([]); // [{ id, type, name, qty, price, included, unit }]
   const [showAddService, setShowAddService] = useState(false);
   const [showServiceDrop, setShowServiceDrop] = useState(false);
@@ -707,18 +710,19 @@ export default function AddOrder() {
   const [assistedSearch, setAssistedSearch] = useState('');
 
   // --- 2. CÁC BIẾN TÍNH TOÁN (DÙNG STATE ĐÃ KHAI BÁO) ---
-  const [orderId] = useState('ORD-' + Date.now().toString().slice(-6));
+  // Mã đơn được cấp tịnh tiến lúc lưu (nextOrderId) nên chưa biết trước khi submit.
+  const orderIdPlaceholder = 'Tự động cấp khi lưu';
   // Admin tạo đơn hộ → toàn bộ quy tắc giá & hình thức thanh toán phải tính theo
   // người được hỗ trợ, không theo admin. Nếu bỏ trống thì giữ nguyên như cũ.
   const assistedUser = (role === 'admin' && selectedAssistedPartner) ? selectedAssistedPartner : null;
   const effectiveUser = assistedUser || userDetail;
   const effectiveRole = assistedUser ? getRole(assistedUser) : role;
 
-  const hasAdvisor = !!effectiveUser?.advisor;
   const isDaily = effectiveRole === 'daily';
+  const isSale = effectiveRole === 'sale';
   const isLevel1 = !effectiveUser?.advisor;
-  const useFixedPrice = isDaily || !isLevel1;
-  const fixedPayment = 'company';
+  const useFixedPrice = isDaily || isSale || !isLevel1;
+  const fixedPayment = isSale ? 'customer' : 'company';
 
   const [paymentMethod, setPaymentMethod] = useState(orderType === 'buon' ? 'company' : 'customer');
 
@@ -738,7 +742,9 @@ export default function AddOrder() {
   //  2. Vai trò người tạo đơn / người được hỗ trợ — người bán thanh toán thì lấy
   //     giá vai trò (resolvedPriceField: giá đại lý/đối tác/CTV, hoặc của advisor cấp 1).
   const priceField = effectivePaymentMethod === 'customer' ? 'price' : resolvedPriceField;
-  const priceLabel = effectivePaymentMethod === 'customer' ? 'Giá sản phẩm' : 'Giá sản phẩm';
+  const priceLabel = priceField === 'price'
+    ? 'Giá sản phẩm'
+    : (PRICE_FIELD_TO_LABEL[priceField] ?? 'Giá sản phẩm');
   // ? 'Giá sản phẩm'
   // : PRICE_FIELD_TO_LABEL[resolvedPriceField] ?? 'Giá niêm yết';
 
@@ -748,7 +754,6 @@ export default function AddOrder() {
     const apply = () => {
       setOrderType(type);
       setPaymentMethod(nextPayment);
-      // setSelectedServices([]);
       setOrderServices([]);
     };
     // Đổi loại đơn kéo theo đổi hình thức thanh toán → đổi bảng giá. Sản phẩm đã thêm
@@ -779,7 +784,7 @@ export default function AddOrder() {
         } else {
           break;
         }
-      } catch (err) {
+      } catch (_err) {
         break;
       }
     }
@@ -818,18 +823,6 @@ export default function AddOrder() {
   // Xóa sản phẩm
   const removeProduct = useCallback((id) => {
     setProducts(prev => prev.filter(p => p.id !== id));
-  }, []);
-
-  const handleSelectService = useCallback((svc) => {
-    setNewService({
-      type: svc.type,
-      name: svc.name,
-      qty: '1',
-      price: String(svc.price || 0),
-      included: false,
-      unit: svc.unit || 'Gói',
-    });
-    setShowServiceDrop(false);
   }, []);
 
   const addServiceItem = useCallback(() => {
@@ -1096,8 +1089,6 @@ export default function AddOrder() {
   useEffect(() => {
     const fetchServiceTypes = async () => {
       try {
-        const category = ORDER_TYPE_TO_CATEGORY[orderType];
-
         // Lấy service types từ collection riêng nếu có
         const { collection, getDocs } = await import('firebase/firestore');
         const snap = await getDocs(collection(db, 'servicePrice'));
@@ -1175,16 +1166,12 @@ export default function AddOrder() {
       }
       const { rootAdvisor, level } = await calculateHierarchy(effectiveCreatorEmail, hierarchyUserDetail);
 
-      const serviceItems = orderServices.map(sv => ({
-        id: sv.id,
-        name: sv.name,
-        qty: sv.qty,
-        price: sv.included ? 0 : (parseInt(sv.price) || 0),
-        included: sv.included,
-        isService: true,
-        serviceType: sv.type,
-      }));
+      // Mã đơn tịnh tiến (ORD-000123) — xem components/Utils/docId.js
+      const orderId = await nextOrderId();
 
+      // ⚠️ Dịch vụ KHÔNG được nhét vào `items`. `items` chỉ chứa sản phẩm để doanh thu và
+      // hoa hồng ở mọi màn chỉ tính trên giá sản phẩm. Mỗi dịch vụ là 1 document riêng
+      // trong collection 'service'; OrderDetail query theo orderId khi mở chi tiết đơn.
       const newOrder = {
         id: orderId,
         orderType,
@@ -1192,10 +1179,8 @@ export default function AddOrder() {
         customer: finalCustomerName,
         phone: finalCustomerPhone,
         customerId: selectedCustomer?.docId || '',
-        items: [...products, ...serviceItems],
-        productAmount: totalAmount,      // ✅ NEW: tổng riêng sản phẩm (không đổi ý nghĩa totalAmount cũ)
-        servicesAmount,                  // ✅ NEW: tổng riêng dịch vụ
-        totalAmount: grandTotal,         // ✅ NEW: tổng cuối cùng lưu vào đơn hàng
+        items: products,
+        totalAmount,                     // tổng tiền sản phẩm — không gồm dịch vụ
         createdAt: orderDate,
         address: deliveryAddress || userDetail?.address || '',
         note: notes,
@@ -1207,67 +1192,45 @@ export default function AddOrder() {
 
       await setDoc(doc(db, 'orders', orderId), newOrder);
 
-      // Sửa lỗi Typo và Crash tại đây:
-      // if (selectedServices.length > 0) {
-      //   const svcStatusMap = {};
-      //   for (const svcType of selectedServices) {
-      //     const svcCategory = SERVICE_TYPE_TO_CATEGORY[svcType]
-      //       || (orderType === 'buon' ? 'DELIVERY' : 'INSTALLATION');
-      //     const statuses = await fetchStatusList(svcCategory);
-      //     svcStatusMap[svcType] = statuses[0]?.name || 'Chờ xử lý';
-      //   }
-      //   await Promise.all(selectedServices.map(async (svcType) => {
-      //     const svcId = `SV-${Date.now().toString().slice(-6)}-${svcType}`;
-      //     return setDoc(doc(db, 'service', svcId), {
-      //       id: svcId,
-      //       type: svcType,
-      //       orderId,
-      //       orderItems: products,
-      //       customer: finalCustomerName, // Dùng biến safe
-      //       phone: finalCustomerPhone,   // Dùng biến safe
-      //       address: deliveryAddress || userDetail?.address || '',
-      //       note: serviceNote,
-      //       status: svcStatusMap[svcType],
-      //       createdBy: userDetail?.email || '',
-      //       createdAt: new Date().toISOString(),
-      //       autoAssigned: true,
-      //       orderType,
-      //     });
-      //   }));
-      // }
-
       if (orderServices.length > 0) {
         const svcStatusMap = {};
         for (const sv of orderServices) {
+          if (svcStatusMap[sv.type]) continue;
           const svcCategory = SERVICE_TYPE_TO_CATEGORY[sv.type]
             || (orderType === 'buon' ? 'DELIVERY' : 'INSTALLATION');
-          if (!svcStatusMap[sv.type]) {
-            const statuses = await fetchStatusList(svcCategory);
-            svcStatusMap[sv.type] = statuses[0]?.name || 'Chờ xử lý';
-          }
+          const statuses = await fetchStatusList(svcCategory);
+          svcStatusMap[sv.type] = statuses[0]?.name || 'Chờ xử lý';
         }
-        await Promise.all(orderServices.map(async (sv) => {
-          const svcId = `SV-${Date.now().toString().slice(-6)}-${sv.type}`;
-          return setDoc(doc(db, 'service', svcId), {
-            id: svcId,
-            type: sv.type,
-            name: sv.name,
-            qty: sv.qty,
-            price: sv.price,
-            included: sv.included,
-            orderId,
-            orderItems: products,
-            customer: finalCustomerName,
-            phone: finalCustomerPhone,
-            address: deliveryAddress || userDetail?.address || '',
-            note: serviceNote,
-            status: svcStatusMap[sv.type],
-            createdBy: userDetail?.email || '',
-            createdAt: new Date().toISOString(),
-            autoAssigned: true,
-            orderType,
-          });
-        }));
+
+        // Cấp mã tuần tự trước rồi mới ghi song song — nhiều transaction cùng lúc trên
+        // 1 bộ đếm sẽ tranh chấp và phải retry.
+        const svcIds = [];
+        for (let i = 0; i < orderServices.length; i++) svcIds.push(await nextServiceId());
+
+        await Promise.all(orderServices.map((sv, i) => setDoc(doc(db, 'service', svcIds[i]), {
+          id: svcIds[i],
+          type: sv.type,
+          name: sv.name,
+          qty: sv.qty,
+          price: sv.included ? 0 : (parseInt(sv.price) || 0),
+          included: !!sv.included,
+          unit: sv.unit || 'Gói',
+          orderId,
+          orderItems: products,
+          customer: finalCustomerName,
+          phone: finalCustomerPhone,
+          address: deliveryAddress || userDetail?.address || '',
+          note: serviceNote,
+          status: svcStatusMap[sv.type],
+          // Phải là chủ đơn (người được hỗ trợ khi admin tạo hộ), không phải admin —
+          // màn Dịch vụ lọc theo createdBy nên ghi sai là đối tác không thấy dịch vụ của mình.
+          createdBy: effectiveCreatorEmail,
+          rootAdvisor,
+          level,
+          createdAt: new Date().toISOString(),
+          autoAssigned: true,
+          orderType,
+        })));
       }
 
       showSuccess('Đơn hàng đã được tạo!', `Mã đơn: ${orderId}`, () => router.replace('/(tabs)/order'));
@@ -1311,7 +1274,7 @@ export default function AddOrder() {
               <View style={W.row2}>
                 <View style={[W.inputGroup, { flex: 1 }]}>
                   <Text style={W.label}>Order ID</Text>
-                  <View style={W.inputBox}><Text style={W.inputReadonly}>{orderId}</Text><Ionicons name="lock-closed-outline" size={14} color="#CBD5E1" /></View>
+                  <View style={W.inputBox}><Text style={W.inputReadonly}>{orderIdPlaceholder}</Text><Ionicons name="lock-closed-outline" size={14} color="#CBD5E1" /></View>
                 </View>
                 <View style={[W.inputGroup, { flex: 1 }]}>
                   <Text style={W.label}>Ngày giao hàng <Text style={W.req}>*</Text></Text>
@@ -1475,18 +1438,6 @@ export default function AddOrder() {
               )} */}
             </View>
 
-            {/* <ServiceList
-              ws={isDesktop}
-              serviceTypesList={filteredServiceTypes} // <-- Dùng list đã lọc
-              selectedServices={ServicesSection}
-              setSelectedServices={setSelectedServices}
-              serviceNote={serviceNote}
-              onServiceNoteChange={handleServiceNoteChange}
-              orderType={orderType}
-              deliveryAddress={deliveryAddress}
-              onAddressChange={handleAddressChange}
-            /> */}
-
             <ServicesSection
               ws={isDesktop}
               catalogServices={filteredServiceTypes}
@@ -1498,6 +1449,7 @@ export default function AddOrder() {
               showServiceDrop={showServiceDrop}
               setShowServiceDrop={handleSetShowServiceDrop}
               onAddService={addServiceItem}
+              onCancelAddService={handleCancelAddService}
               onRemoveService={removeServiceItem}
               onToggleIncluded={toggleServiceIncluded}
               serviceNote={serviceNote}
@@ -1520,8 +1472,7 @@ export default function AddOrder() {
             )}
 
             {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
-            {isLevel1 && (
-              // {userDetail?.role != "daily" && (
+            {(isLevel1 || isSale) && (
               <PaymentMethodField
                 ws={isDesktop}
                 orderType={orderType}
@@ -1560,7 +1511,7 @@ export default function AddOrder() {
             <View style={styles.formCard}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Order ID</Text>
-                <View style={styles.inputBox}><Text style={styles.inputReadonly}>{orderId}</Text></View>
+                <View style={styles.inputBox}><Text style={styles.inputReadonly}>{orderIdPlaceholder}</Text></View>
               </View>
 
               <View style={styles.inputGroup}>
@@ -1694,18 +1645,6 @@ export default function AddOrder() {
                 </View>
               </View>
 
-              {/* <ServiceList
-                ws={isDesktop}
-                serviceTypesList={filteredServiceTypes} // <-- Dùng list đã lọc
-                selectedServices={selectedServices}
-                setSelectedServices={setSelectedServices}
-                serviceNote={serviceNote}
-                onServiceNoteChange={handleServiceNoteChange}
-                orderType={orderType}
-                deliveryAddress={deliveryAddress}
-                onAddressChange={handleAddressChange}
-              /> */}
-
               <ServicesSection
                 ws={isDesktop}
                 catalogServices={filteredServiceTypes}
@@ -1717,6 +1656,7 @@ export default function AddOrder() {
                 showServiceDrop={showServiceDrop}
                 setShowServiceDrop={handleSetShowServiceDrop}
                 onAddService={addServiceItem}
+                onCancelAddService={handleCancelAddService}
                 onRemoveService={removeServiceItem}
                 onToggleIncluded={toggleServiceIncluded}
                 serviceNote={serviceNote}

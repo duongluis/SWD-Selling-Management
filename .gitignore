@@ -51,3 +51,6 @@ prompt.txt
 cors.json
 done_log.txt
 firestore.rules
+
+# tài liệu vận hành Firebase (rules, checklist collection/index) — nội bộ
+firebase/

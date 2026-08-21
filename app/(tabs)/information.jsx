@@ -20,6 +20,7 @@ import { db } from '../../config/firebaseConfig';
 const getRole = (u) => {
     const r = (u?.role || u?.member || '').toLowerCase();
     if (r === 'admin') return 'admin';
+    if (r === 'sale') return 'sale';
     if (['đại lý', 'daily', 'dealer'].includes(r)) return 'daily';
     if (['đối tác', 'phantan', 'distributor'].includes(r)) return 'phantan';
     if (['cộng tác viên', 'ctv', 'collaborator'].includes(r)) return 'ctv';
@@ -32,16 +33,18 @@ const PRICE_LABELS = {
     price_a: { label: 'Giá đại lý', color: '#2563EB', bg: '#EFF6FF' },
     price_p: { label: 'Giá đối tác', color: '#7C3AED', bg: '#F5F3FF' },
     price_c: { label: 'Giá CTV', color: '#059669', bg: '#ECFDF5' },
+    price_s: { label: 'Giá Sale', color: '#F59E0B', bg: '#ECFDF5' }
 };
 
 const getPriceFields = (role, hasAdvisor = false) => {
     if (hasAdvisor) return ['price'];
     return ({
-        giamdoc: ['price', 'price_a', 'price_p', 'price_c'],
-        admin: ['price', 'price_a', 'price_p', 'price_c'],
+        giamdoc: ['price', 'price_a', 'price_p', 'price_c', 'price_s'],
+        admin: ['price', 'price_a', 'price_p', 'price_c', 'price_s'],
         daily: ['price_a', 'price'],
         phantan: ['price_p', 'price'],
         ctv: ['price_c', 'price'],
+        sale: ['price_s', 'price']
     }[role] || ['price']);
 };
 
@@ -113,7 +116,7 @@ const MoneyInput = ({ fkey, label, color, form, set }) => (
             style={[F.inputText, { flex: 1 }]}
             placeholder={label}
             placeholderTextColor="#94A3B8"
-            value={form[fkey] ? String(form[fkey]) : ''}
+            value={form[fkey] ? formatThousand(form[fkey]) : ''}
             onChangeText={v => set(fkey, v.replace(/\D/g, ''))}// có thể là nguyên nhân
             keyboardType="numeric"
         />
@@ -124,7 +127,7 @@ const MoneyInput = ({ fkey, label, color, form, set }) => (
 // ── Create/Edit Product Modal ─────────────────────────────────
 const PRODUCT_EMPTY = {
     name: '', capacity: '', technology: '', made_in: 'Việt Nam',
-    price: '', price_a: '', price_p: '', price_c: '',
+    price: '', price_a: '', price_p: '', price_c: '', price_s: '',
     water_source: '', water_certificate: '',
     electric_requirement: '220 Vac / 50-60Hz',
     using_electric_capacity: '', electric_capacity: '',
@@ -150,6 +153,7 @@ function ProductModal({ visible, onClose, onSaved, existingCount, editData = nul
                 price_a: editData.price_a ? String(editData.price_a) : '',
                 price_p: editData.price_p ? String(editData.price_p) : '',
                 price_c: editData.price_c ? String(editData.price_c) : '',
+                price_s: editData.price_s ? String(editData.price_s) : '',
             });
         } else {
             setForm(PRODUCT_EMPTY);
@@ -175,6 +179,7 @@ function ProductModal({ visible, onClose, onSaved, existingCount, editData = nul
                 price_a: parseMoney(form.price_a),
                 price_p: parseMoney(form.price_p),
                 price_c: parseMoney(form.price_c),
+                price_s: parseMoney(form.price_s),
                 water_source: form.water_source.trim(),
                 water_certificate: form.water_certificate.trim(),
                 electric_requirement: form.electric_requirement.trim(),
@@ -244,6 +249,7 @@ function ProductModal({ visible, onClose, onSaved, existingCount, editData = nul
                 <FormRow label="Giá đại lý"><MoneyInput fkey="price_a" label="Giá đại lý" color="#2563EB" form={form} set={set} /></FormRow>
                 <FormRow label="Giá đối tác"><MoneyInput fkey="price_p" label="Giá đối tác" color="#7C3AED" form={form} set={set} /></FormRow>
                 <FormRow label="Giá CTV"><MoneyInput fkey="price_c" label="Giá CTV" color="#059669" form={form} set={set} /></FormRow>
+                <FormRow label="Giá Sale"><MoneyInput fkey="price_s" label="Giá Sale" color="#059669" form={form} set={set} /></FormRow>
 
                 <Text style={F.section}>Thông số kỹ thuật</Text>
                 <FormRow label="Điện áp"><InputBox fkey="electric_requirement" placeholder="220 Vac / 50-60Hz" form={form} set={set} /></FormRow>
@@ -905,7 +911,7 @@ export default function InformationScreen() {
                         <Text style={S.headerTitle}>Bảng giá</Text>
                         <View style={S.roleBadge}>
                             <Text style={S.roleBadgeText}>
-                                {{ admin: '👑 Quản trị viên', daily: '🏪 Đại lý', phantan: '🚚 Đối tác', ctv: '🤝 Cộng tác viên' }[role] || ''}
+                                {{ admin: 'Quản trị viên', daily: 'Đại lý', phantan: 'Đối tác', ctv: 'Cộng tác viên', sale: ' Nhân viên bán hàng' }[role] || ''}
                             </Text>
                         </View>
                     </View>

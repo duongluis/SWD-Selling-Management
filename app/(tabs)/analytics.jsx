@@ -1,6 +1,7 @@
 // app/(tabs)/analytics.jsx — Báo cáo doanh thu (redesign) responsive
 import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import { THEME } from '@/components/Styles/theme';
+import { productItems, productTotal } from '@/components/Utils/orderItems';
 import { getRole, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -134,19 +135,19 @@ export default function AnalyticsScreen() {
 
 
     const totalRevenue = orders.reduce((s, o) =>
-        s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+        s + productTotal(o), 0);
 
     const thisRev = orders.filter(o => (o.createdAt || '').startsWith(thisKey))
-        .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+        .reduce((s, o) => s + productTotal(o), 0);
 
     const lastRev = orders.filter(o => (o.createdAt || '').startsWith(lastKey))
-        .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+        .reduce((s, o) => s + productTotal(o), 0);
 
     const pending = orders.filter(o => o.status === 'Chờ thanh toán')
-        .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+        .reduce((s, o) => s + productTotal(o), 0);
 
     const paidThis = orders.filter(o => o.status === 'Đã thanh toán' && (o.createdAt || '').startsWith(thisKey))
-        .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+        .reduce((s, o) => s + productTotal(o), 0);
 
     const growth = lastRev > 0 ? ((thisRev - lastRev) / lastRev * 100).toFixed(1) : null;
 
@@ -167,9 +168,7 @@ export default function AnalyticsScreen() {
                         const month = parseInt((o.createdAt || '').slice(5, 7), 10);
                         return quarterMonths.includes(month);
                     })
-                    .reduce((s, o) =>
-                        s + (o.items || []).reduce((ss, p) =>
-                            ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+                    .reduce((s, o) => s + productTotal(o), 0);
 
                 return { l: `Q${i + 1}`, v };
             });
@@ -180,9 +179,7 @@ export default function AnalyticsScreen() {
             const yr = now.getFullYear() - 3 + i;
             const v = active
                 .filter(o => (o.createdAt || '').startsWith(String(yr)))
-                .reduce((s, o) =>
-                    s + (o.items || []).reduce((ss, p) =>
-                        ss + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0), 0);
+                .reduce((s, o) => s + productTotal(o), 0);
             return { l: String(yr), v };
         });
     }, [active, period, now]);
@@ -190,7 +187,7 @@ export default function AnalyticsScreen() {
     const topProducts = useMemo(() => {
 
         const map = new Map();
-        active.forEach(o => (o.items || []).forEach(p => {
+        active.forEach(o => productItems(o).forEach(p => {
             const k = p.name;
             if (!map.has(k)) map.set(k, { name: k, units: 0, revenue: 0 });
             const r = map.get(k); r.units += parseFloat(p.qty || 1); r.revenue += parseFloat(p.price || 0) * parseFloat(p.qty || 1);
@@ -275,7 +272,7 @@ export default function AnalyticsScreen() {
                             <Text style={[A.th, { flex: 0.8, textAlign: 'center' }]}>Trạng thái</Text>
                         </View>
                         {active.slice(0, 10).map((o, i) => {
-                            const val = (o.items || []).reduce((s, p) => s + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0);
+                            const val = productTotal(o);
                             const isPaid = o.status === 'Đã thanh toán';
                             return (
                                 <View key={o.id || i} style={[A.tRow, i % 2 === 1 && { backgroundColor: '#FAFBFF' }]}>

@@ -6,6 +6,7 @@ import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import FilterChips from '@/components/UI/FilterChips';
 import StatBar from '@/components/UI/StatBar';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
+import { productTotal } from '@/components/Utils/orderItems';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { useFocusEffect } from 'expo-router';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -172,7 +173,7 @@ export default function LeaderboardScreen() {
     const rev = {};
     allOrders.forEach(o => {
       if (!inPeriod(o, periodFilter)) return;
-      const val = (o.items || []).reduce((sum, p) => sum + (parseFloat(p.price || 0) * parseFloat(p.qty || 1)), 0);
+      const val = productTotal(o);   // doanh số xếp hạng: chỉ sản phẩm
       rev[o.createdBy] = (rev[o.createdBy] || 0) + val;
     });
     return allUsers

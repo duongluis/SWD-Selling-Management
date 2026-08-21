@@ -23,6 +23,7 @@ const ROLE_OPTIONS = [
     { key: 'ctv', label: 'Cộng tác viên', value: 'cộng tác viên', icon: 'people-outline', color: '#059669', bg: '#ECFDF5' },
     { key: 'giamdoc', label: 'Giám đốc', value: 'giám đốc', icon: 'ribbon-outline', color: '#D97706', bg: '#FFFBEB' },
     { key: 'admin', label: 'Admin', value: 'admin', icon: 'shield-checkmark-outline', color: '#64748B', bg: '#F1F5F9' },
+    { key: 'sale', label: 'Nhân viên bán hàng', value: 'nhân viên bán hàng', icon: 'cash-outline', color: '#CC3333', bg: '#FFFBEB' },
 ];
 
 // Mã giới thiệu 12 ký tự — giống hệt logic ở app/auth/userInfo.jsx

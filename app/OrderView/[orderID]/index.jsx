@@ -1,4 +1,5 @@
 import BgWatermark from "@/components/Main/BgWatermark";
+import { productItems, productTotal } from "@/components/Utils/orderItems";
 import Colors from "@/constant/Colors";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -50,10 +51,9 @@ export default function OrderDetailView() {
   const formatCurrency = (n) =>
     (n || 0).toLocaleString("vi-VN", { style: "currency", currency: "VND" });
 
-  const totalAmount = (order.items || []).reduce(
-    (sum, p) => sum + (p.price * p.qty || 0),
-    0,
-  );
+  // Chỉ sản phẩm — dịch vụ nằm ở collection 'service', xem trong panel chi tiết đơn.
+  const products = productItems(order);
+  const totalAmount = productTotal(order);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -126,10 +126,10 @@ export default function OrderDetailView() {
             <Ionicons name="cube-outline" size={18} color={Colors.Primary} />
             <Text style={styles.sectionTitle}>Sản phẩm</Text>
           </View>
-          {(order.items || []).length === 0 ? (
+          {products.length === 0 ? (
             <Text style={styles.emptyText}>Chưa có sản phẩm</Text>
           ) : (
-            order.items.map((item, index) => (
+            products.map((item, index) => (
               <View key={index} style={styles.productRow}>
                 <View style={styles.productInfo}>
                   <Text style={styles.productName}>{item.name}</Text>
@@ -151,7 +151,7 @@ export default function OrderDetailView() {
           <Text style={styles.totalLabel}>Tổng cộng</Text>
           <Text style={styles.totalAmount}>{formatCurrency(totalAmount)}</Text>
           <Text style={styles.totalSub}>
-            {(order.items || []).length} sản phẩm
+            {products.length} sản phẩm
           </Text>
         </View>
 

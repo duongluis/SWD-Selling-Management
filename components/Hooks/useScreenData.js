@@ -8,6 +8,7 @@ import {
     query, where
 } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useState } from 'react';
+import { productTotal } from '../Utils/orderItems';
 import { getRole, isAdminOrGD } from '../Utils/roleHelper';
 
 // createdAt không hợp lệ (thiếu/sai định dạng) → coi như cũ nhất (0),
@@ -38,6 +39,7 @@ const getRootAdvisorForUser = async (userEmail) => {
 const getTeamEmails = async (myEmail, role) => {
     if (role === 'ctv') return [myEmail];
     if (role === 'giamdoc') return [];
+    if (role === 'sale') return [myEmail];
     if (role === 'phantan') {
         const subSnap = await getDocs(query(collection(db, 'users'), where('advisor', '==', myEmail)));
         const subEmails = subSnap.docs.map(d => d.data().email).filter(Boolean);
@@ -240,7 +242,7 @@ function computeStats(type, data) {
             const active = data.filter(o => o.status !== 'Đã hủy');
             const cancelled = data.filter(o => o.status === 'Đã hủy');
             const revenue = data.filter(o => o.status === 'Đã thanh toán')
-                .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + (p.price * p.qty || 0), 0), 0);
+                .reduce((s, o) => s + productTotal(o), 0);   // chỉ sản phẩm
             return { total: data.length, active: active.length, cancelled: cancelled.length, revenue };
         }
         case 'customers':

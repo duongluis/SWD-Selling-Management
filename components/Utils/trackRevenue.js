@@ -1,5 +1,6 @@
-import { arrayUnion, doc, getDoc, increment, updateDoc } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, doc, getDoc, increment, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
+import { productTotal } from './orderItems';
 
 const PAID_STATUS = 'Đã thanh toán';
 
@@ -10,10 +11,8 @@ export async function trackRevenueOnPaid(userEmail, order, newStatus) {
     if (newStatus !== PAID_STATUS) return false;
     if (!userEmail || !order?.id) return false;
 
-    // Fix lỗi operator precedence
-    const orderTotal = (order.items || []).reduce(
-        (s, p) => s + ((p.price || 0) * (p.qty || 1)), 0
-    );
+    // Doanh thu ghi nhận chỉ tính giá sản phẩm, không cộng tiền dịch vụ.
+    const orderTotal = productTotal(order);
     if (orderTotal <= 0) return false;
 
     try {
@@ -69,6 +68,48 @@ export async function trackRevenueOnPaid(userEmail, order, newStatus) {
         return true;
     } catch (e) {
         console.error('[trackRevenue] Lỗi:', e.message);
+        return false;
+    }
+}
+
+/**
+ * Nghịch đảo của trackRevenueOnPaid — gọi khi xoá đơn hàng.
+ *
+ * Chỉ trừ ở những user thực sự có mã đơn trong revenueOrders, nên gọi lại nhiều lần
+ * cũng không trừ thừa, và đơn chưa từng thanh toán thì không ảnh hưởng gì.
+ * Leo đúng 2 cấp advisor giống lúc cộng.
+ */
+export async function revertRevenueOnDelete(userEmail, order) {
+    if (!userEmail || !order?.id) return false;
+
+    const orderTotal = productTotal(order);
+    if (orderTotal <= 0) return false;
+
+    // Trừ ở 1 user nếu mã đơn còn nằm trong revenueOrders. Trả về email advisor cấp trên
+    // để đi tiếp, hoặc null nếu dừng.
+    const revertOne = async (email) => {
+        if (!email) return null;
+        const ref = doc(db, 'users', email);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) return null;
+
+        const data = snap.data();
+        if ((data.revenueOrders || []).includes(order.id)) {
+            await updateDoc(ref, {
+                revenueTotal: increment(-orderTotal),
+                revenueOrders: arrayRemove(order.id),
+            });
+        }
+        return data.advisor || null;
+    };
+
+    try {
+        const advisor1 = await revertOne(userEmail);
+        const advisor2 = await revertOne(advisor1);
+        await revertOne(advisor2);
+        return true;
+    } catch (e) {
+        console.error('[trackRevenue] Hoàn doanh thu lỗi:', e.message);
         return false;
     }
 }

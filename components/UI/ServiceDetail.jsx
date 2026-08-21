@@ -3,6 +3,7 @@
 import { showAlert } from '@/components/Main/showAlert';
 import { createNotification, getSupportRoomId, sendSystemMessage } from '@/components/Utils/chatService';
 import { fmtCurrency, fmtDate, fmtPhone } from '@/components/Utils/formatters';
+import { productItems } from '@/components/Utils/orderItems';
 import { getRole } from '@/components/Utils/roleHelper';
 import { isServiceStatusLocked, syncOrderStatusFromService } from '@/components/Utils/syncOrderStatus';
 import { db } from '@/config/firebaseConfig';
@@ -176,7 +177,8 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
 
     const typLabel = TYPE_LABEL[local.type] || 'Dịch vụ';
     const statusCfg = scfg(local.status);
-    const items = local.orderItems || local.items || [];
+    // orderItems là bản chụp sản phẩm của đơn — lọc lần nữa phòng dịch vụ cũ chụp cả dòng dịch vụ
+    const items = productItems({ items: local.orderItems || local.items || [] });
     const total = items.reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
 
     return (
@@ -238,6 +240,16 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                     <InfoRow icon="call-outline" label="Điện thoại" value={fmtPhone(local.phone)} />
                     <InfoRow icon="location-outline" label="Địa chỉ" value={local.address} />
                     <InfoRow icon="receipt-outline" label="Đơn hàng" value={local.orderId} />
+                    {/* Giá dịch vụ chỉ lộ ở màn chi tiết — không vào doanh thu/hoa hồng của đơn */}
+                    {(local.price != null || local.included) && (
+                        <InfoRow
+                            icon="pricetag-outline"
+                            label="Giá dịch vụ"
+                            value={local.included
+                                ? 'Bao gồm (miễn phí)'
+                                : `x${Number(local.qty) || 1} · ${fmtCurrency((Number(local.price) || 0) * (Number(local.qty) || 1))}`}
+                        />
+                    )}
                     <InfoRow icon="calendar-outline" label="Ngày tạo" value={fmtDate(local.createdAt)} />
                     {local.note && <InfoRow icon="document-text-outline" label="Ghi chú" value={local.note} />}
                 </View>

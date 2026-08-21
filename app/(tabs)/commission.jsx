@@ -9,7 +9,7 @@ import { createNotification } from '@/components/Utils/chatService';
 import { getRole, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator, Dimensions, Platform,
@@ -22,6 +22,10 @@ const width = Dimensions.get('window').width;
 const IS_DESKTOP = Platform.OS === 'web' && width >= 768;
 
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
+
+// Đơn của sale chia hoa hồng 7/2/1: dòng gốc 7 phần trả cho sale, sau khi trả thì sinh
+// thêm 2 dòng 2 phần và 1 phần — chỉ admin/giám đốc thấy (adminOnly).
+const SPLIT_LABEL = { 2: '2 phần', 3: '1 phần' };
 const fmtShort = n => {
     if (!n) return '0';
     if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + ' tỷ';
@@ -119,7 +123,10 @@ function CommCardMobile({ r, isAdmin, canPay, onApprove }) {
             <View style={MR.top}>
                 <View style={{ flex: 1 }}>
                     <Text style={MR.orderId}>#{r.id}</Text>
-                    <Text style={MR.date}>{r.createdAt?.slice(0, 10) || '—'}</Text>
+                    <Text style={MR.date}>
+                        {r.createdAt?.slice(0, 10) || '—'}
+                        {r.splitPart ? ` · ${SPLIT_LABEL[r.splitPart]}` : ''}
+                    </Text>
                 </View>
                 <View style={{ gap: 4, alignItems: 'flex-end' }}>
                     <StatusBadge status={r.status} />
@@ -215,7 +222,10 @@ function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
         <View style={[WRAP_BASE, DT.row, odd && DT.rowOdd]}>
             <View style={COL.order}>
                 <Text style={DT.td} numberOfLines={1}>#{r.id}</Text>
-                <Text style={DT.sub}>{r.createdAt?.slice(0, 10) || '—'}</Text>
+                <Text style={DT.sub}>
+                    {r.createdAt?.slice(0, 10) || '—'}
+                    {r.splitPart ? ` · ${SPLIT_LABEL[r.splitPart]}` : ''}
+                </Text>
             </View>
             <View style={COL.customer}>
                 <Text style={DT.td} numberOfLines={1}>{r.customer || '—'}</Text>
@@ -314,10 +324,12 @@ export default function CommissionScreen() {
 
     // Gộp 2 nguồn, dedup theo orderId
     const orders = useMemo(() => {
-        const map = new Map(teamCommissions.map(o => [o.orderId || o.id, o]));
-        collabBonuses.forEach(o => map.set(o.orderId || o.id, o));
-        return [...map.values()];
-    }, [teamCommissions, collabBonuses]);
+        const map = new Map(teamCommissions.map(o => [o.docId, o]));
+        collabBonuses.forEach(o => map.set(o.docId, o));
+        let list = [...map.values()];
+        if (!isAdmin) list = list.filter(o => !o.adminOnly);
+        return list;
+    }, [teamCommissions, collabBonuses, isAdmin]);
 
     const handleApprove = useCallback((r) => {
         if (!userDetail?.email) return;
@@ -332,7 +344,59 @@ export default function CommissionScreen() {
             `Trả ${fmt(amount)} cho ${targetEmail || '—'}?\n\nĐơn: #${r.id}\nKhách hàng: ${r.customer || '—'}`,
             async () => {
                 try {
-                    await updateDoc(doc(db, 'commissions', r.orderId || r.id), { [statusField]: 'paid' });
+                    await updateDoc(doc(db, 'commissions', r.docId), { [statusField]: 'paid' });
+                } catch (e) {
+                    console.error('handleApprove update error:', e);
+                    showAlert('Lỗi', 'Không cập nhật được trạng thái thanh toán: ' + e.message);
+                    return;
+                }
+
+                try {
+                    // Sinh thêm 2 dòng 2 phần / 1 phần khi:
+                    // - đang duyệt commission (không phải bonus)
+                    // - đây là dòng công khai gốc (chưa từng là dòng adminOnly)
+                    // - đơn được tạo bởi tài khoản role "sale"
+                    //   (splitEligible do computeOrderCommission ghi; bản ghi cũ chưa có
+                    //    trường này nên fallback về creatorRole)
+                    const isSplitParent = !isBonus && !r.adminOnly
+                        && (r.splitEligible ?? r.creatorRole === 'sale');
+
+                    if (isSplitParent) {
+                        // Làm tròn về số nguyên trước khi chia, và lấy phần 1 là phần dư
+                        // để 7 + 2 + 1 luôn khớp đúng tổng, không lệch vài đồng do rounding.
+                        const total = Math.round(r.commissionTotal ?? (r.commission / 0.7));
+                        const part2 = Math.round(total * 0.2);
+                        const part3 = Math.max(0, total - r.commission - part2);
+
+                        const orderIdKey = r.orderId || r.id;
+                        const splitBase = {
+                            orderId: r.orderId, id: r.id, createdBy: r.createdBy,
+                            sellerEmail: r.sellerEmail, rootAdvisor: r.rootAdvisor,
+                            customer: r.customer, phone: r.phone, orderType: r.orderType,
+                            paymentMethod: r.paymentMethod, createdAt: r.createdAt,
+                            paidAt: new Date().toISOString(), totalValue: r.totalValue,
+                            basePriceField: r.basePriceField, commissionTotal: total,
+                            commissionStatus: 'pending', collaboratorEmail: r.collaboratorEmail,
+                            bonusAmount: 0, bonusStatus: 'paid', adminOnly: true,
+                            creatorRole: r.creatorRole, splitEligible: true,
+                        };
+
+                        await Promise.all([
+                            setDoc(doc(db, 'commissions', `${orderIdKey}-2`), {
+                                ...splitBase, commission: part2, splitPart: 2,
+                            }),
+                            setDoc(doc(db, 'commissions', `${orderIdKey}-3`), {
+                                ...splitBase, commission: part3, splitPart: 3,
+                            }),
+                        ]);
+                    }
+                } catch (e) {
+                    console.error('handleApprove split error:', e);
+                }
+
+                // Thông báo tách khỏi try ở trên: lỗi khi sinh dòng 2/1 phần không được
+                // nuốt luôn cả thông báo trả hoa hồng cho người bán.
+                try {
                     if (targetEmail && targetEmail !== userDetail?.email) {
                         await createNotification({
                             userEmail: targetEmail,
@@ -377,7 +441,7 @@ export default function CommissionScreen() {
                 }))
                 .filter(o => o.commission > 0);
         }
-    }, [orders, mainTab, isAdmin, userDetail.email]);
+    }, [orders, mainTab, isAdmin, userDetail?.email]);
 
     const filteredRecords = useMemo(() => {
         if (!userDetail?.email) return [];
@@ -397,6 +461,18 @@ export default function CommissionScreen() {
     const paid = commRecords.filter(r => r.status === 'paid').reduce((s, r) => s + r.commission, 0);
     const pendingCount = commRecords.filter(r => r.status === 'pending').length;
     const paidCount = commRecords.filter(r => r.status === 'paid').length;
+
+    // Bản ghi hoa hồng = 0 bị `.filter(o => o.commission > 0)` ẩn khỏi danh sách, nên khi
+    // cấu hình sai (bảng giá thiếu giá gốc của vai trò, hoặc đơn do người bán thanh toán)
+    // admin thấy y hệt như "không tạo được hoa hồng". Đếm và báo rõ để phân biệt.
+    const hiddenZero = useMemo(() => {
+        if (!isAdmin || mainTab !== 'commission') return { count: 0, missingPrice: 0 };
+        const zero = orders.filter(o => !(o.commission > 0));
+        return {
+            count: zero.length,
+            missingPrice: zero.filter(o => o.missingBasePrice).length,
+        };
+    }, [orders, isAdmin, mainTab]);
 
     const now = new Date();
     const bars = useMemo(() => Array.from({ length: 6 }, (_, i) => {
@@ -452,11 +528,26 @@ export default function CommissionScreen() {
                 contentContainerStyle={S.scroll}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
             >
+                {/* Nhãn là tiền nên giá trị phải là tiền — trước đây truyền pendingCount/paidCount
+                    (số bản ghi) qua fmtShort, ra "3" dưới nhãn "Chờ giải ngân" rất dễ hiểu nhầm.
+                    Số lượng vẫn hiển thị ở bộ lọc "Chờ trả / Đã trả" ngay bên dưới. */}
                 <View style={S.statsRow}>
-                    <StatCard label="Chờ giải ngân" value={fmtShort(pendingCount)} color="#D97706" borderColor="#FDE68A" />
-                    <StatCard label="Đã thanh toán" value={fmtShort(paidCount)} color="#16A34A" borderColor="#86EFAC" />
-                    <StatCard label="Tổng cộng" value={fmtShort(pendingCount + paidCount)} color={accentColor} borderColor={mainTab === 'bonus' ? '#DDD6FE' : '#BFDBFE'} />
+                    <StatCard label="Chờ giải ngân" value={fmtShort(pending)} color="#D97706" borderColor="#FDE68A" />
+                    <StatCard label="Đã thanh toán" value={fmtShort(paid)} color="#16A34A" borderColor="#86EFAC" />
+                    <StatCard label="Tổng cộng" value={fmtShort(pending + paid)} color={accentColor} borderColor={mainTab === 'bonus' ? '#DDD6FE' : '#BFDBFE'} />
                 </View>
+
+                {/* {hiddenZero.count > 0 && (
+                    <View style={S.zeroWarn}>
+                        <Ionicons name="alert-circle-outline" size={15} color="#B45309" />
+                        <Text style={S.zeroWarnText}>
+                            {hiddenZero.count} đơn đã thanh toán có hoa hồng 0đ nên không hiện trong danh sách.
+                            {hiddenZero.missingPrice > 0
+                                ? ` Trong đó ${hiddenZero.missingPrice} đơn do bảng giá thiếu giá gốc của vai trò (vd chưa điền Giá Sale) — sửa ở màn Bảng giá rồi đặt lại trạng thái đơn.`
+                                : ' Thường do đơn thuộc loại người bán thanh toán, hoặc giá bán bằng đúng giá gốc.'}
+                        </Text>
+                    </View>
+                )} */}
 
                 <View style={S.card}>
                     <View style={S.cardHeader}>
@@ -531,6 +622,8 @@ const MT = StyleSheet.create({
 const S = StyleSheet.create({
     scroll: { padding: IS_DESKTOP ? 32 : 16, paddingTop: IS_DESKTOP ? 16 : 12 },
     statsRow: { flexDirection: 'row', gap: IS_DESKTOP ? 12 : 8, marginBottom: 14 },
+    zeroWarn: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 10, padding: 12, marginBottom: 14 },
+    zeroWarnText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 18 },
     card: { backgroundColor: '#fff', borderRadius: 16, padding: IS_DESKTOP ? 20 : 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 },
     cardTitle: { fontSize: IS_DESKTOP ? 15 : 14, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 },

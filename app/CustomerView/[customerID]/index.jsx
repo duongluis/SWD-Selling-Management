@@ -1,12 +1,13 @@
 import BgWatermark from "@/components/Main/BgWatermark";
 import { showAlert } from "@/components/Main/showAlert";
 import { createNotification } from "@/components/Utils/chatService";
+import { deleteCustomerGuarded } from "@/components/Utils/deleteCustomer";
 import { canEditConsult, getRole } from "@/components/Utils/roleHelper";
 import Colors from "@/constant/Colors";
 import { UserDetailContext } from "@/context/UserDetailContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { collection, doc, getDocs, query, updateDoc, where } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, query, updateDoc, where } from "firebase/firestore";
 import { useContext, useState } from "react";
 import {
   Linking,
@@ -87,6 +88,59 @@ export default function CustomerView() {
     : "";
 
   const isConsult = ['none', 'pending', 'success', 'failed'].includes(customer.status);
+
+  // Xoá — chỉ admin, khớp rule Firestore (customers/consult đều `allow delete: if isAdmin()`).
+  // Màn này dùng chung cho khách hàng thật (collection 'customers') và bản ghi tư vấn
+  // (collection 'consult'), nên phải rẽ nhánh theo isConsult.
+  const [deleting, setDeleting] = useState(false);
+  const canDeleteCustomer = role === 'admin' && !!customer.docId;
+
+  const handleDeleteCustomer = () => {
+    if (!canDeleteCustomer) return;
+
+    // Tư vấn "Thành công" là căn cứ tính giá gốc theo giá CTV (price_c) cho đơn sau này
+    // của khách — xoá đi thì đơn mới tính theo giá vai trò thông thường.
+    const extra = isConsult && customer.status === 'success'
+      ? '\n\nLưu ý: đây là tư vấn đã thành công. Xoá đi thì các đơn hàng tạo sau của khách này không còn được tính là khách được giới thiệu.'
+      : '';
+
+    showAlert(
+      isConsult ? 'Xoá tư vấn khách' : 'Xoá khách hàng',
+      `Bạn có chắc muốn xoá ${isConsult ? 'bản ghi tư vấn' : 'khách hàng'} "${name}"? Không thể hoàn tác.${extra}`,
+      async () => {
+        setDeleting(true);
+        try {
+          if (isConsult) {
+            await deleteDoc(doc(db, 'consult', customer.docId));
+          } else {
+            const { ok, linkedOrders } = await deleteCustomerGuarded(customer);
+            if (!ok) {
+              showAlert(
+                'Không thể xoá',
+                `Khách hàng này còn ${linkedOrders} đơn hàng. Hãy xoá các đơn đó trước, nếu không đơn sẽ trỏ tới khách hàng không còn tồn tại.`
+              );
+              return;
+            }
+          }
+
+          if (customer.createdBy && customer.createdBy !== userDetail?.email) {
+            await createNotification({
+              userEmail: customer.createdBy,
+              type: isConsult ? 'consult_deleted' : 'customer_deleted',
+              title: isConsult ? '🗑️ Tư vấn khách đã bị xoá' : '🗑️ Khách hàng đã bị xoá',
+              body: `${isConsult ? 'Bản ghi tư vấn' : 'Khách hàng'} ${name} đã bị admin xoá khỏi hệ thống`,
+              path: isConsult ? '/(tabs)/customerctv' : '/(tabs)/customer',
+            }).catch(() => { });
+          }
+          router.replace(isConsult ? '/(tabs)/customerctv' : '/(tabs)/customer');
+        } catch (e) {
+          showAlert('Lỗi', `Không thể xoá ${isConsult ? 'tư vấn' : 'khách hàng'}: ` + e.message);
+        } finally {
+          setDeleting(false);
+        }
+      }
+    );
+  };
   const [consultStatus, setConsultStatus] = useState(customer.status || 'none');
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showFailureInput, setShowFailureInput] = useState(false);
@@ -242,6 +296,19 @@ export default function CustomerView() {
                 <Ionicons name="logo-whatsapp" size={16} color={Colors.Zalo} />
                 <Text style={[styles.actionBtnText, { color: Colors.Zalo }]}>
                   Zalo
+                </Text>
+              </TouchableOpacity>
+            )}
+            {canDeleteCustomer && (
+              <TouchableOpacity
+                style={[styles.actionBtn, { borderColor: '#FECACA', backgroundColor: '#FEF2F2' }, deleting && { opacity: 0.6 }]}
+                onPress={handleDeleteCustomer}
+                disabled={deleting}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                <Text style={[styles.actionBtnText, { color: '#DC2626' }]}>
+                  {deleting ? 'Đang xoá...' : 'Xoá'}
                 </Text>
               </TouchableOpacity>
             )}

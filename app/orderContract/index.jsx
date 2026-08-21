@@ -9,14 +9,16 @@
 // ✅ Bổ sung: điều khoản thanh toán theo nhiều đợt (tối đa 4 đợt), tự kiểm tra tổng % = 100%
 
 import BgWatermark from '@/components/Main/BgWatermark';
+import { showAlert } from '@/components/Main/showAlert';
+import { productItems } from '@/components/Utils/orderItems';
 import { db } from '@/config/firebaseConfig';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, Alert, ScrollView,
+    ActivityIndicator, ScrollView,
     StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -105,7 +107,7 @@ async function exportPDF(htmlContent, isDesktop) {
             const Print = await import('expo-print');
             await Print.printAsync({ html: htmlContent });
         } catch (e) {
-            Alert.alert('Lỗi', 'Không thể xuất PDF: ' + e.message);
+            showAlert('Lỗi', 'Không thể xuất PDF: ' + e.message);
         }
     }
 }
@@ -488,7 +490,7 @@ function ServicesEditor({ services, setServices }) {
             <HR />
 
             {(services || []).length === 0 && (
-                <Text style={S.svcEmpty}>Chưa có dịch vụ nào. Bấm "Thêm dịch vụ" để bổ sung.</Text>
+                <Text style={S.svcEmpty}>Chưa có dịch vụ nào. Bấm “Thêm dịch vụ” để bổ sung.</Text>
             )}
 
             {(services || []).map((sv, i) => (
@@ -591,7 +593,7 @@ function BankInfoEditor({ bankInfo, setBankInfo }) {
     return (
         <View style={S.templateCard}>
             <Text style={S.sectionHead}>Ngân hàng & Người gửi</Text>
-            <Text style={S.svcHint}>Hiển thị ở mục "Thông tin ngân hàng" và cuối bản báo giá</Text>
+            <Text style={S.svcHint}>Hiển thị ở mục “Thông tin ngân hàng” và cuối bản báo giá</Text>
             <HR />
 
             <Text style={S.subHead}>Thông tin ngân hàng</Text>
@@ -646,7 +648,7 @@ function PaymentTermsEditor({ paymentTerms, setPaymentTerms, total }) {
             <HR />
 
             {terms.length === 0 && (
-                <Text style={S.svcEmpty}>Chưa có đợt thanh toán nào. Bấm "Thêm đợt thanh toán" để bổ sung.</Text>
+                <Text style={S.svcEmpty}>Chưa có đợt thanh toán nào. Bấm “Thêm đợt thanh toán” để bổ sung.</Text>
             )}
 
             {terms.map((t, i) => {
@@ -812,8 +814,10 @@ export default function OrderContractScreen() {
     });
 
     // Shared calculator state — ✅ luôn fallback []
-    const safeItems = Array.isArray(rawOrder.items) && rawOrder.items.length > 0
-        ? rawOrder.items
+    // Nhóm I của báo giá chỉ gồm sản phẩm; dịch vụ của đơn được nạp vào nhóm II bên dưới.
+    const orderProducts = productItems(rawOrder);
+    const safeItems = orderProducts.length > 0
+        ? orderProducts
         : mode === 'order' ? [] : form.items;
 
     const [items, setItems] = useState(safeItems);
@@ -848,6 +852,32 @@ export default function OrderContractScreen() {
             ))
             .catch(e => console.warn('catalog fetch:', e));
     }, []);
+
+    // ✅ Dịch vụ của đơn nằm ở collection 'service' → nạp sẵn vào nhóm "Thiết bị & Dịch vụ".
+    // Chỉ chạy 1 lần cho mode=order và không ghi đè nếu người dùng đã tự nhập dòng nào.
+    useEffect(() => {
+        if (mode !== 'order' || !rawOrder?.id) return;
+        let cancelled = false;
+        getDocs(query(collection(db, 'service'), where('orderId', '==', rawOrder.id)))
+            .then(snap => {
+                if (cancelled || snap.empty) return;
+                const rows = snap.docs.map(d => {
+                    const sv = d.data();
+                    return {
+                        name: sv.name || sv.type || 'Dịch vụ',
+                        qty: String(sv.qty ?? 1),
+                        unit: sv.unit || 'Gói',
+                        price: String(sv.price ?? 0),
+                        origin: 'SWD',
+                        included: !!sv.included,
+                        note: '',
+                    };
+                });
+                setServices(prev => (prev && prev.length > 0) ? prev : rows);
+            })
+            .catch(e => console.warn('fetch order services:', e));
+        return () => { cancelled = true; };
+    }, [mode, rawOrder?.id]);
 
     // ✅ Gợi ý thông tin ngân hàng/người gửi từ hồ sơ user khi có sẵn (không ghi đè nếu người dùng đã nhập)
     useEffect(() => {

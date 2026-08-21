@@ -1,5 +1,8 @@
 // components/UI/CustomerDetail.jsx — style giống order panel
 
+import { showAlert } from '@/components/Main/showAlert';
+import { createNotification } from '@/components/Utils/chatService';
+import { deleteCustomerGuarded } from '@/components/Utils/deleteCustomer';
 import { fmtDate, fmtPhone, getInitials } from '@/components/Utils/formatters';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,13 +32,55 @@ function InfoSection({ title, rows }) {
     );
 }
 
-export default function CustomerDetail({ customer, onClose, onEdit }) {
+export default function CustomerDetail({ customer, onClose, onEdit, onDeleted }) {
     const router = useRouter();
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail); // ← thêm getRole
     const [local, setLocal] = useState(null);
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => { if (customer) setLocal(customer); }, [customer]);
+
+    // Chỉ admin được xoá — khớp rule Firestore `customers.allow delete: if isAdmin()`,
+    // nếu cho role khác bấm thì Firestore chặn và người dùng chỉ thấy lỗi khó hiểu.
+    const canDeleteCustomer = role === 'admin';
+
+    const handleDelete = () => {
+        if (!canDeleteCustomer || !local?.docId) return;
+        showAlert(
+            'Xoá khách hàng',
+            `Bạn có chắc muốn xoá khách hàng "${local.name || local.companyName || local.phone}"? Không thể hoàn tác.`,
+            async () => {
+                setDeleting(true);
+                try {
+                    const { ok, linkedOrders } = await deleteCustomerGuarded(local);
+                    if (!ok) {
+                        showAlert(
+                            'Không thể xoá',
+                            `Khách hàng này còn ${linkedOrders} đơn hàng. Hãy xoá các đơn đó trước, nếu không đơn sẽ trỏ tới khách hàng không còn tồn tại.`
+                        );
+                        return;
+                    }
+                    if (local.createdBy && local.createdBy !== userDetail?.email) {
+                        await createNotification({
+                            userEmail: local.createdBy,
+                            type: 'customer_deleted',
+                            title: '🗑️ Khách hàng đã bị xoá',
+                            body: `Khách hàng ${local.name || local.phone || '—'} đã bị admin xoá khỏi hệ thống`,
+                            path: '/(tabs)/customer',
+                        }).catch(() => { });
+                    }
+                    onDeleted?.(local);
+                    onClose?.();
+                } catch (e) {
+                    showAlert('Lỗi', 'Không thể xoá khách hàng: ' + e.message);
+                } finally {
+                    setDeleting(false);
+                }
+            }
+        );
+    };
+
     if (!customer || !local) return null;
 
     const color = hashColor(local.name);
@@ -78,6 +123,16 @@ export default function CustomerDetail({ customer, onClose, onEdit }) {
                         >
                             <Ionicons name="add-circle-outline" size={13} color="#059669" />
                             <Text style={[S.aBtnText, { color: '#059669' }]}>Tạo đơn</Text>
+                        </TouchableOpacity>
+                    )}
+                    {canDeleteCustomer && (
+                        <TouchableOpacity
+                            style={[S.aBtn, S.aBtnDanger, deleting && { opacity: 0.6 }]}
+                            onPress={handleDelete}
+                            disabled={deleting}
+                        >
+                            <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                            <Text style={[S.aBtnText, S.aBtnDangerText]}>{deleting ? 'Đang xoá...' : 'Xoá'}</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -140,6 +195,8 @@ const S = StyleSheet.create({
     actions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
     aBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
     aBtnText: { fontSize: 12, fontWeight: '600', color: '#2563EB' },
+    aBtnDanger: { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
+    aBtnDangerText: { color: '#DC2626' },
     // Info section
     section: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
     sectionTitle: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.07, marginBottom: 10 },

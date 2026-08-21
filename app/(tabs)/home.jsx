@@ -6,6 +6,7 @@ import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import StatBar from '@/components/UI/StatBar';
 import { backupToNAS, exportCSV, exportExcel, exportImagesZip, fetchExportData } from '@/components/Utils/exportData';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
+import { productTotal } from '@/components/Utils/orderItems';
 import { canAdd, getRole, isGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -217,6 +218,7 @@ const STATUS_CFG = {
 // ── Web Quick Action (chỉ dùng trên web) ─────────────────────
 function QuickAction({ name, icon, action, color, bg }) {
   return (
+
     <TouchableOpacity style={H.quickItem} onPress={action} activeOpacity={0.7}>
       <View style={[H.quickIcon, { backgroundColor: bg }]}>
         <Ionicons name={icon} size={20} color={color} />
@@ -270,7 +272,7 @@ function MobileGreeting({ userDetail, role, onExport, onNotif }) {
 // ── Mobile order row ──────────────────────────────────────────
 function MobileOrderRow({ order }) {
   const cfg = STATUS_CFG[order.status] || { color: '#64748B', bg: '#F1F5F9', label: order.status || '—' };
-  const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
+  const total = productTotal(order);
   return (
     <View style={MB.orderRow}>
       <View style={[MB.orderDot, { backgroundColor: cfg.color + '22' }]}>
@@ -461,6 +463,7 @@ export default function HomeView() {
           <View>
             <Text style={H.webTitle}>
               Xin chào <Text style={{ color: '#10B981' }}>{userDetail?.role}</Text> {userDetail?.name} 👋
+
             </Text>
             <Text style={H.webSub}>Tổng quan hoạt động kinh doanh của bạn hôm nay.</Text>
           </View>
@@ -474,6 +477,7 @@ export default function HomeView() {
                 <Text style={H.webBtnSecondaryText}>Xuất dữ liệu</Text>
               </TouchableOpacity>
             )}
+            {console.log("thong tin tai khoan", userDetail)}
             {canAdd(role) && (
               <TouchableOpacity style={H.webBtn} onPress={() => router.push('/addOrder')}>
                 <Ionicons name="add" size={16} color="#fff" />
@@ -523,7 +527,7 @@ export default function HomeView() {
               </View>
             ) : recentOrders.map(order => {
               const cfg = STATUS_CFG[order.status] || { color: '#64748B', bg: '#F1F5F9', label: order.status || '—' };
-              const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
+              const total = productTotal(order);
               return (
                 <View key={order.id} style={H.orderRow}>
                   <View style={[H.orderDot, { backgroundColor: cfg.color }]} />

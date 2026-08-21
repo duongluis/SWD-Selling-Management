@@ -11,7 +11,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { memo, useContext, useEffect, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -126,19 +125,20 @@ export default function AddCustomer() {
 
   const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
+  const leaveScreen = () =>
+    router.replace(fromConsult ? '(tabs)/customerctv' : '(tabs)/customer');
+
+  // Nút Huỷ: bỏ dở việc tạo khách từ 1 bản ghi tư vấn → trả tư vấn về 'pending'
+  // để sau còn chuyển đổi lại được.
   const handleCancel = async () => {
     if (consultDocId && fromConsult) {
       try {
-        await updateDoc(doc(db, 'consult', consultDocId), {
-          status: 'pending'
-        });
+        await updateDoc(doc(db, 'consult', consultDocId), { status: 'pending' });
       } catch (e) {
         console.error('Rollback lỗi:', e);
       }
-      router.replace('(tabs)/customerctv');
-      return;
     }
-    router.replace(fromConsult ? '(tabs)/customerctv' : '(tabs)/customer');
+    leaveScreen();
   }
 
 
@@ -148,13 +148,17 @@ export default function AddCustomer() {
       query(collection(db, 'customers'), where('phone', '==', normalizePhone(form.phone)))
     );
 
-    if (userQuery.empty) {
-      return false;
-    } else {
-      showAlert("Đã tồn tại khách hàng trên hệ thống, vui lòng liên hệ quản trị viên để biết thêm thông tin ")
-      handleCancel();
-      return true;
-    }
+    if (userQuery.empty) return false;
+
+    // Khách đã có sẵn trong hệ thống → bản ghi tư vấn này thực chất ĐÃ thành công.
+    // Không gọi handleCancel ở đây: nó sẽ đẩy tư vấn về 'pending' và kẹt ở đó vĩnh viễn,
+    // vì lần chuyển đổi nào sau này cũng lại vướng đúng cái khách đang tồn tại.
+    showAlert(
+      'Khách hàng đã tồn tại',
+      'Số điện thoại này đã có trong hệ thống. Vui lòng liên hệ quản trị viên để biết thêm thông tin.'
+    );
+    leaveScreen();
+    return true;
   };
 
   // Thêm hàm calculateHierarchy ngay sau các state, trước handleSave
@@ -188,9 +192,12 @@ export default function AddCustomer() {
       return;
     }
     setSubmitting(true);
-    if (await checkingDuplicate()) return;
-
     try {
+      // Kiểm tra trùng phải nằm TRONG try: trước đây `return` sớm ở đây bỏ qua luôn
+      // khối finally, nút Lưu kẹt ở trạng thái "đang gửi" và không bấm lại được nếu
+      // getDocs lỗi mạng.
+      if (await checkingDuplicate()) return;
+
       // Admin tạo khách hộ → creator/hierarchy lấy theo người được hỗ trợ vừa chọn,
       // nếu bỏ trống thì giữ nguyên logic cũ (consultCreatedBy hoặc chính người tạo)
       let effectiveCreatorEmail = consultCreatedBy || userDetail?.email;
@@ -226,7 +233,7 @@ export default function AddCustomer() {
       });
     } catch (e) {
       console.error('Lỗi:', e.code, e.message);
-      Alert.alert('Lỗi', e.message);
+      showAlert('Lỗi', e.message);
     } finally {
       setSubmitting(false);
     }

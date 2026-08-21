@@ -1,29 +1,10 @@
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
 
-// ── Mapping: (serviceType, newServiceStatus) → orderStatus ──
-// Chỉ map những trạng thái cần auto-sync (changeable:false ở đơn hàng)
-const SERVICE_TO_ORDER_STATUS = {
-    // Dịch vụ Giao hàng → Đơn buôn
-    DELIVERY: {
-        'Đang xử lý': 'Đang giao hàng', // service chờ→đang  : order chờ giao→đang giao
-        'Hoàn thành': 'Đã giao hàng',   // service hoàn thành: order đã giao
-    },
-    // Dịch vụ Lắp đặt → Đơn lẻ
-    INSTALLATION: {
-        'Đang xử lý': 'Đang lắp đặt',   // service đang xử lý → order đang lắp đặt
-        'Hoàn thành': 'Chờ thanh toán', // service hoàn thành → order chờ thanh toán
-    },
-};
-
-// ── Tên trạng thái service (từ status_seed) ──────────────────
-// Map từ key nội bộ cũ sang tên mới theo seed
-const SVC_STATUS_NAMES = {
-    PENDING: 'Chờ xử lý',
-    PROCESSING: 'Đang xử lý',
-    COMPLETED: 'Hoàn thành',
-    CANCELLED: 'Đã hủy',
-};
+// Chiều service → order KHÔNG map theo từng loại dịch vụ: syncOrderStatusFromService chỉ
+// đổi đơn sang "Chờ thanh toán" khi TẤT CẢ dịch vụ của đơn đã "Hoàn thành".
+// (Hai bảng map SERVICE_TO_ORDER_STATUS và SVC_STATUS_NAMES trước đây nằm ở đây mô tả một
+//  thiết kế cũ không còn được dùng — đã xoá để khỏi hiểu nhầm là code đang chạy theo chúng.)
 
 /**
  * Gọi sau khi updateDoc service thành công.

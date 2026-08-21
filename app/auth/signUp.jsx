@@ -1,11 +1,12 @@
 import BgWatermark from '@/components/Main/BgWatermark';
+import { showAlert } from '@/components/Main/showAlert';
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import Colors from '@/constant/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert, Linking, Platform, StyleSheet, Text,
+  Linking, Platform, StyleSheet, Text,
   TextInput, TouchableOpacity, View,
 } from 'react-native';
 
@@ -24,11 +25,11 @@ export default function SignUp() {
 
   const { isDesktop } = useLayout();
   const validate = () => {
-    if (!gmail.trim()) { Alert.alert('Thông báo', 'Vui lòng nhập email'); return false; }
-    if (!password) { Alert.alert('Thông báo', 'Vui lòng nhập mật khẩu'); return false; }
-    if (password.length < 6) { Alert.alert('Thông báo', 'Mật khẩu phải có ít nhất 6 ký tự'); return false; }
-    if (password !== rePassword) { Alert.alert('Thông báo', 'Mật khẩu xác nhận không khớp'); return false; }
-    if (!agree) { Alert.alert('Thông báo', 'Vui lòng đồng ý với điều khoản'); return false; }
+    if (!gmail.trim()) { showAlert('Thông báo', 'Vui lòng nhập email'); return false; }
+    if (!password) { showAlert('Thông báo', 'Vui lòng nhập mật khẩu'); return false; }
+    if (password.length < 6) { showAlert('Thông báo', 'Mật khẩu phải có ít nhất 6 ký tự'); return false; }
+    if (password !== rePassword) { showAlert('Thông báo', 'Mật khẩu xác nhận không khớp'); return false; }
+    if (!agree) { showAlert('Thông báo', 'Vui lòng đồng ý với điều khoản'); return false; }
     return true;
   };
 

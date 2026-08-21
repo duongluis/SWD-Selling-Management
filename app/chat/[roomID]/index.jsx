@@ -3,6 +3,7 @@ import BgWatermark from '@/components/Main/BgWatermark';
 import {
     markRoomAsRead, sendMessage, subscribeMessages,
 } from '@/components/Utils/chatService';
+import { productItems } from '@/components/Utils/orderItems';
 import { db } from '@/config/firebaseConfig';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,7 +45,7 @@ function formatDate(val) {
 
 // ── Order Card ────────────────────────────────────────────────
 function OrderCard({ order }) {
-    const items = order.items || [];
+    const items = productItems(order);
     const total = items.reduce((sum, it) => sum + (it.price || it.basePrice || 0) * (it.qty || 1), 0);
 
     return (
@@ -383,7 +384,7 @@ export default function ChatScreen() {
                     address: order.address,
                     createdAt: order.createdAt,
                     status: order.status,
-                    items: order.items || [],
+                    items: productItems(order),
                 },
                 senderEmail: myEmail,
                 senderName: myName,

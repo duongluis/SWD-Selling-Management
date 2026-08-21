@@ -2,6 +2,7 @@
 
 import BgWatermark from '@/components/Main/BgWatermark';
 import { createNotification } from '@/components/Utils/chatService';
+import { productItems, productTotal } from '@/components/Utils/orderItems';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -60,6 +61,8 @@ export default function EditService() {
     const [orderSearch, setOrderSearch] = useState('');
 
     const { customers } = useCustomers();
+    // Đơn liên quan chỉ liệt kê sản phẩm (dịch vụ có document riêng ở collection 'service')
+    const orderProducts = productItems(selectedOrder);
 
     useEffect(() => {
         if (customers.length === 0) return;
@@ -108,7 +111,7 @@ export default function EditService() {
             const updated = {
                 type: serviceType,
                 orderId: selectedOrder?.id || null,
-                orderItems: selectedOrder?.items || [],
+                orderItems: productItems(selectedOrder),
                 customer: customerName.trim(),
                 phone: customerPhone.trim(),
                 address: address.trim(),
@@ -195,7 +198,8 @@ export default function EditService() {
                 ) : filteredOrders.length === 0 ? (
                     <Text style={styles.pickerEmpty}>{orderSearch ? 'Không tìm thấy' : 'Chưa có đơn hàng nào'}</Text>
                 ) : filteredOrders.map((order, i) => {
-                    const total = (order.items || []).reduce((s, p) => s + (p.price * p.qty || 0), 0);
+                    const total = productTotal(order);
+                    const productCount = productItems(order).length;
                     return (
                         <TouchableOpacity
                             key={order.id || i}
@@ -206,7 +210,7 @@ export default function EditService() {
                             <View style={styles.pickerItemIcon}><Ionicons name="receipt-outline" size={14} color="#2563EB" /></View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.pickerItemId}>#{order.id}</Text>
-                                <Text style={styles.pickerItemSub}>{order.customer} · {order.items?.length || 0} sản phẩm</Text>
+                                <Text style={styles.pickerItemSub}>{order.customer} · {productCount} sản phẩm</Text>
                             </View>
                             <Text style={styles.pickerItemAmount}>{fmt(total)}</Text>
                         </TouchableOpacity>
@@ -279,7 +283,7 @@ export default function EditService() {
                                         <Ionicons name="receipt-outline" size={15} color="#2563EB" />
                                         <View style={{ flex: 1 }}>
                                             <Text style={W.selectedOrderId}>#{selectedOrder.id}</Text>
-                                            <Text style={W.selectedOrderSub}>{selectedOrder.customer} · {selectedOrder.items?.length || 0} sản phẩm</Text>
+                                            <Text style={W.selectedOrderSub}>{selectedOrder.customer} · {orderProducts.length} sản phẩm</Text>
                                         </View>
                                         <TouchableOpacity onPress={() => { setSelectedOrder(null); setCustomerName(''); setCustomerPhone(''); }}>
                                             <Ionicons name="close-circle" size={16} color="#94A3B8" />
@@ -294,10 +298,10 @@ export default function EditService() {
                                 )}
                             </TouchableOpacity>
                             {showOrderPicker && <OrderPickerDropdown />}
-                            {selectedOrder?.items?.length > 0 && (
+                            {orderProducts.length > 0 && (
                                 <View style={W.orderItemsBox}>
                                     <Text style={W.orderItemsTitle}>Sản phẩm trong đơn:</Text>
-                                    {selectedOrder.items.map((item, i) => (
+                                    {orderProducts.map((item, i) => (
                                         <View key={i} style={W.orderItemRow}>
                                             <Ionicons name="water-outline" size={13} color="#64748B" />
                                             <Text style={W.orderItemName}>{item.name}</Text>
@@ -430,9 +434,9 @@ export default function EditService() {
                                 )}
                             </TouchableOpacity>
                             {showOrderPicker && <OrderPickerDropdown />}
-                            {selectedOrder?.items?.length > 0 && (
+                            {orderProducts.length > 0 && (
                                 <View style={M.orderItemsBox}>
-                                    {selectedOrder.items.map((item, i) => (
+                                    {orderProducts.map((item, i) => (
                                         <View key={i} style={M.orderItemRow}>
                                             <Ionicons name="water-outline" size={12} color="#64748B" />
                                             <Text style={M.orderItemName} numberOfLines={1}>{item.name}</Text>

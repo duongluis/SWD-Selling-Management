@@ -8,7 +8,7 @@ import { canEditConsult, getRole } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
     Dimensions,
@@ -82,7 +82,7 @@ function InfoSection({ title, children }) {
 }
 
 // ── Main Component ────────────────────────────────────────────
-export default function CtvDetail({ customer, onClose, onUpdated }) {
+export default function CtvDetail({ customer, onClose, onUpdated, onDeleted }) {
     const router = useRouter();
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
@@ -90,6 +90,7 @@ export default function CtvDetail({ customer, onClose, onUpdated }) {
     const [local, setLocal] = useState(null);
     const [consultStatus, setConsultStatus] = useState(customer?.status || 'none');
     const [updatingStatus, setUpdatingStatus] = useState(false);
+    const [deleting, setDeleting] = useState(false);
     const [showFailureInput, setShowFailureInput] = useState(false);
     const [failureReason, setFailureReason] = useState(customer?.reason || '');
 
@@ -162,6 +163,43 @@ export default function CtvDetail({ customer, onClose, onUpdated }) {
         finally { setUpdatingStatus(false); }
     };
 
+    // Chỉ admin được xoá — khớp rule Firestore `consult.allow delete: if isAdmin()`.
+    const canDeleteConsult = role === 'admin' && isConsult && !!local.docId;
+
+    const handleDelete = () => {
+        if (!canDeleteConsult) return;
+        // Tư vấn "Thành công" là căn cứ để tính giá gốc theo giá CTV (price_c) cho các đơn
+        // sau này của khách — xoá đi thì đơn mới sẽ tính theo giá vai trò thông thường.
+        const extra = consultStatus === 'success'
+            ? '\n\nLưu ý: đây là tư vấn đã thành công. Xoá đi thì các đơn hàng tạo sau của khách này không còn được tính là khách được giới thiệu.'
+            : '';
+        showAlert(
+            'Xoá tư vấn khách',
+            `Bạn có chắc muốn xoá bản ghi tư vấn "${local.name || local.phone}"? Không thể hoàn tác.${extra}`,
+            async () => {
+                setDeleting(true);
+                try {
+                    await deleteDoc(doc(db, 'consult', local.docId));
+                    if (local.createdBy && local.createdBy !== userDetail?.email) {
+                        await createNotification({
+                            userEmail: local.createdBy,
+                            type: 'consult_deleted',
+                            title: '🗑️ Tư vấn khách đã bị xoá',
+                            body: `Bản ghi tư vấn ${local.name || local.phone || '—'} đã bị admin xoá khỏi hệ thống`,
+                            path: '/(tabs)/customerctv',
+                        }).catch(() => { });
+                    }
+                    onDeleted?.(local);
+                    onClose?.();
+                } catch (e) {
+                    showAlert('Lỗi', 'Không thể xoá tư vấn: ' + e.message);
+                } finally {
+                    setDeleting(false);
+                }
+            }
+        );
+    };
+
     const statusCfg = CONSULT_STATUS_CFG[consultStatus] || CONSULT_STATUS_CFG.none;
 
     return (
@@ -219,6 +257,16 @@ export default function CtvDetail({ customer, onClose, onUpdated }) {
                             })}>
                             <Ionicons name="add-circle-outline" size={13} color="#7C3AED" />
                             <Text style={[S.aBtnText, { color: '#7C3AED' }]}>Tạo đơn</Text>
+                        </TouchableOpacity>
+                    )}
+                    {canDeleteConsult && (
+                        <TouchableOpacity
+                            style={[S.aBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }, deleting && { opacity: 0.6 }]}
+                            onPress={handleDelete}
+                            disabled={deleting}
+                        >
+                            <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                            <Text style={[S.aBtnText, { color: '#DC2626' }]}>{deleting ? 'Đang xoá...' : 'Xoá'}</Text>
                         </TouchableOpacity>
                     )}
                 </View>

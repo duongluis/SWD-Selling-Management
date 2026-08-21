@@ -2,6 +2,7 @@
 
 import BgWatermark from '@/components/Main/BgWatermark';
 import { createNotification } from '@/components/Utils/chatService';
+import { productItems } from '@/components/Utils/orderItems';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -109,7 +110,10 @@ export default function EditOrder() {
     const [orderDate, setOrderDate] = useState(existing.createdAt || '');
     const [deliveryAddress, setDeliveryAddress] = useState(existing.address || '');
     const [notes, setNotes] = useState(existing.note || '');
-    const [items, setItems] = useState(existing.items || []);
+    // Chỉ sửa sản phẩm. Đơn cũ có dòng dịch vụ lẫn trong items sẽ bị loại ra ở đây và
+    // không được ghi lại — dịch vụ đã có document riêng ở collection 'service', sửa tại
+    // màn Dịch vụ. Xem components/Utils/orderItems.js.
+    const [items, setItems] = useState(() => productItems(existing));
     const [submitting, setSubmitting] = useState(false);
 
     const updateItemQty = (id, qty) =>
@@ -133,6 +137,7 @@ export default function EditOrder() {
                 address: deliveryAddress,
                 note: notes,
                 items: items,
+                totalAmount: total,   // giữ đồng bộ với items, không để lệch sau khi sửa
             });
 
             let createdBy = null;

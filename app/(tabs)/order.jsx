@@ -8,6 +8,7 @@ import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import OrderDetail from '@/components/UI/OrderDetail';
 import StatBar from '@/components/UI/StatBar';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
+import { productItems, productTotal } from '@/components/Utils/orderItems';
 import { canAdd, getPriceField, getRole, isAdmin, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -133,7 +134,7 @@ function TotalRow({ totalCost, totalRevenue, showCost, showCreator, tableStyles 
 function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles, tableStyles, showCreator, creatorNames }) {
   const tcfg = TYPE_CFG[item.orderType];
   const pcfg = PAYMENT_CFG[item.paymentMethod] || { label: item.paymentMethod || '—', c: '#64748B', bg: '#F1F5F9' };
-  const total = (item.items || []).reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
+  const total = productTotal(item);   // doanh thu sản phẩm, không gồm dịch vụ
   const isCancelled = (item.status || '').includes('hủy') || item.status === 'CANCELLED';
   const avatarColor = isCancelled ? '#94A3B8' : AVATAR_COLORS[index % AVATAR_COLORS.length];
   const scfg = getStatusCfg(item.status);
@@ -144,7 +145,7 @@ function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles
     : '—';
 
   const priceField = getCostPriceField(item, role, advisorRoles);
-  const totalCostRow = (item.items || []).reduce((s, p) =>
+  const totalCostRow = productItems(item).reduce((s, p) =>
     s + getItemCost(p, priceField) * PARSE(p.qty || 1), 0
   );
 
@@ -180,9 +181,10 @@ function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles
 
       {showCreator && (
         <View style={COL.creator}>
-          <Text style={ROW.cellMuted} numberOfLines={1}>
+          {/* Tên người tạo hay dài (họ tên đầy đủ) → cho xuống tối đa 2 dòng thay vì
+              cắt cụt 1 dòng. Row không đặt height cố định nên tự cao thêm. */}
+          <Text style={[ROW.cellMuted, ROW.cellCreator]} numberOfLines={2}>
             {creatorNames[item.createdBy] || item.createdBy?.split('@')[0] || '—'}
-            {console.log("Nguoi tao don: ", creatorNames[item.createdBy])}
           </Text>
         </View>
       )}
@@ -316,7 +318,7 @@ export default function OrderScreen() {
       .filter(o => !['Đã hủy', 'CANCELLED'].includes(o.status))
       .reduce((sum, o) => {
         const priceField = getCostPriceField(o, role, advisorRoles);
-        return sum + (o.items || []).reduce((s, p) =>
+        return sum + productItems(o).reduce((s, p) =>
           s + getItemCost(p, priceField) * PARSE(p.qty || 1), 0
         );
       }, 0);
@@ -345,8 +347,7 @@ export default function OrderScreen() {
   }, [data, role]);
 
   const totalRevenueFiltered = useMemo(() =>
-    filtered.reduce((s, o) =>
-      s + (o.items || []).reduce((ss, p) => ss + PARSE(p.price) * PARSE(p.qty || 1), 0), 0)
+    filtered.reduce((s, o) => s + productTotal(o), 0)
     , [filtered]);
 
   useEffect(() => {
@@ -388,7 +389,7 @@ export default function OrderScreen() {
   const totalRevenue = useMemo(() =>
     data
       .filter(o => o.status === 'Đã thanh toán')
-      .reduce((s, o) => s + (o.items || []).reduce((ss, p) => ss + PARSE(p.price) * PARSE(p.qty || 1), 0), 0)
+      .reduce((s, o) => s + productTotal(o), 0)
     , [data]);
 
   const totalCost = useMemo(() => {
@@ -397,7 +398,7 @@ export default function OrderScreen() {
       .filter(o => !['Đã hủy', 'CANCELLED'].includes(o.status))
       .reduce((sum, o) => {
         const priceField = getCostPriceField(o, role, advisorRoles);
-        return sum + (o.items || []).reduce((s, p) =>
+        return sum + productItems(o).reduce((s, p) =>
           s + getItemCost(p, priceField) * PARSE(p.qty || 1), 0
         );
       }, 0);
@@ -703,7 +704,7 @@ const COL = {
   amount: { width: 115, flexShrink: 0, alignItems: 'flex-end', paddingRight: 8 },
   status: { width: 135, flexShrink: 0 },
   trail: { width: 20 },
-  creator: { width: 100, flexShrink: 0 },
+  creator: { width: 140, flexShrink: 0 },
 };
 
 const ROW = StyleSheet.create({
@@ -730,6 +731,7 @@ const ROW = StyleSheet.create({
     alignSelf: 'center',  // ← căn giữa trong cột
   },
   paymentText: { fontSize: 11, fontWeight: '600' },
+  cellCreator: { lineHeight: 14 },
   cellMuted: {
     fontSize: 11,
     color: THEME.colors.textMuted,

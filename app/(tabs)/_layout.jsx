@@ -40,7 +40,7 @@ const NAV_SECTIONS = [
     items: [
       { key: 'home', link: '(tabs)/home', label: 'Trang chủ', icon: 'home-outline', activeIcon: 'home', visible: () => true },
       { key: 'customer', link: '(tabs)/customer', label: 'Khách hàng', icon: 'people-outline', activeIcon: 'people', visible: (r) => r !== 'ctv' },
-      { key: 'consult', link: '(tabs)/customerctv', label: 'Giới thiệu khách', icon: 'person-add-outline', activeIcon: 'person-add', visible: () => true },
+      { key: 'consult', link: '(tabs)/customerctv', label: 'Giới thiệu khách', icon: 'person-add-outline', activeIcon: 'person-add', visible: (r) => r !== 'sale' },
       { key: 'order', link: '(tabs)/order', label: 'Đơn hàng', icon: 'receipt-outline', activeIcon: 'receipt', visible: () => true },
       { key: 'service', link: '(tabs)/service', label: 'Dịch vụ', icon: 'build-outline', activeIcon: 'build', visible: (r) => r !== 'ctv' },
       { key: 'team', link: '(tabs)/team', label: 'Đội ngũ', icon: 'people-outline', activeIcon: 'people', },
@@ -49,7 +49,7 @@ const NAV_SECTIONS = [
   {
     label: 'TIỆN ÍCH',
     items: [
-      { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'Bảng xếp hạng', icon: 'trophy-outline', activeIcon: 'trophy' },
+      { key: 'leaderboard', link: '(tabs)/leaderboard', label: 'Bảng xếp hạng', icon: 'trophy-outline', activeIcon: 'trophy', visible: (r) => r === 'admin' },
       { key: 'commission', link: '(tabs)/commission', label: 'Hoa hồng', icon: 'cash-outline', activeIcon: 'cash' },
       { key: 'revenue', link: '(tabs)/analytics', label: 'Báo cáo doanh thu', icon: 'bar-chart-outline', activeIcon: 'bar-chart' },
       { key: 'region', link: '(tabs)/regionAnalytics', label: 'Báo cáo khu vực', icon: 'map-outline', activeIcon: 'map' },
@@ -151,7 +151,7 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
       if (gd) return true;
       if (userDetail?.advisor) return false;
       if (role === 'daily') return false;
-      return role === 'admin' || role === 'phantan' || role === 'ctv';
+      return role === 'admin' || role === 'phantan' || role === 'ctv' || role === 'sale';
     }
 
     if (item.key === 'team') {

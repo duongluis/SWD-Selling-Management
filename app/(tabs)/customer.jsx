@@ -150,6 +150,9 @@ export default function CustomerScreen() {
             customer={selected}
             onClose={() => setSelected(null)}
             onEdit={() => { setSelected(null); router.push({ pathname: '/editCustomer/[customerID]', params: { customerId: selected.docId } }); }}
+            /* Admin/GĐ đọc collection qua onSnapshot nên tự cập nhật; các role khác dùng
+               static fetch nên phải refresh thủ công sau khi xoá. */
+            onDeleted={() => { setSelected(null); refresh(); }}
           />
         )}
       </View>
