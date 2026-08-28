@@ -18,6 +18,7 @@ import {
 } from '../../components/Hooks/getStatus';
 import { useCustomers } from '../../components/Hooks/useCustomers';
 import { nextServiceId } from '../../components/Utils/docId';
+import { isValidPhone, normalizePhone } from '../../components/Utils/formatters';
 import { productItems, productTotal } from '../../components/Utils/orderItems';
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
@@ -212,7 +213,8 @@ export default function AddService() {
     const [wantSaveCustomer, setWantSaveCustomer] = useState(false);
     const [customerExists, setCustomerExists] = useState(null); // null=chưa check, true/false=kết quả
 
-    const normalizePhone = (phone) => (phone || '').replace(/\s+/g, '').trim();
+    // normalizePhone dùng bản chung ở components/Utils/formatters.js — bản cục bộ cũ chỉ
+    // bỏ dấu cách nên vẫn để lọt dấu chấm/gạch và so khớp trượt với dữ liệu đã chuẩn hoá.
 
 
     // ── Effects ──────────────────────────────────────────────
@@ -344,6 +346,7 @@ export default function AddService() {
         }
         if (!customerName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên khách hàng'); return; }
         if (!customerPhone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại'); return; }
+        if (!isValidPhone(customerPhone)) { showAlert('Số điện thoại không hợp lệ', 'Số điện thoại phải có từ 9 đến 11 chữ số.'); return; }
         if (showMachineSection && !selectedMachine) {
             showAlert('Thông báo', `Vui lòng chọn máy cần ${currentTypeCfg.label?.toLowerCase()}`);
             return;
@@ -352,7 +355,7 @@ export default function AddService() {
         try {
             // ── Lưu khách hàng nếu được tick ─────────────────────
             if (wantSaveCustomer) {
-                const phone = customerPhone.replace(/\s+/g, '').trim();
+                const phone = normalizePhone(customerPhone);
                 const dup = await getDocs(
                     query(collection(db, 'customers'), where('phone', '==', phone))
                 );
@@ -394,7 +397,7 @@ export default function AddService() {
                 orderItems: productItems(selectedOrder),
                 machineItem: selectedMachine || null,
                 customer: customerName.trim(),
-                phone: customerPhone.replace(/\s+/g, '').trim(),
+                phone: normalizePhone(customerPhone),
                 address: address.trim(),
                 note: note.trim(),
                 status: initialStatus,
@@ -545,7 +548,7 @@ export default function AddService() {
                                 <Text style={W.label}>Số điện thoại <Text style={W.required}>*</Text></Text>
                                 <View style={W.inputBox}>
                                     <Ionicons name="call-outline" size={15} color="#94A3B8" />
-                                    <TextInput style={W.input} placeholder="090x xxx xxx" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={customerPhone} onChangeText={setCustomerPhone} />
+                                    <TextInput style={W.input} placeholder="0901234567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={customerPhone} onChangeText={v => setCustomerPhone(normalizePhone(v))} maxLength={11} />
                                 </View>
                             </View>
                         </View>
@@ -735,7 +738,7 @@ export default function AddService() {
                             <Text style={M.fieldLabel}>SỐ ĐIỆN THOẠI <Text style={{ color: '#EF4444' }}>*</Text></Text>
                             <View style={M.inputBox}>
                                 <Ionicons name="call-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
-                                <TextInput style={M.input} placeholder="090x xxx xxx" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={customerPhone} onChangeText={setCustomerPhone} />
+                                <TextInput style={M.input} placeholder="0901234567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={customerPhone} onChangeText={v => setCustomerPhone(normalizePhone(v))} maxLength={11} />
                             </View>
                             <Text style={M.fieldLabel}>ĐỊA CHỈ</Text>
                             <View style={M.inputBox}>

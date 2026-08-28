@@ -4,6 +4,7 @@ import { showAlert } from '@/components/Main/showAlert';
 import { showSuccess } from '@/components/Main/showSuccess';
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import HelpButton from '@/components/Help/HelpButton';
+import { isValidPhone, normalizePhone } from '@/components/Utils/formatters';
 import { db } from '@/config/firebaseConfig';
 import Colors from '@/constant/Colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -64,19 +65,27 @@ export default function EditCustomerScreen() {
             .finally(() => setLoading(false));
     }, [docId]);
 
-    const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+    // Ô SĐT chỉ nhận chữ số — xem components/Utils/formatters.js
+    const handleChange = (field, value) => {
+        const v = field === 'phone' ? normalizePhone(value) : value;
+        setForm(prev => ({ ...prev, [field]: v }));
+    };
 
     // ── Save ────────────────────────────────────────────────────
     const handleSave = async () => {
         if (!form.name || !form.phone) {
-            showAlert('THÔNG BÁO', 'VUI LÒNG NHẬP HỌ TÊN VÀ ĐIỆN THOẠI');
+            showAlert('Thông báo', 'Vui lòng nhập họ tên và số điện thoại');
+            return;
+        }
+        if (!isValidPhone(form.phone)) {
+            showAlert('Số điện thoại không hợp lệ', 'Số điện thoại phải có từ 9 đến 11 chữ số.');
             return;
         }
         setSubmitting(true);
         try {
             const payload = {
                 name: form.name.trim(),
-                phone: form.phone.trim(),
+                phone: normalizePhone(form.phone),
                 email: form.email?.trim() || '',
                 address: form.address?.trim() || '',
                 note: form.note?.trim() || '',

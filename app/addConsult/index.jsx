@@ -1,6 +1,7 @@
 // app/addConsult/index.jsx
 
 import BgWatermark from '@/components/Main/BgWatermark';
+import { isValidPhone, normalizePhone } from '@/components/Utils/formatters';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -84,12 +85,13 @@ export default function AddConsultScreen() {
     const handleSubmit = async () => {
         if (!name.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên khách hàng'); return; }
         if (!phone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại'); return; }
+        if (!isValidPhone(phone)) { showAlert('Số điện thoại không hợp lệ', 'Số điện thoại phải có từ 9 đến 11 chữ số.'); return; }
 
         setSubmitting(true);
         try {
             await addDoc(collection(db, 'consult'), {
                 name: name.trim(),
-                phone: phone.trim(),
+                phone: normalizePhone(phone),
                 address: address.trim(),
                 age: age.trim() ? parseInt(age) : null,
                 productIds: products,
@@ -153,7 +155,7 @@ export default function AddConsultScreen() {
                                 </View>
 
                                 <Field label="Tên khách hàng" value={name} onChange={setName} required placeholder="Nguyễn Văn A" />
-                                <Field label="Số điện thoại" value={phone} onChange={setPhone} required keyboard="phone-pad" placeholder="0901 234 567" />
+                                <Field label="Số điện thoại" value={phone} onChange={v => setPhone(normalizePhone(v))} required keyboard="phone-pad" placeholder="0901234567" />
                                 <Field label="Địa chỉ" value={address} onChange={setAddress} placeholder="Quận/huyện, tỉnh/thành..." />
                                 <Field label="Tuổi" value={age} onChange={setAge} keyboard="numeric" placeholder="VD: 35" />
                                 <Field label="Ghi chú" value={note} onChange={setNote} multiline placeholder="Ghi chú thêm..." />

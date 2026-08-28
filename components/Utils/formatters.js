@@ -20,6 +20,26 @@ export const fmtPhone = (p) => {
     return p;
 };
 
+/**
+ * Chuẩn hoá số điện thoại: bỏ mọi thứ không phải chữ số (dấu cách, dấu chấm,
+ * dấu gạch, dấu ngoặc, chữ...).
+ *
+ * Dùng ở HAI nơi và phải giống hệt nhau:
+ *   1. onChangeText của ô nhập SĐT → người dùng không gõ được ký tự lạ.
+ *   2. Ngay trước khi ghi Firestore → dữ liệu cũ/dán từ ngoài vào cũng sạch.
+ *
+ * Quan trọng vì `phone` là khoá nối giữa customers ↔ orders ↔ service ↔ consult
+ * (vd computeOrderCommission dò consult theo SĐT). Chỉ cần một bên lưu
+ * "0901 234 567" còn bên kia "0901234567" là mọi phép so khớp trượt hết.
+ */
+export const normalizePhone = (p) => String(p ?? '').replace(/\D/g, '');
+
+/** SĐT Việt Nam: 10 số (đầu 0) hoặc 11 số (dạng 84...) */
+export const isValidPhone = (p) => {
+    const d = normalizePhone(p);
+    return d.length >= 9 && d.length <= 11;
+};
+
 export const fmtShort = (n) => {
     if (!n) return '0';
     if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + ' tỷ';

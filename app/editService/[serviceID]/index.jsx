@@ -2,6 +2,7 @@
 
 import BgWatermark from '@/components/Main/BgWatermark';
 import { createNotification } from '@/components/Utils/chatService';
+import { isValidPhone, normalizePhone } from '@/components/Utils/formatters';
 import { productItems, productTotal } from '@/components/Utils/orderItems';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -105,6 +106,7 @@ export default function EditService() {
     const handleSubmit = async () => {
         if (!customerName.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên khách hàng'); return; }
         if (!customerPhone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại'); return; }
+        if (!isValidPhone(customerPhone)) { showAlert('Số điện thoại không hợp lệ', 'Số điện thoại phải có từ 9 đến 11 chữ số.'); return; }
 
         setSubmitting(true);
         try {
@@ -113,7 +115,7 @@ export default function EditService() {
                 orderId: selectedOrder?.id || null,
                 orderItems: productItems(selectedOrder),
                 customer: customerName.trim(),
-                phone: customerPhone.trim(),
+                phone: normalizePhone(customerPhone),
                 address: address.trim(),
                 note: note.trim(),
                 updatedBy: userDetail?.email || '',
@@ -325,7 +327,7 @@ export default function EditService() {
                                 </View>
                                 <View style={[W.inputGroup, { flex: 1 }]}>
                                     <Text style={W.label}>Số điện thoại <Text style={W.required}>*</Text></Text>
-                                    <View style={W.inputBox}><Ionicons name="call-outline" size={15} color="#94A3B8" /><TextInput style={W.input} placeholder="090x xxx xxx" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={customerPhone} onChangeText={setCustomerPhone} /></View>
+                                    <View style={W.inputBox}><Ionicons name="call-outline" size={15} color="#94A3B8" /><TextInput style={W.input} placeholder="0901234567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={customerPhone} onChangeText={v => setCustomerPhone(normalizePhone(v))} maxLength={11} /></View>
                                 </View>
                             </View>
                             <View style={W.inputGroup}>
@@ -453,7 +455,7 @@ export default function EditService() {
                             <Text style={M.fieldLabel}>TÊN KHÁCH HÀNG</Text>
                             <View style={M.inputBox}><Ionicons name="person-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="Nguyễn Văn A" placeholderTextColor="#94A3B8" value={customerName} onChangeText={setCustomerName} /></View>
                             <Text style={M.fieldLabel}>SỐ ĐIỆN THOẠI</Text>
-                            <View style={M.inputBox}><Ionicons name="call-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="090x xxx xxx" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={customerPhone} onChangeText={setCustomerPhone} /></View>
+                            <View style={M.inputBox}><Ionicons name="call-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="0901234567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={customerPhone} onChangeText={v => setCustomerPhone(normalizePhone(v))} maxLength={11} /></View>
                             <Text style={M.fieldLabel}>ĐỊA CHỈ</Text>
                             <View style={M.inputBox}><Ionicons name="location-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="Quận/Huyện, TP..." placeholderTextColor="#94A3B8" value={address} onChangeText={setAddress} /></View>
                             <Text style={M.fieldLabel}>GHI CHÚ</Text>

@@ -1,4 +1,5 @@
 import BgWatermark from '@/components/Main/BgWatermark';
+import { normalizePhone } from '@/components/Utils/formatters';
 import { formatThousand, parseThousand } from '@/components/Utils/formatNumber';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -1137,9 +1138,15 @@ export default function AddOrder() {
         ? (selectedCustomer?.name || userDetail?.name || 'Đơn buôn hệ thống')
         : selectedCustomer.name;
 
-      const finalCustomerPhone = orderType === 'buon'
-        ? (selectedCustomer?.phone || userDetail?.phone || userDetail?.email)
+      // `phone` là khoá nối giữa orders ↔ customers ↔ service ↔ consult nên phải bỏ hết
+      // dấu cách/ký tự lạ trước khi ghi, dù số này lấy từ hồ sơ khách chứ không nhập tay.
+      const rawPhone = orderType === 'buon'
+        ? (selectedCustomer?.phone || userDetail?.phone || '')
         : selectedCustomer.phone;
+      // Đơn buôn không có SĐT nào thì vẫn lùi về email làm định danh như cũ —
+      // email phải giữ nguyên, không cho qua normalizePhone (sẽ bị xoá sạch).
+      const finalCustomerPhone = normalizePhone(rawPhone)
+        || (orderType === 'buon' ? (userDetail?.email || '') : '');
 
       const orderCategory = ORDER_TYPE_TO_CATEGORY[orderType];
       const [orderStatuses] = await Promise.all([fetchStatusList(orderCategory)]);

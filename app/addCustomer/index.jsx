@@ -3,6 +3,7 @@
 import HelpButton from '@/components/Help/HelpButton';
 import BgWatermark from '@/components/Main/BgWatermark';
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import { isValidPhone, normalizePhone } from '@/components/Utils/formatters';
 import { getRole } from '@/components/Utils/roleHelper';
 import Colors from '@/constant/Colors';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -123,7 +124,12 @@ export default function AddCustomer() {
     fetchAssisted();
   }, [role]);
 
-  const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+  // Ô SĐT chỉ nhận chữ số — lọc ngay khi gõ/dán nên state luôn sạch, cả form desktop
+  // lẫn form mobile đều đi qua đây.
+  const handleChange = (field, value) => {
+    const v = field === 'phone' ? normalizePhone(value) : value;
+    setForm(prev => ({ ...prev, [field]: v }));
+  };
 
   const leaveScreen = () =>
     router.replace(fromConsult ? '(tabs)/customerctv' : '(tabs)/customer');
@@ -143,7 +149,8 @@ export default function AddCustomer() {
 
 
   const checkingDuplicate = async () => {
-    const normalizePhone = (phone) => phone.replace(/\s+/g, '').trim();
+    // Dùng chung normalizePhone với lúc ghi, nếu không sẽ tra "0901234567" mà bản ghi
+    // lại lưu "0901 234 567" → không bao giờ phát hiện được trùng.
     const userQuery = await getDocs(
       query(collection(db, 'customers'), where('phone', '==', normalizePhone(form.phone)))
     );
@@ -188,7 +195,11 @@ export default function AddCustomer() {
   // Sửa handleSave:
   const handleSave = async () => {
     if (!form.name || !form.phone) {
-      showAlert('THÔNG BÁO', 'VUI LÒNG NHẬP HỌ TÊN VÀ ĐIỆN THOẠI');
+      showAlert('Thông báo', 'Vui lòng nhập họ tên và số điện thoại');
+      return;
+    }
+    if (!isValidPhone(form.phone)) {
+      showAlert('Số điện thoại không hợp lệ', 'Số điện thoại phải có từ 9 đến 11 chữ số.');
       return;
     }
     setSubmitting(true);
@@ -216,7 +227,7 @@ export default function AddCustomer() {
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
         name: form.name.trim(),
-        phone: form.phone.trim(),
+        phone: normalizePhone(form.phone),   // docId của customers cũng là số này
         email: form.email?.trim() || '',
         address: form.address?.trim() || '',
         note: form.note?.trim() || '',
@@ -333,9 +344,10 @@ export default function AddCustomer() {
                   <View style={W.inputBox}>
                     <TextInput
                       style={W.input}
-                      placeholder="0901 234 567"
+                      placeholder="0901234567"
                       placeholderTextColor="#94A3B8"
                       keyboardType="phone-pad"
+                      maxLength={11}
                       value={form.phone}
                       onChangeText={v => handleChange('phone', v)}
                     />
@@ -515,7 +527,7 @@ export default function AddCustomer() {
               )}
               {[
                 { label: 'Họ và tên', field: 'name', placeholder: 'Nguyễn Văn A', required: true },
-                { label: 'Số điện thoại', field: 'phone', placeholder: '0901 234 567', required: true, keyboard: 'phone-pad' },
+                { label: 'Số điện thoại', field: 'phone', placeholder: '0901234567', required: true, keyboard: 'phone-pad', maxLength: 11 },
                 { label: 'Email', field: 'email', placeholder: 'example@company.com', keyboard: 'email-address' },
               ].map(f => (
                 <View style={styles.inputGroup} key={f.field}>
@@ -528,6 +540,7 @@ export default function AddCustomer() {
                     placeholderTextColor={Colors.TextPlaceholder}
                     keyboardType={f.keyboard || 'default'}
                     autoCapitalize="none"
+                    maxLength={f.maxLength}
                     value={form[f.field]}
                     onChangeText={v => handleChange(f.field, v)}
                   />
