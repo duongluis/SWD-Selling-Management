@@ -15,6 +15,7 @@ import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import HelpButton from '@/components/Help/HelpButton';
+import { normalizePhone } from '@/components/Utils/formatters';
 
 const ROLE_CONFIG = {
     'đại lý': { color: '#2563EB', bg: '#EFF6FF', label: 'Đại lý / NPP' },
@@ -115,7 +116,7 @@ export default function EditUserScreen() {
         try {
             const payload = {
                 name: name.trim(),
-                phone: phone.trim(),
+                phone: normalizePhone(phone),
                 address: address.trim(),
                 adminNote: adminNote.trim(),
             };
@@ -173,7 +174,7 @@ export default function EditUserScreen() {
                             {/* Thông tin liên hệ */}
                             <Section icon="person-circle-outline" title="Thông tin liên hệ">
                                 <Field label="Họ và tên" value={name} onChange={setName} required />
-                                <Field label="Số điện thoại" value={phone} onChange={setPhone} required keyboard="phone-pad" />
+                                <Field label="Số điện thoại" value={phone} onChange={v => setPhone(normalizePhone(v))} required keyboard="phone-pad" />
                                 <Field label="Địa chỉ" value={address} onChange={setAddress} multiline />
                                 {/* Email chỉ hiện, không sửa */}
                                 <Field label="Email tài khoản" value={user.email} readOnly />

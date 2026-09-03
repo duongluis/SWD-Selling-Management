@@ -1,12 +1,16 @@
 // app/orderContract/index.jsx
-// Màn tính toán + hợp đồng đơn hàng
+// Màn tính toán + HỒ SƠ CHÀO GIÁ (theo template SWD mới)
 // mode=order  → pre-fill từ đơn hàng có sẵn
 // mode=template → điền tay, không lưu DB
 // Xuất PDF: web dùng window.print(), mobile dùng expo-print
-// ✅ Đã bỏ phần preview hợp đồng trên màn hình — form nhập liệu chia 2 cột
-// ✅ Đã sửa lỗi font (bold weight 800 → 700) cho các tiêu đề
-// ✅ Bổ sung: form nhập thông tin ngân hàng / người gửi / SĐT người gửi
-// ✅ Bổ sung: điều khoản thanh toán theo nhiều đợt (tối đa 4 đợt), tự kiểm tra tổng % = 100%
+//
+// ✅ v2 — Cập nhật theo bản doc "SWD_Template_Ho_so_chao_gia":
+//    Trang bìa · 1.Giới thiệu công ty · 2.Thư chào giá · 3.Bảng báo giá chi tiết
+//    4.Tiến độ thực hiện · 5.Bảo hành & bảo trì · 6.Điều khoản thanh toán · 7.Thông tin khác · Ký tên
+// ✅ Bảng giá đủ 8 cột: STT | Hạng mục | Mô tả | ĐVT | SL | Đơn giá | Thành tiền | Ghi chú
+// ✅ Tự sinh dòng "Bằng chữ: ... đồng" (đọc số tiếng Việt)
+// ✅ Thêm editor: Thông tin công trình · Tiến độ · Bảo hành · Thư chào giá
+// ✅ Mã báo giá đổi sang định dạng SWD-BG-YYYYMMDD-KH
 
 import BgWatermark from '@/components/Main/BgWatermark';
 import { showAlert } from '@/components/Main/showAlert';
@@ -18,13 +22,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, ScrollView,
-    StyleSheet, Text, TextInput, TouchableOpacity, View,
+    ActivityIndicator, Image, Platform, ScrollView,
+    StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
-
 
 const fmt = (n) => Math.round(n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtN = (n) => Math.round(n || 0).toLocaleString('vi-VN');
@@ -32,7 +35,82 @@ const COMM = { buon: 0.03, le: 0.05 };
 const parseNum = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
 const MAX_PAYMENT_TERMS = 4;
 
-// ── Mã báo giá tự sinh: SWD-YYYY-MM-DD-TENKH-1 (có thể ghi đè trong quoteMeta.code) ──
+// ── Thông tin công ty (theo bản doc mới) ──────────────────────
+const COMPANY = {
+    name: 'CÔNG TY CỔ PHẦN SPRING WATER DELIVERY',
+    address: 'Số 1 Hẻm 99/110/85 Định Công Hạ, Phường Định Công, TP Hà Nội',
+    taxCode: '0110879471',
+    hotline: '0393.028.008',
+    email: 'contact@swd.vn',
+    website: 'swd.vn',
+    repName: 'Đặng Quang Hưng',
+    repPhone: '08881 08883',
+};
+
+// ── Nội dung mục 1 (giới thiệu công ty) — sửa ở đây nếu marketing đổi copy ──
+const INTRO = {
+    overview:
+        'Công ty Cổ phần Spring Water Delivery (thương hiệu SWD) là đơn vị cung cấp giải pháp lọc nước tổng sinh hoạt cho biệt thự, căn hộ, nhà phố và các dự án dân dụng tại Việt Nam và khu vực Đông Nam Á. Với triết lý kinh doanh <b>“Bán chất lượng nước, không bán máy lọc nước”</b>, SWD không ngừng nỗ lực mang đến những sản phẩm hiệu quả, bền vững, phù hợp với nhu cầu thực tế của từng khách hàng.',
+    tech: [
+        'Tiên phong công nghệ lọc nước nóng',
+        'Ứng dụng công nghệ lọc đa cấp hiện đại trong lọc tổng sinh hoạt, lọc tổng tinh khiết, lọc tổng giữ khoáng',
+        'Tích hợp công nghệ M.U.S.I.C độc quyền: tự động vệ sinh màng lọc, kéo dài tuổi thọ màng',
+        'Hệ thống điều khiển thông minh',
+        'Thiết kế đột phá — vững chắc, phù hợp với điều kiện nhà ở và khí hậu Việt Nam',
+    ],
+    projects: [
+        'Dự án cứu trợ miền Trung — máy lọc nước dã chiến cho người dân vùng lũ',
+        'Dự án cứu trợ Myanmar — phối hợp cùng Học viện Nguyên Thủy và các mạnh thường quân',
+    ],
+};
+
+// ── Đọc số tiền bằng chữ (tiếng Việt) ─────────────────────────
+const DIGITS = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+
+function readTriple(n, full) {
+    const tram = Math.floor(n / 100);
+    const chuc = Math.floor((n % 100) / 10);
+    const dv = n % 10;
+    let s = '';
+    if (full || tram > 0) s += DIGITS[tram] + ' trăm';
+    if (chuc === 0) {
+        if (dv > 0) s += (s ? ' lẻ ' : '') + DIGITS[dv];
+    } else if (chuc === 1) {
+        s += (s ? ' ' : '') + 'mười';
+        if (dv === 5) s += ' lăm';
+        else if (dv > 0) s += ' ' + DIGITS[dv];
+    } else {
+        s += (s ? ' ' : '') + DIGITS[chuc] + ' mươi';
+        if (dv === 1) s += ' mốt';
+        else if (dv === 4) s += ' tư';
+        else if (dv === 5) s += ' lăm';
+        else if (dv > 0) s += ' ' + DIGITS[dv];
+    }
+    return s.trim();
+}
+
+function numberToVietnameseWords(num) {
+    let n = Math.round(Math.abs(num || 0));
+    if (n === 0) return 'Không';
+    const groups = [];
+    while (n > 0) { groups.unshift(n % 1000); n = Math.floor(n / 1000); }
+    const scale = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ', 'triệu tỷ'];
+    const len = groups.length;
+    const parts = [];
+    groups.forEach((g, i) => {
+        if (g === 0) return;
+        const pos = len - 1 - i;
+        parts.push((readTriple(g, i > 0) + ' ' + (scale[pos] || '')).trim());
+    });
+    const s = parts.join(' ').replace(/\s+/g, ' ').trim();
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// ── Escape HTML để tránh vỡ layout khi khách nhập ký tự lạ ────
+const esc = (v) => String(v ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// ── Mã báo giá: SWD-BG-YYYYMMDD-TENKH (có thể ghi đè trong quoteMeta.code) ──
 function buildQuoteCode(order, quoteMeta) {
     if (quoteMeta?.code) return quoteMeta.code;
     const now = new Date();
@@ -45,10 +123,10 @@ function buildQuoteCode(order, quoteMeta) {
         .replace(/[^a-zA-Z0-9]+/g, '')
         .toUpperCase()
         .slice(0, 10) || 'KH';
-    return `SWD-${y}-${m}-${d}-${custSlug}-1`;
+    return `SWD-BG-${y}${m}${d}-${custSlug}`;
 }
 
-// ── Chuẩn hoá danh sách đợt thanh toán (fallback 1 đợt 100%) ──
+// ── Chuẩn hoá danh sách đợt thanh toán (fallback theo doc: 50/30/20) ──
 function normalizePaymentTerms(paymentTerms) {
     const terms = Array.isArray(paymentTerms) && paymentTerms.length
         ? paymentTerms
@@ -64,7 +142,7 @@ function TInput({ value, onChange, keyboardType = 'default', style, placeholder 
             style={[S.tInput, style]}
             value={value === undefined || value === null ? '' : String(value)}
             keyboardType={keyboardType}
-            onChangeText={onChange}           // ← trả về string thô, không parse ở đây
+            onChangeText={onChange}
             selectTextOnFocus
             placeholder={placeholder}
             placeholderTextColor="#CBD5E1"
@@ -76,27 +154,174 @@ function TInput({ value, onChange, keyboardType = 'default', style, placeholder 
 const HR = () => <View style={S.hr} />;
 
 // ── Xuất PDF ─────────────────────────────────────────────────
+// ── Ảnh: chuyển asset/blob → base64 (bắt buộc để nhúng vào PDF) ──
+async function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+async function assetToBase64(mod) {
+    const { Asset } = await import('expo-asset');
+    const asset = Asset.fromModule(mod);
+    await asset.downloadAsync();
+    const response = await fetch(asset.uri);
+    const blob = await response.blob();
+    return blobToBase64(blob);
+}
+
 async function getBase64Logo() {
     try {
-        const { Asset } = await import('expo-asset');
-        const asset = Asset.fromModule(require('../../assets/images/logo-light.png'));
-        await asset.downloadAsync();
-
-        // Nếu là web, dùng fetch để lấy base64
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(blob);
-        });
+        return await assetToBase64(require('../../assets/images/logo-light.png'));
     } catch (e) {
         console.warn('getBase64Logo failed:', e.message);
         return null;
     }
 }
-async function exportPDF(htmlContent, isDesktop) {
 
+// ✅ 8 ảnh chứng nhận/chứng chỉ — MẶC ĐỊNH, luôn in ở mục 1
+//    Metro yêu cầu require tĩnh nên phải liệt kê đủ 8 dòng.
+//    Nếu file là .jpg thì đổi đuôi ở đây.
+const CERT_MODULES = [
+    require('../../assets/images/certs/cert_1.png'),
+    require('../../assets/images/certs/cert_2.png'),
+    require('../../assets/images/certs/cert_3.png'),
+    require('../../assets/images/certs/cert_4.png'),
+    require('../../assets/images/certs/cert_5.png'),
+    require('../../assets/images/certs/cert_6.png'),
+    require('../../assets/images/certs/cert_7.png'),
+    require('../../assets/images/certs/cert_8.png'),
+];
+
+async function getBase64Certs() {
+    const out = [];
+    for (const mod of CERT_MODULES) {
+        try { out.push(await assetToBase64(mod)); }
+        catch (e) { console.warn('cert load failed:', e.message); }
+    }
+    return out;
+}
+
+// ✅ Chọn NHIỀU ảnh cho dự án tiêu biểu — trả về mảng data-URI base64
+//    QUAN TRỌNG: mọi nhánh đều phải resolve (kể cả khi người dùng bấm Huỷ),
+//    nếu không nút "Chọn ảnh" sẽ quay loading vĩnh viễn.
+async function pickImagesAsync(limit = 6) {
+    return Platform.OS === 'web' ? pickImagesWeb(limit) : pickImagesNative(limit);
+}
+
+// ── Web: input file ẩn ────────────────────────────────────────
+function pickImagesWeb(limit) {
+    return new Promise((resolve) => {
+        let settled = false;
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        // Safari/Firefox chặn .click() nếu element chưa nằm trong DOM
+        input.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+        document.body.appendChild(input);
+
+        const cleanup = () => {
+            window.removeEventListener('focus', onWindowFocus);
+            if (input.parentNode) input.parentNode.removeChild(input);
+        };
+        const finish = (list) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve(list || []);
+        };
+
+        // Người dùng bấm Huỷ: Chrome 113+ có sự kiện 'cancel'
+        input.addEventListener('cancel', () => finish([]));
+
+        // Trình duyệt cũ không có 'cancel' → dựa vào việc cửa sổ lấy lại focus.
+        // Chờ 800ms để 'change' (nếu có) kịp chạy trước.
+        function onWindowFocus() {
+            setTimeout(() => {
+                if (!input.files || input.files.length === 0) finish([]);
+            }, 800);
+        }
+        window.addEventListener('focus', onWindowFocus);
+
+        input.addEventListener('change', async () => {
+            const files = Array.from(input.files || []).slice(0, limit);
+            const out = [];
+            for (const f of files) {
+                try { out.push(await blobToBase64(f)); }
+                catch (e) { console.warn('read image failed:', e.message); }
+            }
+            finish(out);
+        });
+
+        input.click();
+    });
+}
+
+// ── Mobile: expo-image-picker ─────────────────────────────────
+async function pickImagesNative(limit) {
+    let ImagePicker = null;
+    try {
+        const mod = await import('expo-image-picker');
+        // Metro interop: có bản trả namespace, có bản gói trong .default
+        ImagePicker = mod?.launchImageLibraryAsync ? mod : mod?.default;
+    } catch (e) {
+        console.warn('import expo-image-picker failed:', e.message);
+    }
+
+    if (!ImagePicker?.launchImageLibraryAsync) {
+        showAlert('Thiếu thư viện', 'Chưa cài expo-image-picker.\nChạy: npx expo install expo-image-picker');
+        return [];
+    }
+
+    try {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm?.granted) {
+            showAlert('Cần quyền truy cập', 'Vui lòng cho phép ứng dụng truy cập thư viện ảnh trong Cài đặt.');
+            return [];
+        }
+
+        // SDK ≥52 bỏ MediaTypeOptions, dùng mảng string thay thế
+        const mediaTypes = ImagePicker.MediaTypeOptions?.Images ?? ['images'];
+
+        const res = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes,
+            allowsMultipleSelection: true,
+            selectionLimit: limit,
+            quality: 0.6,           // nén bớt cho file PDF không quá nặng
+            base64: true,
+        });
+        if (res?.canceled) return [];
+        return (res?.assets || []).map(a =>
+            a.base64 ? `data:${a.mimeType || 'image/jpeg'};base64,${a.base64}` : a.uri
+        );
+    } catch (e) {
+        console.warn('pickImages error:', e);
+        showAlert('Lỗi', 'Không mở được thư viện ảnh: ' + e.message);
+        return [];
+    }
+}
+
+// ✅ Tự phân bổ ảnh thành lưới cân đối theo số lượng
+//    1 ảnh → 1 hàng lớn · 2 hoặc 4 ảnh → 2 cột · còn lại → 3 cột (chứng chỉ ép 4 cột)
+function galleryHtml(images, opts = {}) {
+    const list = (images || []).filter(Boolean);
+    if (!list.length) return '';
+    const n = list.length;
+    const perRow = opts.perRow || (n === 1 ? 1 : (n === 2 || n === 4) ? 2 : 3);
+    const width = { 1: '66%', 2: '48%', 3: '32%', 4: '24%' }[perRow] || '32%';
+    const height = opts.height || ({ 1: '205px', 2: '158px', 3: '110px', 4: '92px' }[perRow] || '110px');
+    const fit = opts.fit || 'cover';
+    const bg = fit === 'contain' ? '#fff' : 'transparent';
+    return `<div class="gallery">${list.map(src =>
+        `<span class="imgCell" style="width:${width}"><img src="${src}" style="height:${height};object-fit:${fit};background:${bg}" /></span>`
+    ).join('')}</div>`;
+}
+
+async function exportPDF(htmlContent, isDesktop) {
     if (isDesktop) {
         const w = window.open('', '_blank');
         w.document.write(htmlContent);
@@ -112,197 +337,319 @@ async function exportPDF(htmlContent, isDesktop) {
     }
 }
 
-// ── PDF: bảng theo mẫu (header công ty · thanh BÁO GIÁ · 3 cột info · bảng nhóm I/II · tổng · điều khoản/ngân hàng · banner kết) ──
-function buildPDFHtml({ order, seller, items: itemsProp, services: servicesProp, quoteMeta, disc, subtotal, total, discAmt, logoBase64, bankInfo, paymentTerms }) {
+// ══════════════════════════════════════════════════════════════
+// PDF: HỒ SƠ CHÀO GIÁ (7 mục, theo template doc)
+// ══════════════════════════════════════════════════════════════
+function buildPDFHtml({
+    order, seller, items: itemsProp, services: servicesProp, quoteMeta,
+    disc, subtotal, total, discAmt, logoBase64, bankInfo, paymentTerms,
+    schedule, warranty, letter, projects, certImages,
+}) {
     const items = Array.isArray(itemsProp) ? itemsProp : [];
     const services = Array.isArray(servicesProp) ? servicesProp : [];
     const hdNum = buildQuoteCode(order, quoteMeta);
-    const today = new Date().toLocaleDateString('vi-VN');
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    const today = `${dd}/${mm}/${yyyy}`;
     const { terms, totalPercent } = normalizePaymentTerms(paymentTerms);
 
-    // ── Nhóm I: sản phẩm | Nhóm II: thiết bị & dịch vụ (nhập tay) ──
-    const groups = [];
-    if (items.length) groups.push({ roman: 'I', label: 'MÁY LỌC TỔNG SINH HOẠT', rows: items, defUnit: 'Cái' });
-    if (services.length) groups.push({ roman: groups.length ? 'II' : 'I', label: 'THIẾT BỊ & DỊCH VỤ', rows: services, defUnit: 'Gói' });
+    const customerName = quoteMeta?.company || order?.customer || '—';
+    const customerPhone = order?.phone || '—';
+    const siteAddress = quoteMeta?.siteAddress || order?.address || '—';
+    const jobName = quoteMeta?.jobName || 'Cung cấp và lắp đặt hệ thống lọc nước tổng sinh hoạt';
+    const systemName = quoteMeta?.systemName || jobName;
+    const repName = quoteMeta?.contactName || bankInfo?.senderName || seller?.name || COMPANY.repName;
+    const repPhone = quoteMeta?.contactPhone || bankInfo?.senderPhone || seller?.phone || COMPANY.repPhone;
 
-    let groupsHtml = '';
-    groups.forEach((g) => {
-        const rows = g.rows.map((p, i) => {
-            const isIncluded = p.included === true;
-            const lineTotal = isIncluded ? 0 : (parseFloat(p.price) || 0) * (parseFloat(p.qty) || 1);
-            return `
-            <tr>
-                <td class="c">${String(i + 1).padStart(2, '0')}</td>
-                <td>${p.name || ''}</td>
-                <td class="c">${fmtN(p.qty || 1)}</td>
-                <td class="c">${p.origin || 'SWD - Việt Nam'}</td>
-                <td class="c">${p.unit || g.defUnit}</td>
-                <td class="r">${isIncluded ? '—' : fmtN(p.price)}</td>
-                <td class="r b ${isIncluded ? 'included' : ''}">${isIncluded ? 'Bao gồm' : fmtN(lineTotal)}</td>
-            </tr>`;
-        }).join('');
+    // ── Gộp sản phẩm + dịch vụ thành 1 bảng liên tục (đúng như doc) ──
+    const rows = [
+        ...items.map(p => ({ ...p, defUnit: 'Bộ' })),
+        ...services.map(s => ({ ...s, defUnit: 'Gói' })),
+    ];
 
-        groupsHtml += `
-        <tr class="groupRow"><td colspan="7">${g.roman} — ${g.label}</td></tr>
-        ${rows}`;
-    });
+    const rowsHtml = rows.map((p, i) => {
+        const isIncluded = p.included === true;
+        const lineTotal = isIncluded ? 0 : parseNum(p.price) * (parseNum(p.qty) || 1);
+        return `
+        <tr>
+            <td class="c">${i + 1}</td>
+            <td class="b">${esc(p.name || '')}</td>
+            <td class="desc">${esc(p.desc || p.description || p.capacity || '')}</td>
+            <td class="c">${esc(p.unit || p.defUnit)}</td>
+            <td class="c">${fmtN(p.qty || 1)}</td>
+            <td class="r">${isIncluded ? '—' : fmtN(p.price)}</td>
+            <td class="r b ${isIncluded ? 'included' : ''}">${isIncluded ? 'Bao gồm' : fmtN(lineTotal)}</td>
+            <td class="c note">${esc(p.note || '--')}</td>
+        </tr>`;
+    }).join('');
+
+    // ── Tiến độ ──
+    const schedRows = (schedule || []).filter(s => s.task).map(s => `
+        <tr><td>${esc(s.task)}</td><td class="c b">${esc(s.days || '__')} ngày</td></tr>`).join('');
+    const totalDays = (schedule || []).reduce((s, r) => s + parseNum(r.days), 0);
 
     // ── Điều khoản thanh toán theo đợt ──
-    const paymentTermsHtml = terms.map((t, i) => {
+    const paymentRows = terms.map((t, i) => {
         const pct = parseNum(t.percent);
         const amt = total * pct / 100;
-        return `<li class="highlight">Đợt ${i + 1}: ${pct}% giá trị đơn hàng (${fmtN(amt)}đ)${t.dueLabel ? ` — Hạn: ${t.dueLabel}` : ''}</li>`;
+        return `<tr>
+            <td class="b" style="width:78px">Đợt ${i + 1}</td>
+            <td>Thanh toán <b>${pct}%</b> giá trị đơn hàng (<b>${fmtN(amt)}đ</b>)${t.dueLabel ? ` — ${esc(t.dueLabel)}` : ''}</td>
+        </tr>`;
     }).join('');
-    const paymentWarningHtml = totalPercent !== 100
-        ? `<li style="color:#B91C1C">* Tổng tỷ lệ các đợt hiện tại: ${totalPercent}% (chưa đủ 100%)</li>`
-        : '';
+    const paymentWarning = totalPercent !== 100
+        ? `<p class="warn">* Tổng tỷ lệ các đợt hiện tại: ${totalPercent}% (chưa đủ 100%)</p>` : '';
+
+    // ── Dự án tiêu biểu: nội dung + ảnh do người dùng tự nhập ──
+    const projList = (projects || []).filter(p => (p.title || p.desc || (p.images || []).length));
+    const projectsHtml = projList.length
+        ? projList.map(p => `
+        <div class="projBlock">
+          ${p.title ? `<p class="projTitle">${esc(p.title)}</p>` : ''}
+          ${p.desc ? `<p class="projDesc">${esc(p.desc)}</p>` : ''}
+          ${galleryHtml(p.images)}
+        </div>`).join('')
+        : `<ul>${INTRO.projects.map(t => `<li>${t}</li>`).join('')}</ul>`;
+
+    // ── Chứng nhận & chứng chỉ: 8 ảnh mặc định từ assets ──
+    const certsHtml = (certImages || []).length
+        ? galleryHtml(certImages, { perRow: 4, fit: 'contain', height: '96px' })
+        : '<div class="imgSlot">[CHÈN HÌNH ẢNH CHỨNG NHẬN / CHỨNG CHỈ TẠI ĐÂY]</div>';
 
     return `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8">
-
 <style>
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; margin: 0; padding: 28px 32px; color: #0F172A; font-size: 12px; position: relative; }
-  .watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%,-50%); width: 70%; opacity: 0.06; pointer-events: none; z-index: 0; }
-  body > *:not(.watermark) { position: relative; z-index: 1; }
+  @page { size: A4; margin: 14mm 13mm; }
+  body { font-family: "Times New Roman", Times, serif; margin: 0; color: #111827; font-size: 12.5px; line-height: 1.55; }
+  .page { position: relative; page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .watermark { position: fixed; top: 46%; left: 50%; transform: translate(-50%,-50%); width: 62%; opacity: 0.05; pointer-events: none; z-index: 0; }
+  .page > * { position: relative; z-index: 1; }
 
-  /* Header công ty */
-  .headerRow { display: flex; align-items: flex-start; gap: 14px; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid #E2E8F0; }
-  .logo { width: 56px; height: 56px; object-fit: contain; }
-  .companyBlock { flex: 1; }
-  .companyName { font-size: 15px; font-weight: 700; color: #0F172A; margin: 0 0 3px; }
-  .companyLine { font-size: 11px; color: #334155; line-height: 1.5; }
+  h2.sec { font-size: 14px; font-weight: bold; color: #0C447C; text-transform: uppercase;
+           border-bottom: 2px solid #7FD3EF; padding-bottom: 5px; margin: 0 0 12px; }
+  h3.sub { font-size: 12.5px; font-weight: bold; margin: 14px 0 6px; color: #0F172A; }
+  p { margin: 0 0 9px; text-align: justify; }
+  ul { margin: 0 0 10px; padding-left: 20px; }
+  li { margin-bottom: 4px; }
 
-  /* Thanh tiêu đề BÁO GIÁ */
-  .titleBar { background: #7FD3EF; border-radius: 8px; text-align: center; padding: 11px 0 13px; margin: 12px 0 16px; }
-  .titleMain { font-size: 19px; font-weight: 700; letter-spacing: .05em; margin: 0; color: #0F172A; }
-  .titleSub { font-size: 13px; font-weight: 600; font-style: italic; margin: 3px 0 0; color: #0F172A; }
+  /* ── Trang bìa ── */
+  /* ── Trang bìa: căn giữa cả chiều dọc lẫn ngang (dùng làm tờ đầu khi in) ── */
+  .cover { display: table; width: 100%; height: 258mm; text-align: center; }
+  .coverInner { display: table-cell; vertical-align: middle; }
+  .cover p, .sign p { text-align: center; }   /* ghi đè p{justify} ở trên */
+  .coverLogo { width: 150px; margin-bottom: 22px; }
+  .coverTitle { font-size: 30px; font-weight: bold; letter-spacing: .08em; color: #0C447C; margin: 0; }
+  .coverRule { width: 190px; height: 3px; background: #7FD3EF; margin: 12px auto 22px; }
+  .coverJob { font-size: 16px; font-weight: bold; text-transform: uppercase; margin: 0 0 6px; }
+  .coverAddr { font-size: 13px; font-weight: bold; color: #334155; margin: 0 0 26px; }
+  .coverTable { width: 74%; margin: 0 auto 34px; border-collapse: collapse; }
+  .coverTable td { border: 1px solid #CBD5E1; padding: 8px 12px; font-size: 12.5px; text-align: left; }
+  .coverTable td:first-child { background: #F1F5F9; font-weight: bold; width: 42%; }
+  .coverFooter { border-top: 1px solid #CBD5E1; padding-top: 14px; margin-top: 30px; }
+  .coverCompany { font-size: 13.5px; font-weight: bold; color: #0C447C; margin: 0 0 4px; }
+  .coverLine { font-size: 11.5px; color: #334155; margin: 0 0 2px; }
 
-  /* 3 cột thông tin */
-  .infoGrid { display: flex; gap: 20px; margin-bottom: 14px; flex-wrap: wrap; }
-  .infoCol { flex: 1; min-width: 160px; }
-  .infoLabel { font-size: 10px; font-weight: 700; color: #0F172A; letter-spacing: .03em; margin-bottom: 4px; }
-  .infoName { font-size: 12.5px; font-weight: 700; color: #0F172A; }
-  .infoVal { font-size: 12px; font-weight: 700; color: #0F172A; }
-  .infoSub { font-size: 11px; color: #475569; margin-top: 2px; }
+  /* ── Khối "Kính gửi" ── */
+  .letterBox { border: 1px solid #CBD5E1; background: #F8FAFC; padding: 12px 16px; margin-bottom: 14px; }
+  .letterBox p { margin: 0 0 5px; font-weight: bold; text-align: left; }
+  .letterBox p:last-child { margin-bottom: 0; font-weight: normal; }
+  .dateLine { text-align: right; font-style: italic; margin: 0 0 14px; }
 
-  .sectionTitle2 { font-size: 11px; font-weight: 700; color: #0F172A; text-transform: uppercase; margin: 0 0 7px; }
+  /* ── Bảng ── */
+  table.data { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 11.5px; }
+  table.data th { background: #0C447C; color: #fff; font-weight: bold; padding: 7px 5px; border: 1px solid #0C447C; text-align: center; font-size: 11px; }
+  table.data td { padding: 6px 5px; border: 1px solid #CBD5E1; vertical-align: middle; }
+  .c { text-align: center; } .r { text-align: right; } .b { font-weight: bold; }
+  .desc { font-size: 11px; color: #334155; }
+  .note { font-size: 11px; color: #64748B; }
+  .included { font-style: italic; color: #0C447C; }
+  .sumRow td { border: 1px solid #CBD5E1; font-weight: bold; background: #F1F5F9; }
+  .totalRow td { background: #7FD3EF; font-weight: bold; font-size: 13px; border: 1px solid #7FD3EF; }
+  .wordsRow td { font-style: italic; font-weight: bold; background: #F8FAFC; }
+  .unit { font-style: italic; font-size: 11.5px; margin: 0 0 4px; }
+  .hint { font-style: italic; font-size: 11px; color: #475569; margin-top: 6px; }
+  .warn { color: #B91C1C; font-size: 11px; font-style: italic; }
 
-  /* Bảng */
-  table { width: 100%; border-collapse: collapse; margin: 0 0 16px; }
-  thead th { background: #F1F5F9; color: #0F172A; font-size: 10.5px; font-weight: 700; padding: 8px 6px; border: 1px solid #CBD5E1; text-align: center; }
-  td { padding: 7px 6px; border: 1px solid #E2E8F0; font-size: 11px; vertical-align: middle; }
-  .c { text-align: center; } .r { text-align: right; } .b { font-weight: 700; }
-  .included { font-style: italic; font-weight: 600; color: #334155; }
-  .groupRow td { background: #F1F5F9; color: #0F172A; font-weight: 700; font-size: 11px; padding: 6px 8px; border: 1px solid #CBD5E1; }
+  table.plain { width: 100%; border-collapse: collapse; margin: 4px 0 12px; font-size: 12px; }
+  table.plain td { border: 1px solid #CBD5E1; padding: 7px 10px; }
+  table.plain td:first-child { background: #F8FAFC; }
 
-  .sumRow td { border: 1px solid #E2E8F0; font-weight: 700; }
-  .sumRow .label { color: #64748B; font-weight: 600; }
-  .totalBarRow td { background: #7FD3EF; font-weight: 700; font-size: 13px; border: 1px solid #7FD3EF; color: #0F172A; }
+  .bankTable { width: 100%; border-collapse: collapse; margin: 4px 0 12px; font-size: 12px; }
+  .bankTable td { border: 1px solid #CBD5E1; padding: 6px 10px; }
+  .bankTable td:first-child { background: #F8FAFC; font-weight: bold; width: 34%; }
 
-  /* Điều khoản + ngân hàng */
-  .termsBankGrid { display: flex; gap: 26px; margin-bottom: 6px; }
-  .termsCol, .bankCol { flex: 1; }
-  .terms { font-size: 10.5px; color: #334155; line-height: 1.8; margin: 0; padding-left: 16px; }
-  .terms .highlight { color: #0F172A; font-weight: 700; }
-  .bankTable { width: 100%; border-collapse: collapse; margin-top: 2px; }
-  .bankTable td { border: 1px solid #E2E8F0; padding: 6px 10px; font-size: 11px; }
-  .bankTable td:first-child { background: #F8FAFC; font-weight: 600; width: 38%; }
+  .sign { margin-top: 34px; text-align: center; }
+  .signTitle { font-weight: bold; font-size: 12.5px; text-transform: uppercase; margin: 0 0 4px; }
+  .signNote { font-style: italic; font-size: 11.5px; color: #475569; margin: 0 0 54px; }
+  .signName { font-weight: bold; font-size: 13px; margin: 0; }
+  .signPhone { font-size: 11.5px; color: #334155; margin: 2px 0 0; }
 
-  /* Banner kết */
-  .closingBanner { background: #7FD3EF; border-radius: 6px; padding: 9px 14px; margin-top: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-  .closingText { font-size: 11px; font-style: italic; color: #0F172A; }
-  .closingSender { font-size: 11px; font-weight: 700; color: #0F172A; white-space: nowrap; }
+  .imgSlot { border: 1px dashed #94A3B8; background: #F8FAFC; color: #64748B; font-style: italic;
+             text-align: center; padding: 26px 10px; font-size: 11.5px; margin: 8px 0 12px; }
 
-  @media print { body { padding: 16px 20px; } }
+  /* ── Lưới ảnh (dự án tiêu biểu / chứng chỉ) ── */
+  .gallery { font-size: 0; margin: 6px -3px 12px; }
+  .imgCell { display: inline-block; vertical-align: top; padding: 3px; }
+  .imgCell img { width: 100%; display: block; border: 1px solid #E2E8F0; border-radius: 4px; }
+  .projBlock { margin-bottom: 14px; page-break-inside: avoid; }
+  .projTitle { font-weight: bold; font-size: 12.5px; margin: 0 0 3px; color: #0C447C; text-align: left; }
+  .projDesc { margin: 0 0 4px; font-size: 12px; }
 </style></head><body>
 ${logoBase64 ? `<img class="watermark" src="${logoBase64}" alt="" />` : ''}
 
-<div class="headerRow">
-  ${logoBase64 ? `<img class="logo" src="${logoBase64}" alt="logo" />` : ''}
-  <div class="companyBlock">
-    <p class="companyName">CÔNG TY CỔ PHẦN SPRING WATER DELIVERY</p>
-    <div class="companyLine">Địa chỉ: Số 4 Ngõ 102 Kim Giang, P. Đại Kim, Q. Hoàng Mai, Tp. Hà Nội</div>
-    <div class="companyLine">Hotline: 0329 111 000 &nbsp;|&nbsp; Email: ${seller?.email || '—'} &nbsp;|&nbsp; MST: ${seller?.taxCode || '0110873471'}</div>
+<!-- ═══ TRANG BÌA (căn giữa trang) ═══ -->
+<div class="page cover">
+ <div class="coverInner">
+  ${logoBase64 ? `<img class="coverLogo" src="${logoBase64}" alt="logo" />` : ''}
+  <p class="coverTitle">HỒ SƠ CHÀO GIÁ</p>
+  <div class="coverRule"></div>
+  <p class="coverJob">${esc(jobName)}</p>
+  <p class="coverAddr">${esc(siteAddress)}</p>
+
+  <table class="coverTable">
+    <tr><td>Số báo giá:</td><td><b>${esc(hdNum)}</b></td></tr>
+    <tr><td>Ngày:</td><td><b>${dd} / ${mm} / ${yyyy}</b></td></tr>
+    <tr><td>Khách hàng:</td><td><b>${esc(customerName)}</b></td></tr>
+    <tr><td>Người phụ trách:</td><td>${esc(repName)}</td></tr>
+    <tr><td>Điện thoại:</td><td>${esc(repPhone)}</td></tr>
+  </table>
+
+  <div class="coverFooter">
+    <p class="coverCompany">${COMPANY.name}</p>
+    <p class="coverLine">${COMPANY.address} • MST: ${esc(seller?.taxCode || COMPANY.taxCode)}</p>
+    <p class="coverLine">Hotline: ${COMPANY.hotline} • ${esc(seller?.email || COMPANY.email)} • ${COMPANY.website}</p>
   </div>
+ </div>
 </div>
 
-<div class="titleBar">
-  <p class="titleMain">BÁO GIÁ</p>
-  <p class="titleSub">Hệ thống lọc nước tổng sinh hoạt</p>
+<!-- ═══ 1. GIỚI THIỆU CÔNG TY ═══ -->
+<div class="page">
+  <h2 class="sec">1. Giới thiệu công ty</h2>
+
+  <h3 class="sub">Tổng quan</h3>
+  <p>${INTRO.overview}</p>
+
+  <h3 class="sub">Dẫn đầu về công nghệ</h3>
+  <ul>${INTRO.tech.map(t => `<li>${t}</li>`).join('')}</ul>
+
+  <h3 class="sub">Dự án tiêu biểu</h3>
+  ${projectsHtml}
+
+  <h3 class="sub">Chứng nhận &amp; chứng chỉ</h3>
+  ${certsHtml}
 </div>
 
-<div class="infoGrid">
-  <div class="infoCol">
-    <div class="infoLabel">KHÁCH HÀNG</div>
-    <div class="infoName">${quoteMeta?.company || order.customer || '—'}</div>
-    ${quoteMeta?.company ? `<div class="infoSub">${order.customer || ''}</div>` : ''}
-    ${quoteMeta?.taxCode ? `<div class="infoSub">Mã số thuế: ${quoteMeta.taxCode}</div>` : ''}
+<!-- ═══ 2. THƯ CHÀO GIÁ ═══ -->
+<div class="page">
+  <p class="dateLine">Hà Nội, ngày ${dd} tháng ${mm} năm ${yyyy}</p>
+  <h2 class="sec">2. Thư chào giá</h2>
+
+  <div class="letterBox">
+    <p>Kính gửi: ${esc(customerName)}</p>
+    <p>Điện thoại: ${esc(customerPhone)}</p>
+    <p>Địa chỉ: ${esc(siteAddress)}</p>
+    <p><b>Về việc:</b> Cung cấp và lắp đặt <b>${esc(systemName)}</b> và các thiết bị, vật tư, dịch vụ kèm theo</p>
   </div>
-  <div class="infoCol">
-    <div class="infoLabel">ĐỊA CHỈ LẮP ĐẶT/GIAO HÀNG</div>
-    <div class="infoVal">${order.address || '—'}</div>
-  </div>
-  <div class="infoCol">
-    <div class="infoLabel">MÃ BÁO GIÁ</div>
-    <div class="infoName">${hdNum}</div>
-    <div class="infoSub">Ngày ${today} &nbsp;·&nbsp; Hiệu lực: ${quoteMeta?.validDays || 7} ngày</div>
-  </div>
+
+  <p>Kính gửi Quý khách hàng,</p>
+  <p>Công ty Cổ phần Spring Water Delivery xin gửi lời chào trân trọng và lời chúc sức khỏe đến Quý khách. Được nhận yêu cầu tư vấn từ Quý khách là niềm vui lớn đối với toàn thể đội ngũ SWD. Chúng tôi chân thành cảm ơn Quý khách đã trao cho chúng tôi cơ hội được mang sản phẩm và dịch vụ lọc nước tinh khiết đến phục vụ cuộc sống của Quý khách và Gia đình.</p>
+  <p>Dựa trên nhu cầu thực tế của Quý khách, chúng tôi xin gửi đến Thư chào giá đối với công việc: <b>“${esc(jobName)}”</b>. Chúng tôi đã nghiên cứu kỹ lưỡng để đưa ra phương án tối ưu nhất dưới đây, với hy vọng đáp ứng trọn vẹn các tiêu chuẩn và kỳ vọng của Quý khách.</p>
+  <p>SWD cam kết mang đến giải pháp tối ưu, không chỉ đáp ứng các yêu cầu kỹ thuật mà còn đem lại sự an tâm tuyệt đối cho Quý khách trong suốt quá trình sử dụng. Chúng tôi mong sớm được bắt tay triển khai dự án cùng Quý khách.</p>
+  ${letter?.extraNote ? `<p>${esc(letter.extraNote)}</p>` : ''}
+  <p>Trân trọng cảm ơn Quý khách!</p>
 </div>
 
-<div class="sectionTitle2">Chi tiết báo giá</div>
-<table>
-  <thead>
-    <tr>
-      <th style="width:24px">STT</th>
-      <th>Hạng mục</th>
-      <th style="width:34px">SL</th>
-      <th style="width:82px">Xuất xứ</th>
-      <th style="width:50px">Đơn vị</th>
-      <th style="width:96px">Đơn giá (VNĐ)</th>
-      <th style="width:108px">Thành tiền (VNĐ)</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${groupsHtml}
-    <tr class="sumRow">
-      <td colspan="6" class="label">Tổng cộng (chưa ưu đãi)</td>
-      <td class="r b">${fmtN(subtotal)}</td>
-    </tr>
-    ${disc > 0 ? `
-    <tr class="sumRow">
-      <td colspan="6" class="label">Chiết khấu (${disc}%)</td>
-      <td class="r" style="color:#B91C1C">- ${fmtN(discAmt)}</td>
-    </tr>` : ''}
-    <tr class="totalBarRow">
-      <td colspan="6">TỔNG ĐẦU TƯ (Đã bao gồm VAT)</td>
-      <td class="r">${fmtN(total)} đ</td>
-    </tr>
-  </tbody>
-</table>
+<!-- ═══ 3. BẢNG BÁO GIÁ CHI TIẾT ═══ -->
+<div class="page">
+  <h2 class="sec">3. Bảng báo giá chi tiết</h2>
+  <p class="unit">Đơn vị tính: VNĐ</p>
 
-<div class="termsBankGrid">
-  <div class="termsCol">
-    <div class="sectionTitle2">Điều khoản thanh toán</div>
-    <ul class="terms">
-      ${paymentTermsHtml}
-      ${paymentWarningHtml}
-      <li>Báo giá có hiệu lực ${quoteMeta?.validDays || 7} ngày kể từ ngày phát hành</li>
-      ${order.note ? `<li>Ghi chú: ${order.note}</li>` : ''}
-    </ul>
-  </div>
-  <div class="bankCol">
-    <div class="sectionTitle2">Thông tin ngân hàng</div>
-    <table class="bankTable">
-      <tr><td>Tên TK</td><td>${bankInfo?.bankAccountName || seller?.name || 'CÔNG TY CỔ PHẦN SPRING WATER DELIVERY'}</td></tr>
-      <tr><td>Số TK</td><td>${bankInfo?.bankAccountNumber || '803838'}</td></tr>
-      <tr><td>Ngân hàng</td><td>${bankInfo?.bankName || 'Ngân hàng TMCP Kỹ Thương Việt Nam - TECHCOMBANK'}</td></tr>
-    </table>
-  </div>
+  <table class="data">
+    <thead>
+      <tr>
+        <th style="width:28px">STT</th>
+        <th style="width:150px">Hạng mục</th>
+        <th>Mô tả</th>
+        <th style="width:42px">ĐVT</th>
+        <th style="width:34px">SL</th>
+        <th style="width:82px">Đơn giá</th>
+        <th style="width:88px">Thành tiền</th>
+        <th style="width:64px">Ghi chú</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml || '<tr><td colspan="8" class="c">Chưa có hạng mục nào</td></tr>'}
+      <tr class="sumRow">
+        <td colspan="6" class="r">Tổng cộng (chưa ưu đãi)</td>
+        <td class="r">${fmtN(subtotal)}</td>
+        <td></td>
+      </tr>
+      ${disc > 0 ? `
+      <tr class="sumRow">
+        <td colspan="6" class="r">Chiết khấu (${parseNum(disc)}%)</td>
+        <td class="r" style="color:#B91C1C">- ${fmtN(discAmt)}</td>
+        <td></td>
+      </tr>` : ''}
+      <tr class="totalRow">
+        <td colspan="6" class="r">TỔNG GIÁ TRỊ (đã bao gồm VAT)</td>
+        <td class="r">${fmtN(total)}</td>
+        <td></td>
+      </tr>
+      <tr class="wordsRow">
+        <td colspan="8">Bằng chữ: ${numberToVietnameseWords(total)} đồng</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="hint">Lưu ý: Đơn giá trên đã bao gồm chi phí khảo sát, tư vấn, vật tư kết nối, thi công lắp đặt và vận hành thử nghiệm (nếu không có ghi chú khác).</p>
 </div>
 
-<div class="closingBanner">
-  <div class="closingText">SWD cam kết mang đến giải pháp nước sạch chuẩn cao cấp cho gia đình hiện đại</div>
-  <div class="closingSender">Người gửi: ${bankInfo?.senderName || seller?.name || '—'} ${(bankInfo?.senderPhone || seller?.phone) ? ` — ${bankInfo?.senderPhone || seller?.phone}` : ''}</div>
+<!-- ═══ 4–7 + KÝ TÊN ═══ -->
+<div class="page">
+  <h2 class="sec">4. Tiến độ thực hiện</h2>
+  <p>Tổng tiến độ dự kiến: <b>${totalDays || '__'} ngày</b>, chi tiết như sau:</p>
+  <table class="plain">
+    <tr><td class="b" style="width:70%">Nội dung công việc</td><td class="b c">Thời gian dự kiến</td></tr>
+    ${schedRows}
+    <tr><td class="b">Tổng cộng</td><td class="b c">${totalDays || '__'} ngày</td></tr>
+  </table>
+
+  <h2 class="sec">5. Bảo hành &amp; dịch vụ bảo trì</h2>
+  <ul>
+    <li><b>${esc(warranty?.systemName || systemName)}</b>: bảo hành <b>${esc(warranty?.filterMonths || '06')} tháng</b> với vật tư lọc, <b>${esc(warranty?.partMonths || '24')} tháng</b> với linh kiện điện tử</li>
+    <li>Các hệ thống và thiết bị khác: bảo hành theo chính sách của hãng sản xuất</li>
+    <li>SWD hỗ trợ kiểm tra định kỳ và tư vấn thay thế vật tư trong suốt vòng đời sản phẩm</li>
+    ${warranty?.extraNote ? `<li>${esc(warranty.extraNote)}</li>` : ''}
+  </ul>
+
+  <h2 class="sec">6. Điều khoản thanh toán (đề nghị)</h2>
+  <table class="plain">${paymentRows}</table>
+  ${paymentWarning}
+
+  <h3 class="sub">Thông tin chuyển khoản</h3>
+  <table class="bankTable">
+    <tr><td>Tên tài khoản</td><td>${esc(bankInfo?.bankAccountName || COMPANY.name)}</td></tr>
+    <tr><td>Số tài khoản</td><td>${esc(bankInfo?.bankAccountNumber || '803838')}</td></tr>
+    <tr><td>Ngân hàng</td><td>${esc(bankInfo?.bankName || 'Ngân hàng TMCP Kỹ Thương Việt Nam - TECHCOMBANK')}</td></tr>
+  </table>
+
+  <h2 class="sec">7. Thông tin khác</h2>
+  <ul>
+    <li>Báo giá có hiệu lực trong vòng <b>${esc(quoteMeta?.validDays || 7)} ngày</b> kể từ ngày phát hành</li>
+    <li>Các điều khoản chi tiết của Hợp đồng sẽ được hai bên thảo luận và ký kết khi Quý khách chấp nhận Thư chào giá này</li>
+    <li>Mọi thắc mắc xin liên hệ trực tiếp người phụ trách để được hỗ trợ nhanh nhất</li>
+    ${order?.note ? `<li>Ghi chú: ${esc(order.note)}</li>` : ''}
+  </ul>
+
+  <div class="sign">
+    <p class="signTitle">Đại diện ${COMPANY.name}</p>
+    <p class="signNote">(Ký, ghi rõ họ tên)</p>
+    <p class="signName">${esc(repName)}</p>
+    <p class="signPhone">Hotline: ${esc(repPhone)}</p>
+  </div>
 </div>
 
 </body></html>`;
@@ -357,11 +704,11 @@ function ProductDropdown({ catalog, onSelect, onClose }) {
 
 // ── Template Form (mode=template) ────────────────────────────
 function TemplateForm({ form, setForm, catalog }) {
-    const [openDropIdx, setOpenDropIdx] = useState(null); // index sản phẩm đang mở dropdown
+    const [openDropIdx, setOpenDropIdx] = useState(null);
 
     const addProduct = () => setForm(f => ({
         ...f,
-        items: [...(f.items || []), { name: '', qty: '1', price: '', note: '' }],
+        items: [...(f.items || []), { name: '', desc: '', unit: 'Bộ', qty: '1', price: '', note: '' }],
     }));
 
     const removeProduct = (i) => setForm(f => ({
@@ -371,7 +718,7 @@ function TemplateForm({ form, setForm, catalog }) {
 
     const updateItem = (i, field, val) => setForm(f => {
         const items = (f.items || []).map((p, idx) =>
-            idx === i ? { ...p, [field]: val } : p   // ✅ lưu string thô
+            idx === i ? { ...p, [field]: val } : p
         );
         return { ...f, items };
     });
@@ -379,7 +726,12 @@ function TemplateForm({ form, setForm, catalog }) {
     const selectProduct = (i, prod) => {
         setForm(f => {
             const items = (f.items || []).map((p, idx) =>
-                idx === i ? { ...p, name: prod.name, price: String(prod.price || prod.price_a || 0) } : p
+                idx === i ? {
+                    ...p,
+                    name: prod.name,
+                    desc: p.desc || prod.capacity || prod.description || '',
+                    price: String(prod.price || prod.price_a || 0),
+                } : p
             );
             return { ...f, items };
         });
@@ -388,23 +740,22 @@ function TemplateForm({ form, setForm, catalog }) {
 
     return (
         <View style={S.templateCard}>
-            <Text style={S.sectionHead}>Thông tin hợp đồng</Text>
+            <Text style={S.sectionHead}>Thông tin khách hàng</Text>
             <HR />
 
-            <Text style={S.subHead}>Bên mua</Text>
             <Text style={S.fieldLabel}>Tên khách hàng</Text>
             <TextInput style={S.input} placeholder="Nguyễn Văn A" placeholderTextColor="#CBD5E1"
                 value={form.customer} onChangeText={v => setForm(f => ({ ...f, customer: v }))} />
             <Text style={S.fieldLabel}>Số điện thoại</Text>
             <TextInput style={S.input} placeholder="0901 234 567" keyboardType="phone-pad" placeholderTextColor="#CBD5E1"
                 value={form.phone} onChangeText={v => setForm(f => ({ ...f, phone: v }))} />
-            <Text style={S.fieldLabel}>Địa chỉ giao hàng</Text>
+            <Text style={S.fieldLabel}>Địa chỉ công trình / giao hàng</Text>
             <TextInput style={[S.input, { minHeight: 56 }]} placeholder="123 Đường ABC, Q.1, TP.HCM"
                 multiline placeholderTextColor="#CBD5E1"
                 value={form.address} onChangeText={v => setForm(f => ({ ...f, address: v }))} />
 
             <HR />
-            <Text style={S.subHead}>Sản phẩm</Text>
+            <Text style={S.subHead}>Hạng mục sản phẩm</Text>
 
             {(form.items || []).map((p, i) => (
                 <View key={i} style={S.prodFormRow}>
@@ -417,8 +768,7 @@ function TemplateForm({ form, setForm, catalog }) {
                         )}
                     </View>
 
-                    {/* ✅ Dropdown chọn sản phẩm */}
-                    <Text style={S.fieldLabel}>Sản phẩm</Text>
+                    <Text style={S.fieldLabel}>Hạng mục</Text>
                     <TouchableOpacity
                         style={[S.input, S.dropTrigger, openDropIdx === i && { borderColor: '#185FA5' }]}
                         onPress={() => setOpenDropIdx(openDropIdx === i ? null : i)}
@@ -437,7 +787,18 @@ function TemplateForm({ form, setForm, catalog }) {
                         />
                     )}
 
+                    {/* ✅ NEW: cột "Mô tả" của bảng báo giá */}
+                    <Text style={S.fieldLabel}>Mô tả (tính năng chính)</Text>
+                    <TextInput style={[S.input, { minHeight: 48 }]} multiline
+                        placeholder="Mô tả ngắn gọn tính năng chính" placeholderTextColor="#CBD5E1"
+                        value={p.desc || ''} onChangeText={v => updateItem(i, 'desc', v)} />
+
                     <View style={S.row2}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={S.fieldLabel}>ĐVT</Text>
+                            <TextInput style={S.input} placeholder="Bộ" placeholderTextColor="#CBD5E1"
+                                value={p.unit ?? 'Bộ'} onChangeText={v => updateItem(i, 'unit', v)} />
+                        </View>
                         <View style={{ flex: 1 }}>
                             <Text style={S.fieldLabel}>Số lượng</Text>
                             <TextInput style={S.input} keyboardType="numeric" placeholderTextColor="#CBD5E1"
@@ -451,32 +812,31 @@ function TemplateForm({ form, setForm, catalog }) {
                                 onChangeText={v => updateItem(i, 'price', v)} />
                         </View>
                     </View>
+
                     <Text style={S.fieldLabel}>Ghi chú</Text>
-                    <TextInput style={S.input} placeholder="Giao buổi sáng..." placeholderTextColor="#CBD5E1"
+                    <TextInput style={S.input} placeholder="--" placeholderTextColor="#CBD5E1"
                         value={p.note || ''} onChangeText={v => updateItem(i, 'note', v)} />
                 </View>
             ))}
 
             <TouchableOpacity style={S.addProdBtn} onPress={addProduct}>
                 <Ionicons name="add" size={16} color="#185FA5" />
-                <Text style={S.addProdText}>Thêm sản phẩm</Text>
+                <Text style={S.addProdText}>Thêm hạng mục</Text>
             </TouchableOpacity>
 
             <HR />
-            <Text style={S.fieldLabel}>Ghi chú đơn hàng</Text>
+            <Text style={S.fieldLabel}>Ghi chú đơn hàng (hiện ở mục 7)</Text>
             <TextInput style={S.input} placeholder="Hướng dẫn đặc biệt..." placeholderTextColor="#CBD5E1"
                 value={form.note || ''} onChangeText={v => setForm(f => ({ ...f, note: v }))} />
         </View>
     );
 }
 
-// ── NEW: mục "Thiết bị & Dịch vụ" nhập tay (độc lập với sản phẩm đơn hàng) ──
-// Dùng cho cả mode=order lẫn mode=template — mỗi dòng: tên, SL, đơn vị, đơn giá, ghi chú,
-// và cờ "Bao gồm" (miễn phí, không cộng vào tổng — giống các dòng "Bao gồm" trong ảnh mẫu).
+// ── Thiết bị & Dịch vụ (nhập tay) ─────────────────────────────
 function ServicesEditor({ services, setServices }) {
     const addService = () => setServices(s => [
         ...(s || []),
-        { name: '', qty: '1', unit: 'Gói', price: '', origin: 'SWD', included: false, note: '' },
+        { name: '', desc: '', qty: '1', unit: 'Gói', price: '', included: false, note: '' },
     ]);
     const removeService = (i) => setServices(s => (s || []).filter((_, idx) => idx !== i));
     const updateService = (i, field, val) => setServices(s => (s || []).map((sv, idx) =>
@@ -486,7 +846,7 @@ function ServicesEditor({ services, setServices }) {
     return (
         <View style={S.templateCard}>
             <Text style={S.sectionHead}>Thiết bị & Dịch vụ</Text>
-            <Text style={S.svcHint}>Khảo sát, thi công, vật tư, vệ sinh... — nhập thủ công</Text>
+            <Text style={S.svcHint}>Khảo sát, thi công, vật tư, vệ sinh... — nối tiếp vào bảng báo giá mục 3</Text>
             <HR />
 
             {(services || []).length === 0 && (
@@ -507,16 +867,21 @@ function ServicesEditor({ services, setServices }) {
                         placeholderTextColor="#CBD5E1"
                         value={sv.name} onChangeText={v => updateService(i, 'name', v)} />
 
+                    <Text style={S.fieldLabel}>Mô tả</Text>
+                    <TextInput style={[S.input, { minHeight: 44 }]} multiline
+                        placeholder="Mô tả ngắn gọn" placeholderTextColor="#CBD5E1"
+                        value={sv.desc || ''} onChangeText={v => updateService(i, 'desc', v)} />
+
                     <View style={S.row2}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={S.fieldLabel}>ĐVT</Text>
+                            <TextInput style={S.input} placeholder="Gói" placeholderTextColor="#CBD5E1"
+                                value={sv.unit || ''} onChangeText={v => updateService(i, 'unit', v)} />
+                        </View>
                         <View style={{ flex: 1 }}>
                             <Text style={S.fieldLabel}>Số lượng</Text>
                             <TextInput style={S.input} keyboardType="numeric" placeholderTextColor="#CBD5E1"
                                 value={String(sv.qty ?? '')} onChangeText={v => updateService(i, 'qty', v)} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={S.fieldLabel}>Đơn vị</Text>
-                            <TextInput style={S.input} placeholder="Gói" placeholderTextColor="#CBD5E1"
-                                value={sv.unit || ''} onChangeText={v => updateService(i, 'unit', v)} />
                         </View>
                     </View>
 
@@ -542,12 +907,12 @@ function ServicesEditor({ services, setServices }) {
                             color={sv.included ? '#185FA5' : '#94A3B8'}
                         />
                         <Text style={[S.includedToggleText, sv.included && { color: '#185FA5', fontWeight: '700' }]}>
-                            Bao gồm (miễn phí )
+                            Bao gồm (miễn phí)
                         </Text>
                     </TouchableOpacity>
 
                     <Text style={S.fieldLabel}>Ghi chú</Text>
-                    <TextInput style={S.input} placeholder="Ghi chú thêm..." placeholderTextColor="#CBD5E1"
+                    <TextInput style={S.input} placeholder="--" placeholderTextColor="#CBD5E1"
                         value={sv.note || ''} onChangeText={v => updateService(i, 'note', v)} />
                 </View>
             ))}
@@ -560,67 +925,295 @@ function ServicesEditor({ services, setServices }) {
     );
 }
 
-// ── NEW: thông tin báo giá (mã báo giá, tên công ty KH, MST, hiệu lực) ──
+// ── Thông tin hồ sơ chào giá (trang bìa + thư chào giá) ───────
 function QuoteMetaEditor({ quoteMeta, setQuoteMeta }) {
+    const set = (k) => (v) => setQuoteMeta(m => ({ ...m, [k]: v }));
     return (
         <View style={S.templateCard}>
-            <Text style={S.sectionHead}>Thông tin báo giá</Text>
+            <Text style={S.sectionHead}>Thông tin hồ sơ chào giá</Text>
+            <Text style={S.svcHint}>Hiển thị ở trang bìa và mục 2 — Thư chào giá</Text>
             <HR />
+
+            <Text style={S.fieldLabel}>Tên công việc / hạng mục chào giá</Text>
+            <TextInput style={[S.input, { minHeight: 48 }]} multiline
+                placeholder="Cung cấp và lắp đặt hệ thống lọc nước tổng sinh hoạt"
+                placeholderTextColor="#CBD5E1"
+                value={quoteMeta.jobName} onChangeText={set('jobName')} />
+
+            <Text style={S.fieldLabel}>Địa chỉ công trình</Text>
+            <TextInput style={[S.input, { minHeight: 48 }]} multiline
+                placeholder="Biệt thự ABC, Khu đô thị XYZ, Hà Nội" placeholderTextColor="#CBD5E1"
+                value={quoteMeta.siteAddress} onChangeText={set('siteAddress')} />
+
+            <Text style={S.fieldLabel}>Tên hệ thống / sản phẩm (mục “Về việc”)</Text>
+            <TextInput style={S.input} placeholder="Hệ thống lọc nước tổng sinh hoạt"
+                placeholderTextColor="#CBD5E1"
+                value={quoteMeta.systemName} onChangeText={set('systemName')} />
+
             <Text style={S.fieldLabel}>Tên công ty khách hàng (nếu có)</Text>
             <TextInput style={S.input} placeholder="CÔNG TY TNHH ..." placeholderTextColor="#CBD5E1"
-                value={quoteMeta.company} onChangeText={v => setQuoteMeta(m => ({ ...m, company: v }))} />
+                value={quoteMeta.company} onChangeText={set('company')} />
+
             <View style={S.row2}>
                 <View style={{ flex: 1 }}>
-                    <Text style={S.fieldLabel}>Mã số thuế</Text>
+                    <Text style={S.fieldLabel}>Mã số thuế KH</Text>
                     <TextInput style={S.input} placeholder="0319341685" placeholderTextColor="#CBD5E1"
-                        value={quoteMeta.taxCode} onChangeText={v => setQuoteMeta(m => ({ ...m, taxCode: v }))} />
+                        value={quoteMeta.taxCode} onChangeText={set('taxCode')} />
                 </View>
                 <View style={{ flex: 1 }}>
                     <Text style={S.fieldLabel}>Hiệu lực (ngày)</Text>
                     <TextInput style={S.input} keyboardType="numeric" placeholder="7" placeholderTextColor="#CBD5E1"
-                        value={String(quoteMeta.validDays ?? '')} onChangeText={v => setQuoteMeta(m => ({ ...m, validDays: v }))} />
+                        value={String(quoteMeta.validDays ?? '')} onChangeText={set('validDays')} />
                 </View>
             </View>
-            <Text style={S.fieldLabel}>Mã báo giá</Text>
-            <TextInput style={S.input} placeholder="SWD-2026-08-06-KH-1" placeholderTextColor="#CBD5E1"
-                value={quoteMeta.code} onChangeText={v => setQuoteMeta(m => ({ ...m, code: v }))} />
+
+            <Text style={S.fieldLabel}>Số báo giá</Text>
+            <TextInput style={S.input} placeholder="SWD-BG-20260903-KH" placeholderTextColor="#CBD5E1"
+                value={quoteMeta.code} onChangeText={set('code')} />
+
+            <HR />
+            <Text style={S.subHead}>Người phụ trách</Text>
+            <View style={S.row2}>
+                <View style={{ flex: 1 }}>
+                    <Text style={S.fieldLabel}>Họ tên</Text>
+                    <TextInput style={S.input} placeholder={COMPANY.repName} placeholderTextColor="#CBD5E1"
+                        value={quoteMeta.contactName} onChangeText={set('contactName')} />
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={S.fieldLabel}>Điện thoại</Text>
+                    <TextInput style={S.input} placeholder={COMPANY.repPhone} keyboardType="phone-pad"
+                        placeholderTextColor="#CBD5E1"
+                        value={quoteMeta.contactPhone} onChangeText={set('contactPhone')} />
+                </View>
+            </View>
         </View>
     );
 }
 
-// ── NEW: thông tin ngân hàng + người gửi báo giá (nhập tay) ──
+// ── NEW: Dự án tiêu biểu (mục 1) — nội dung tự điền + chọn nhiều ảnh ──
+function ProjectsEditor({ projects, setProjects }) {
+    const [picking, setPicking] = useState(null); // index đang mở thư viện ảnh
+    const rows = Array.isArray(projects) ? projects : [];
+    const totalImages = rows.reduce((s, p) => s + (p.images || []).length, 0);
+
+    const addProject = () => setProjects(p => [...(p || []), { title: '', desc: '', images: [] }]);
+    const removeProject = (i) => setProjects(p => (p || []).filter((_, idx) => idx !== i));
+    const updateProject = (i, field, val) => setProjects(p => (p || []).map((r, idx) =>
+        idx === i ? { ...r, [field]: val } : r
+    ));
+
+    const addImages = async (i) => {
+        if (picking !== null) return;      // tránh mở 2 lần chồng nhau
+        setPicking(i);
+        try {
+            // Chốt chặn cuối: dù picker có treo thì sau 60s cũng nhả nút ra
+            const picked = await Promise.race([
+                pickImagesAsync(6),
+                new Promise(res => setTimeout(() => res([]), 60000)),
+            ]);
+            if (picked.length) {
+                setProjects(p => (p || []).map((r, idx) =>
+                    idx === i ? { ...r, images: [...(r.images || []), ...picked].slice(0, 6) } : r
+                ));
+            }
+        } catch (e) {
+            console.warn('addImages error:', e);
+        } finally {
+            setPicking(null);
+        }
+    };
+
+    const removeImage = (i, imgIdx) => setProjects(p => (p || []).map((r, idx) =>
+        idx === i ? { ...r, images: (r.images || []).filter((_, k) => k !== imgIdx) } : r
+    ));
+
+    return (
+        <View style={S.templateCard}>
+            <View style={S.calcHeader}>
+                <Text style={[S.sectionHead, { flex: 1 }]}>Dự án tiêu biểu</Text>
+                <View style={[S.editBadge, { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons name="images-outline" size={11} color="#185FA5" />
+                    <Text style={S.editBadgeText}>{totalImages} ảnh</Text>
+                </View>
+            </View>
+            <Text style={S.svcHint}>
+                Mục 1 của hồ sơ — ảnh tự phân bổ cân đối (1 ảnh: khổ lớn · 2–4 ảnh: 2 cột · 5–6 ảnh: 3 cột).
+                Chứng chỉ đã có sẵn 8 ảnh mặc định, không cần chọn.
+            </Text>
+            <HR />
+
+            {rows.length === 0 && (
+                <Text style={S.svcEmpty}>Chưa có dự án nào — hồ sơ sẽ in danh sách dự án mặc định.</Text>
+            )}
+
+            {rows.map((p, i) => (
+                <View key={i} style={S.prodFormRow}>
+                    <View style={S.prodFormHeader}>
+                        <Text style={S.prodFormIdx}>Dự án {i + 1}</Text>
+                        <TouchableOpacity onPress={() => removeProject(i)}>
+                            <Ionicons name="trash-outline" size={15} color="#EF4444" />
+                        </TouchableOpacity>
+                    </View>
+
+                    <Text style={S.fieldLabel}>Tên dự án</Text>
+                    <TextInput style={S.input} placeholder="Dự án cứu trợ miền Trung"
+                        placeholderTextColor="#CBD5E1"
+                        value={p.title || ''} onChangeText={v => updateProject(i, 'title', v)} />
+
+                    <Text style={S.fieldLabel}>Mô tả</Text>
+                    <TextInput style={[S.input, { minHeight: 56 }]} multiline
+                        placeholder="Máy lọc nước dã chiến cho người dân vùng lũ..."
+                        placeholderTextColor="#CBD5E1"
+                        value={p.desc || ''} onChangeText={v => updateProject(i, 'desc', v)} />
+
+                    {/* Ảnh dự án */}
+                    <Text style={S.fieldLabel}>Ảnh dự án ({(p.images || []).length}/6)</Text>
+                    <View style={S.thumbGrid}>
+                        {(p.images || []).map((uri, k) => (
+                            <View key={k} style={S.thumbWrap}>
+                                <Image source={{ uri }} style={S.thumb} resizeMode="cover" />
+                                <TouchableOpacity style={S.thumbRemove} onPress={() => removeImage(i, k)}>
+                                    <Ionicons name="close" size={11} color="#fff" />
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                        {(p.images || []).length < 6 && (
+                            <TouchableOpacity
+                                style={S.thumbAdd}
+                                onPress={() => addImages(i)}
+                                disabled={picking === i}
+                                activeOpacity={0.7}
+                            >
+                                {picking === i
+                                    ? <ActivityIndicator size="small" color="#185FA5" />
+                                    : <Ionicons name="add" size={20} color="#185FA5" />}
+                                <Text style={S.thumbAddText}>Chọn ảnh</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+            ))}
+
+            <TouchableOpacity style={S.addProdBtn} onPress={addProject}>
+                <Ionicons name="add" size={16} color="#185FA5" />
+                <Text style={S.addProdText}>Thêm dự án</Text>
+            </TouchableOpacity>
+        </View>
+    );
+}
+
+// ── NEW: Tiến độ thực hiện (mục 4) ────────────────────────────
+function ScheduleEditor({ schedule, setSchedule }) {
+    const rows = Array.isArray(schedule) ? schedule : [];
+    const totalDays = rows.reduce((s, r) => s + parseNum(r.days), 0);
+
+    const addRow = () => setSchedule(s => [...(s || []), { task: '', days: '' }]);
+    const removeRow = (i) => setSchedule(s => (s || []).filter((_, idx) => idx !== i));
+    const updateRow = (i, field, val) => setSchedule(s => (s || []).map((r, idx) =>
+        idx === i ? { ...r, [field]: val } : r
+    ));
+
+    return (
+        <View style={S.templateCard}>
+            <View style={S.calcHeader}>
+                <Text style={[S.sectionHead, { flex: 1 }]}>Tiến độ thực hiện</Text>
+                <View style={[S.editBadge, { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons name="time-outline" size={11} color="#185FA5" />
+                    <Text style={S.editBadgeText}>{totalDays} ngày</Text>
+                </View>
+            </View>
+            <Text style={S.svcHint}>Mục 4 của hồ sơ — tổng số ngày tự cộng</Text>
+            <HR />
+
+            {rows.map((r, i) => (
+                <View key={i} style={S.prodFormRow}>
+                    <View style={S.prodFormHeader}>
+                        <Text style={S.prodFormIdx}>Bước {i + 1}</Text>
+                        <TouchableOpacity onPress={() => removeRow(i)}>
+                            <Ionicons name="trash-outline" size={15} color="#EF4444" />
+                        </TouchableOpacity>
+                    </View>
+                    <Text style={S.fieldLabel}>Nội dung công việc</Text>
+                    <TextInput style={S.input} placeholder="Sản xuất, vận chuyển thiết bị đến công trình"
+                        placeholderTextColor="#CBD5E1"
+                        value={r.task || ''} onChangeText={v => updateRow(i, 'task', v)} />
+                    <Text style={S.fieldLabel}>Thời gian dự kiến (ngày)</Text>
+                    <TextInput style={S.input} keyboardType="numeric" placeholder="5" placeholderTextColor="#CBD5E1"
+                        value={String(r.days ?? '')} onChangeText={v => updateRow(i, 'days', v)} />
+                </View>
+            ))}
+
+            <TouchableOpacity style={S.addProdBtn} onPress={addRow}>
+                <Ionicons name="add" size={16} color="#185FA5" />
+                <Text style={S.addProdText}>Thêm bước</Text>
+            </TouchableOpacity>
+        </View>
+    );
+}
+
+// ── NEW: Bảo hành & bảo trì (mục 5) ───────────────────────────
+function WarrantyEditor({ warranty, setWarranty }) {
+    const set = (k) => (v) => setWarranty(w => ({ ...w, [k]: v }));
+    return (
+        <View style={S.templateCard}>
+            <Text style={S.sectionHead}>Bảo hành & bảo trì</Text>
+            <Text style={S.svcHint}>Mục 5 của hồ sơ</Text>
+            <HR />
+            <Text style={S.fieldLabel}>Tên hệ thống chính</Text>
+            <TextInput style={S.input} placeholder="Hệ thống lọc tổng sinh hoạt" placeholderTextColor="#CBD5E1"
+                value={warranty.systemName} onChangeText={set('systemName')} />
+            <View style={S.row2}>
+                <View style={{ flex: 1 }}>
+                    <Text style={S.fieldLabel}>Vật tư lọc (tháng)</Text>
+                    <TextInput style={S.input} keyboardType="numeric" placeholder="06" placeholderTextColor="#CBD5E1"
+                        value={String(warranty.filterMonths ?? '')} onChangeText={set('filterMonths')} />
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={S.fieldLabel}>Linh kiện điện tử (tháng)</Text>
+                    <TextInput style={S.input} keyboardType="numeric" placeholder="24" placeholderTextColor="#CBD5E1"
+                        value={String(warranty.partMonths ?? '')} onChangeText={set('partMonths')} />
+                </View>
+            </View>
+            <Text style={S.fieldLabel}>Điều khoản bổ sung (tuỳ chọn)</Text>
+            <TextInput style={[S.input, { minHeight: 48 }]} multiline
+                placeholder="Ví dụ: miễn phí vệ sinh định kỳ 2 lần/năm..." placeholderTextColor="#CBD5E1"
+                value={warranty.extraNote || ''} onChangeText={set('extraNote')} />
+        </View>
+    );
+}
+
+// ── Ngân hàng + Người gửi ─────────────────────────────────────
 function BankInfoEditor({ bankInfo, setBankInfo }) {
     return (
         <View style={S.templateCard}>
             <Text style={S.sectionHead}>Ngân hàng & Người gửi</Text>
-            <Text style={S.svcHint}>Hiển thị ở mục “Thông tin ngân hàng” và cuối bản báo giá</Text>
+            <Text style={S.svcHint}>Hiển thị ở mục 6 và phần ký tên cuối hồ sơ</Text>
             <HR />
 
             <Text style={S.subHead}>Thông tin ngân hàng</Text>
             <Text style={S.fieldLabel}>Tên chủ tài khoản</Text>
-            <TextInput style={S.input} placeholder="CÔNG TY CỔ PHẦN SPRING WATER DELIVERY" placeholderTextColor="#CBD5E1"
+            <TextInput style={S.input} placeholder={COMPANY.name} placeholderTextColor="#CBD5E1"
                 value={bankInfo.bankAccountName} onChangeText={v => setBankInfo(b => ({ ...b, bankAccountName: v }))} />
             <Text style={S.fieldLabel}>Số tài khoản</Text>
             <TextInput style={S.input} placeholder="0123456789" keyboardType="numeric" placeholderTextColor="#CBD5E1"
                 value={bankInfo.bankAccountNumber} onChangeText={v => setBankInfo(b => ({ ...b, bankAccountNumber: v }))} />
             <Text style={S.fieldLabel}>Ngân hàng</Text>
-            <TextInput style={S.input} placeholder="Vietcombank" placeholderTextColor="#CBD5E1"
+            <TextInput style={S.input} placeholder="Techcombank" placeholderTextColor="#CBD5E1"
                 value={bankInfo.bankName} onChangeText={v => setBankInfo(b => ({ ...b, bankName: v }))} />
 
             <HR />
             <Text style={S.subHead}>Người gửi báo giá</Text>
             <Text style={S.fieldLabel}>Họ tên người gửi</Text>
-            <TextInput style={S.input} placeholder="Nguyễn Văn A" placeholderTextColor="#CBD5E1"
+            <TextInput style={S.input} placeholder={COMPANY.repName} placeholderTextColor="#CBD5E1"
                 value={bankInfo.senderName} onChangeText={v => setBankInfo(b => ({ ...b, senderName: v }))} />
             <Text style={S.fieldLabel}>Số điện thoại người gửi</Text>
-            <TextInput style={S.input} placeholder="0901 234 567" keyboardType="phone-pad" placeholderTextColor="#CBD5E1"
+            <TextInput style={S.input} placeholder={COMPANY.repPhone} keyboardType="phone-pad" placeholderTextColor="#CBD5E1"
                 value={bankInfo.senderPhone} onChangeText={v => setBankInfo(b => ({ ...b, senderPhone: v }))} />
         </View>
     );
 }
 
-// ── NEW: điều khoản thanh toán theo nhiều đợt (tối đa 4 đợt) ──
-// Mỗi đợt chỉ cần % giá trị đơn hàng + hạn thanh toán. Tự tính tổng % và cảnh báo nếu chưa đủ 100%.
+// ── Điều khoản thanh toán theo nhiều đợt (tối đa 4 đợt) ───────
 function PaymentTermsEditor({ paymentTerms, setPaymentTerms, total }) {
     const terms = Array.isArray(paymentTerms) && paymentTerms.length ? paymentTerms : [];
     const totalPercent = terms.reduce((s, t) => s + parseNum(t.percent), 0);
@@ -644,7 +1237,7 @@ function PaymentTermsEditor({ paymentTerms, setPaymentTerms, total }) {
                     <Text style={[S.editBadgeText, { color: isValid ? '#16A34A' : '#DC2626' }]}>{totalPercent}%</Text>
                 </View>
             </View>
-            <Text style={S.svcHint}>Chia đợt thanh toán theo % giá trị đơn hàng (tối đa {MAX_PAYMENT_TERMS} đợt)</Text>
+            <Text style={S.svcHint}>Mục 6 — chia đợt theo % giá trị đơn hàng (tối đa {MAX_PAYMENT_TERMS} đợt)</Text>
             <HR />
 
             {terms.length === 0 && (
@@ -669,8 +1262,8 @@ function PaymentTermsEditor({ paymentTerms, setPaymentTerms, total }) {
                                     value={String(t.percent ?? '')} onChangeText={v => updateTerm(i, 'percent', v)} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={S.fieldLabel}>Hạn thanh toán</Text>
-                                <TextInput style={S.input} placeholder="Trước khi lắp đặt" placeholderTextColor="#CBD5E1"
+                                <Text style={S.fieldLabel}>Mốc thanh toán</Text>
+                                <TextInput style={S.input} placeholder="Ngay khi ký xác nhận đặt hàng" placeholderTextColor="#CBD5E1"
                                     value={t.dueLabel || ''} onChangeText={v => updateTerm(i, 'dueLabel', v)} />
                             </View>
                         </View>
@@ -709,8 +1302,6 @@ function Calculator({ items: itemsProp, services: servicesProp, orderType, disc,
     const subtotal = itemsSubtotal + servicesSubtotal;
     const discAmt = subtotal * (parseNum(disc) / 100);
     const total = subtotal - discAmt;
-    const commRate = COMM[orderType] || 0.03;
-    const comm = total * commRate;
 
     return (
         <View style={S.calcCard}>
@@ -774,7 +1365,7 @@ function Calculator({ items: itemsProp, services: servicesProp, orderType, disc,
 
             <HR />
             <View style={S.discRow}>
-                <Text style={S.calcFieldLabel}>Chiết khấu áp dụng</Text>
+                <Text style={S.calcFieldLabel}>Chiết khấu áp dụng (%)</Text>
                 <TInput
                     value={String(disc ?? '')}
                     onChange={v => setDisc(v)}
@@ -788,9 +1379,11 @@ function Calculator({ items: itemsProp, services: servicesProp, orderType, disc,
             <View style={S.statRow}><Text style={S.statLabel}>Tổng tiền hàng</Text><Text style={S.statVal}>{fmt(subtotal)}</Text></View>
             <View style={S.statRow}><Text style={S.statLabel}>Tiền chiết khấu</Text><Text style={[S.statVal, { color: '#A32D2D' }]}>- {fmt(discAmt)}</Text></View>
             <View style={S.totalRow}>
-                <Text style={S.totalLabel}>Tổng thanh toán</Text>
+                <Text style={S.totalLabel}>Tổng giá trị (đã gồm VAT)</Text>
                 <Text style={S.totalVal}>{fmt(total)}</Text>
             </View>
+            {/* ✅ NEW: dòng "Bằng chữ" giống mục 3 của hồ sơ */}
+            <Text style={S.wordsText}>Bằng chữ: {numberToVietnameseWords(total)} đồng</Text>
         </View>
     );
 }
@@ -810,39 +1403,71 @@ export default function OrderContractScreen() {
     const [form, setForm] = useState({
         customer: '', phone: '', address: '',
         orderType: 'le', paymentMethod: 'customer', note: '',
-        items: [{ name: '', qty: 1, price: 0, note: '' }],
+        items: [{ name: '', desc: '', unit: 'Bộ', qty: '1', price: '', note: '' }],
     });
 
-    // Shared calculator state — ✅ luôn fallback []
-    // Nhóm I của báo giá chỉ gồm sản phẩm; dịch vụ của đơn được nạp vào nhóm II bên dưới.
     const orderProducts = productItems(rawOrder);
     const safeItems = orderProducts.length > 0
         ? orderProducts
         : mode === 'order' ? [] : form.items;
 
     const [items, setItems] = useState(safeItems);
-    // ✅ NEW: mục Thiết bị & Dịch vụ — nhập tay, độc lập với sản phẩm đơn hàng, dùng chung cho cả 2 mode
     const [services, setServices] = useState(rawOrder.services || []);
-    // ✅ NEW: thông tin báo giá (mã báo giá / công ty KH / MST / hiệu lực)
+
+    // ✅ Thông tin hồ sơ (trang bìa + thư chào giá)
     const [quoteMeta, setQuoteMeta] = useState({
         company: rawOrder.customerCompany || '',
         taxCode: rawOrder.customerTaxCode || '',
         validDays: '7',
         code: '',
+        jobName: '',
+        siteAddress: rawOrder.address || '',
+        systemName: '',
+        contactName: COMPANY.repName,
+        contactPhone: COMPANY.repPhone,
     });
-    // ✅ NEW: thông tin ngân hàng + người gửi (nhập tay)
+
+    // ✅ Tiến độ thực hiện (mục 4) — mặc định 3 bước theo template
+    const [schedule, setSchedule] = useState([
+        { task: 'Sản xuất, vận chuyển thiết bị đến công trình', days: '' },
+        { task: 'Lắp đặt, điều chỉnh, vận hành thử nghiệm', days: '' },
+        { task: 'Chạy thử và bàn giao', days: '' },
+    ]);
+
+    // ✅ Dự án tiêu biểu (mục 1) — nội dung + ảnh do người dùng nhập
+    const [projects, setProjects] = useState([
+        { title: 'Dự án cứu trợ miền Trung', desc: 'Máy lọc nước dã chiến cho người dân vùng lũ', images: [] },
+        { title: 'Dự án cứu trợ Myanmar', desc: 'Phối hợp cùng Học viện Nguyên Thủy và các mạnh thường quân', images: [] },
+    ]);
+
+    // ✅ 8 ảnh chứng chỉ mặc định — nạp sẵn 1 lần để lúc xuất PDF không phải chờ
+    const [certImages, setCertImages] = useState([]);
+    useEffect(() => {
+        let cancelled = false;
+        getBase64Certs().then(list => { if (!cancelled) setCertImages(list); });
+        return () => { cancelled = true; };
+    }, []);
+
+    // ✅ Bảo hành (mục 5)
+    const [warranty, setWarranty] = useState({
+        systemName: '', filterMonths: '06', partMonths: '24', extraNote: '',
+    });
+
     const [bankInfo, setBankInfo] = useState({
         bankAccountName: '', bankAccountNumber: '', bankName: '',
         senderName: '', senderPhone: '',
     });
-    // ✅ NEW: điều khoản thanh toán theo đợt (tối đa 4 đợt) — mặc định 1 đợt 100%
+
+    // ✅ Điều khoản thanh toán — mặc định 50/30/20 theo template mới
     const [paymentTerms, setPaymentTerms] = useState([
-        { percent: '100', dueLabel: 'Trước khi lắp đặt' },
+        { percent: '50', dueLabel: 'Tạm ứng ngay khi ký xác nhận đặt hàng' },
+        { percent: '30', dueLabel: 'Trước khi giao hàng đến chân công trình' },
+        { percent: '20', dueLabel: 'Sau khi hoàn thành lắp đặt, vận hành và bàn giao' },
     ]);
     const [disc, setDisc] = useState('0');
     const [exporting, setExporting] = useState(false);
 
-    // ✅ Fetch catalog sản phẩm từ Firestore
+    // Catalog sản phẩm
     const [catalog, setCatalog] = useState([]);
     useEffect(() => {
         getDocs(collection(db, 'productPrice'))
@@ -853,8 +1478,7 @@ export default function OrderContractScreen() {
             .catch(e => console.warn('catalog fetch:', e));
     }, []);
 
-    // ✅ Dịch vụ của đơn nằm ở collection 'service' → nạp sẵn vào nhóm "Thiết bị & Dịch vụ".
-    // Chỉ chạy 1 lần cho mode=order và không ghi đè nếu người dùng đã tự nhập dòng nào.
+    // Dịch vụ của đơn
     useEffect(() => {
         if (mode !== 'order' || !rawOrder?.id) return;
         let cancelled = false;
@@ -865,10 +1489,10 @@ export default function OrderContractScreen() {
                     const sv = d.data();
                     return {
                         name: sv.name || sv.type || 'Dịch vụ',
+                        desc: sv.desc || sv.description || '',
                         qty: String(sv.qty ?? 1),
                         unit: sv.unit || 'Gói',
                         price: String(sv.price ?? 0),
-                        origin: 'SWD',
                         included: !!sv.included,
                         note: '',
                     };
@@ -879,7 +1503,7 @@ export default function OrderContractScreen() {
         return () => { cancelled = true; };
     }, [mode, rawOrder?.id]);
 
-    // ✅ Gợi ý thông tin ngân hàng/người gửi từ hồ sơ user khi có sẵn (không ghi đè nếu người dùng đã nhập)
+    // Gợi ý ngân hàng / người gửi từ hồ sơ user
     useEffect(() => {
         if (!userDetail) return;
         setBankInfo(b => ({
@@ -891,7 +1515,7 @@ export default function OrderContractScreen() {
         }));
     }, [userDetail]);
 
-    // Derived — ✅ guard items trước khi reduce
+    // Derived
     const order = mode === 'order' ? rawOrder : form;
     const safeCalc = Array.isArray(items) ? items : [];
     const safeServices = Array.isArray(services) ? services : [];
@@ -901,30 +1525,109 @@ export default function OrderContractScreen() {
     const discAmt = subtotal * (parseNum(disc) / 100);
     const total = subtotal - discAmt;
 
-    // ✅ Sync items từ form khi mode=template (tránh bug function updater)
+    // Sync items từ form khi mode=template
     useEffect(() => {
         if (mode === 'template' && Array.isArray(form.items)) {
             setItems(form.items);
         }
     }, [form.items, mode]);
 
-    const handleFormChange = (nextForm) => {
-        setForm(nextForm); // React tự xử lý cả object lẫn function updater
+    // Địa chỉ công trình mặc định lấy theo địa chỉ đơn/form nếu chưa nhập tay
+    useEffect(() => {
+        const addr = mode === 'order' ? rawOrder.address : form.address;
+        if (!addr) return;
+        setQuoteMeta(m => (m.siteAddress ? m : { ...m, siteAddress: addr }));
+    }, [mode, rawOrder.address, form.address]);
+
+    const handleFormChange = (nextForm) => setForm(nextForm);
+
+    // ✅ NEW: form chia 3 cột trên desktop rộng, tự co xuống 2 cột / 1 cột khi hẹp
+    const { width } = useWindowDimensions();
+    const colCount = !isDesktop ? 1 : width >= 1240 ? 3 : width >= 880 ? 2 : 1;
+
+    // Các khối nhập liệu — khai báo 1 lần rồi phân bổ vào cột
+    const B = {
+        quoteMeta: <QuoteMetaEditor key="quoteMeta" quoteMeta={quoteMeta} setQuoteMeta={setQuoteMeta} />,
+        projects: <ProjectsEditor key="projects" projects={projects} setProjects={setProjects} />,
+        customer: mode === 'template'
+            ? <TemplateForm key="customer" form={form} setForm={handleFormChange} catalog={catalog} />
+            : null,
+        services: <ServicesEditor key="services" services={safeServices} setServices={setServices} />,
+        schedule: <ScheduleEditor key="schedule" schedule={schedule} setSchedule={setSchedule} />,
+        warranty: <WarrantyEditor key="warranty" warranty={warranty} setWarranty={setWarranty} />,
+        payment: <PaymentTermsEditor key="payment" paymentTerms={paymentTerms} setPaymentTerms={setPaymentTerms} total={total} />,
+        bank: <BankInfoEditor key="bank" bankInfo={bankInfo} setBankInfo={setBankInfo} />,
+        calc: (
+            <Calculator
+                key="calc"
+                items={safeCalc}
+                services={safeServices}
+                orderType={order.orderType || 'le'}
+                disc={disc}
+                setDisc={setDisc}
+            />
+        ),
     };
+
+    const LAYOUTS = {
+        3: [
+            { title: 'Thông tin hồ sơ', keys: ['quoteMeta', 'customer'] },
+            { title: 'Giới thiệu & hạng mục', keys: ['projects', 'services', 'schedule', 'warranty'] },
+            { title: 'Thanh toán', keys: ['payment', 'bank', 'calc'] },
+        ],
+        2: [
+            { title: 'Thông tin & hạng mục', keys: ['quoteMeta', 'customer', 'projects', 'services'] },
+            { title: 'Tiến độ & thanh toán', keys: ['schedule', 'warranty', 'payment', 'bank', 'calc'] },
+        ],
+        1: [
+            { title: '', keys: ['quoteMeta', 'customer', 'projects', 'services', 'schedule', 'warranty', 'payment', 'bank', 'calc'] },
+        ],
+    };
+
+    const columns = LAYOUTS[colCount].map(col => ({
+        title: col.title,
+        blocks: col.keys.map(k => B[k]).filter(Boolean),
+    }));
 
     const handleExport = async () => {
         setExporting(true);
         try {
-            const logoBase64 = await getBase64Logo(); // ✅ fetch base64 trước
+            const logoBase64 = await getBase64Logo();
+            const certs = certImages.length ? certImages : await getBase64Certs();
             const html = buildPDFHtml({
                 order, seller: userDetail, items: safeCalc, services: safeServices,
                 quoteMeta, disc, subtotal, total, discAmt, logoBase64,
-                bankInfo, paymentTerms,
+                bankInfo, paymentTerms, schedule, warranty, letter: {},
+                projects, certImages: certs,
             });
             await exportPDF(html, isDesktop);
         } catch (e) { console.error(e); }
         finally { setExporting(false); }
     };
+
+    // Chặn ngay tại màn, không chỉ ẩn ở menu: người dùng vẫn có thể tới đây bằng link
+    // trực tiếp, nút back trong lịch sử, hoặc thu nhỏ cửa sổ trình duyệt khi đang mở.
+    // Đặt SAU toàn bộ hook để không vi phạm rules of hooks.
+    if (!isDesktop) {
+        return (
+            <View style={[S.root, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+                <BgWatermark />
+                <Ionicons name="desktop-outline" size={44} color="#94A3B8" />
+                <Text style={[S.hTitle, { marginTop: 14, textAlign: 'center' }]}>Chỉ dùng được trên máy tính</Text>
+                <Text style={[S.hSub, { marginTop: 8, textAlign: 'center', maxWidth: 320 }]}>
+                    Form báo giá cần màn hình rộng để nhập bảng nhiều cột và xuất PDF.
+                    Vui lòng mở lại trên máy tính.
+                </Text>
+                <TouchableOpacity
+                    style={[S.backBtn, { marginTop: 20, flexDirection: 'row', alignItems: 'center', gap: 6, width: 'auto', paddingHorizontal: 16 }]}
+                    onPress={() => router.replace('(tabs)/home')}
+                >
+                    <Ionicons name="arrow-back" size={18} color="#0F172A" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>Về trang chủ</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
 
     return (
         <View style={[S.root, { paddingTop: isDesktop ? 0 : insets.top }]}>
@@ -936,13 +1639,12 @@ export default function OrderContractScreen() {
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
                     <Text style={S.hTitle}>
-                        {mode === 'template' ? 'Hợp đồng mẫu' : `Đơn hàng #${rawOrder.id}`}
+                        {mode === 'template' ? 'Hồ sơ chào giá mẫu' : `Đơn hàng #${rawOrder.id}`}
                     </Text>
                     <Text style={S.hSub}>
-                        {mode === 'template' ? 'Điền thông tin để xem trước hợp đồng' : rawOrder.customer}
+                        {mode === 'template' ? 'Điền thông tin để xuất hồ sơ chào giá' : rawOrder.customer}
                     </Text>
                 </View>
-                {/* PDF Export button */}
                 <TouchableOpacity style={S.pdfBtn} onPress={handleExport} disabled={exporting} activeOpacity={0.85}>
                     {exporting
                         ? <ActivityIndicator size="small" color="#fff" />
@@ -952,49 +1654,29 @@ export default function OrderContractScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* Body — ✅ không còn preview hợp đồng, chỉ còn form nhập liệu chia 2 cột (desktop) */}
+            {/* Body */}
             <ScrollView
                 showsVerticalScrollIndicator={true}
                 contentContainerStyle={[S.body, isDesktop && S.bodyWeb]}
                 keyboardShouldPersistTaps="handled"
             >
-                {isDesktop ? (
-                    <View style={S.grid2}>
-                        <View style={S.gridCol}>
-                            <QuoteMetaEditor quoteMeta={quoteMeta} setQuoteMeta={setQuoteMeta} />
-                            {mode === 'template' && (
-                                <TemplateForm form={form} setForm={handleFormChange} catalog={catalog} />
-                            )}
-                            <ServicesEditor services={safeServices} setServices={setServices} />
-                        </View>
-                        <View style={S.gridCol}>
-                            <BankInfoEditor bankInfo={bankInfo} setBankInfo={setBankInfo} />
-                            <PaymentTermsEditor paymentTerms={paymentTerms} setPaymentTerms={setPaymentTerms} total={total} />
-                            <Calculator
-                                items={safeCalc}
-                                services={safeServices}
-                                orderType={order.orderType || 'le'}
-                                disc={disc}
-                                setDisc={setDisc}
-                            />
-                        </View>
+                {colCount === 1 ? (
+                    <View style={{ gap: 12 }}>
+                        {columns.flatMap(c => c.blocks)}
                     </View>
                 ) : (
-                    <View style={{ gap: 12 }}>
-                        <QuoteMetaEditor quoteMeta={quoteMeta} setQuoteMeta={setQuoteMeta} />
-                        {mode === 'template' && (
-                            <TemplateForm form={form} setForm={handleFormChange} catalog={catalog} />
-                        )}
-                        <ServicesEditor services={safeServices} setServices={setServices} />
-                        <BankInfoEditor bankInfo={bankInfo} setBankInfo={setBankInfo} />
-                        <PaymentTermsEditor paymentTerms={paymentTerms} setPaymentTerms={setPaymentTerms} total={total} />
-                        <Calculator
-                            items={safeCalc}
-                            services={safeServices}
-                            orderType={order.orderType || 'le'}
-                            disc={disc}
-                            setDisc={setDisc}
-                        />
+                    <View style={S.gridRow}>
+                        {columns.map((col, ci) => (
+                            <View key={ci} style={S.gridCol}>
+                                <View style={S.colHead}>
+                                    <View style={S.colHeadNum}>
+                                        <Text style={S.colHeadNumText}>{ci + 1}</Text>
+                                    </View>
+                                    <Text style={S.colHeadText}>{col.title}</Text>
+                                </View>
+                                {col.blocks}
+                            </View>
+                        ))}
                     </View>
                 )}
                 <View style={{ height: 60 }} />
@@ -1006,21 +1688,22 @@ export default function OrderContractScreen() {
 // ── Styles ────────────────────────────────────────────────────
 const S = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F4F6FA' },
-    // Header
     header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 13, backgroundColor: '#fff', borderBottomWidth: 0.5, borderBottomColor: '#E2E8F0' },
     backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
     hTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
     hSub: { fontSize: 12, color: '#64748B', marginTop: 1 },
     pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0C447C', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9 },
     pdfBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
-    // Layout
     body: { padding: 14, paddingBottom: 40 },
     bodyWeb: { padding: 20 },
-    // ✅ 2 cột nhập liệu ngang bằng (đã bỏ cột preview hợp đồng)
-    grid2: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
+    // ✅ lưới nhập liệu: 3 cột (≥1240px) · 2 cột (≥880px) · 1 cột (mobile)
+    gridRow: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
     gridCol: { flex: 1, minWidth: 0, gap: 14 },
+    colHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 2, marginBottom: -2 },
+    colHeadNum: { width: 20, height: 20, borderRadius: 6, backgroundColor: '#0C447C', alignItems: 'center', justifyContent: 'center' },
+    colHeadNumText: { fontSize: 11, fontWeight: '700', color: '#fff' },
+    colHeadText: { fontSize: 12, fontWeight: '700', color: '#0C447C', textTransform: 'uppercase', letterSpacing: 0.4 },
     hr: { height: 0.5, backgroundColor: '#E2E8F0', marginVertical: 13 },
-    // Template Form / mục dùng chung
     templateCard: { backgroundColor: '#fff', borderRadius: 14, padding: 18, borderWidth: 0.5, borderColor: '#E2E8F0', marginBottom: 0 },
     sectionHead: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
     subHead: { fontSize: 12, fontWeight: '700', color: '#374151', marginTop: 12, marginBottom: 6 },
@@ -1028,29 +1711,28 @@ const S = StyleSheet.create({
     input: { backgroundColor: '#F8FAFC', borderWidth: 0.5, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 11, paddingVertical: 9, fontSize: 13, color: '#0F172A' },
     inputDisabled: { color: '#CBD5E1' },
     row2: { flexDirection: 'row', gap: 10 },
-    typeRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
-    typeBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 0.5, borderColor: '#E2E8F0', alignItems: 'center', backgroundColor: '#F8FAFC' },
-    typeBtnActive: { backgroundColor: '#0C447C', borderColor: '#0C447C' },
-    typeBtnText: { fontSize: 12, color: '#64748B', fontWeight: '600' },
-    typeBtnTextActive: { color: '#fff' },
     prodFormRow: { backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, marginTop: 8, borderWidth: 0.5, borderColor: '#E2E8F0' },
     prodFormHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
     prodFormIdx: { fontSize: 11, fontWeight: '700', color: '#185FA5' },
     addProdBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 9, backgroundColor: '#EFF6FF', marginTop: 10 },
     addProdText: { fontSize: 13, color: '#185FA5', fontWeight: '600' },
-    // Dịch vụ (services)
     svcHint: { fontSize: 11, color: '#94A3B8', marginTop: 3 },
+    // Ảnh dự án tiêu biểu
+    thumbGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
+    thumbWrap: { width: 74, height: 74, borderRadius: 8, overflow: 'visible' },
+    thumb: { width: 74, height: 74, borderRadius: 8, backgroundColor: '#E2E8F0' },
+    thumbRemove: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center' },
+    thumbAdd: { width: 74, height: 74, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: '#BFDBFE', backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', gap: 2 },
+    thumbAddText: { fontSize: 10, color: '#185FA5', fontWeight: '600' },
     svcEmpty: { fontSize: 12, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 4 },
     includedToggle: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 9, paddingVertical: 2 },
     includedToggleText: { fontSize: 11.5, color: '#64748B', flexShrink: 1 },
-    // Điều khoản thanh toán theo đợt
     percentBadgeOk: { backgroundColor: '#F0FDF4' },
     percentBadgeWarn: { backgroundColor: '#FEF2F2' },
     paymentTermAmt: { fontSize: 11, color: '#185FA5', fontWeight: '600', marginTop: 8 },
     totalPercentVal: { fontSize: 13, fontWeight: '700' },
     totalPercentOk: { color: '#16A34A' },
     totalPercentWarn: { color: '#DC2626' },
-    // Calculator
     calcCard: { backgroundColor: '#fff', borderRadius: 14, padding: 18, borderWidth: 0.5, borderColor: '#E2E8F0' },
     calcHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     calcIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
@@ -1060,9 +1742,6 @@ const S = StyleSheet.create({
     calcSvcHead: { fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 8, marginTop: 2, textTransform: 'uppercase', letterSpacing: .04 },
     calcRow: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'flex-start' },
     calcProdIcon: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-    calcDropTrigger: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', borderWidth: 0.5, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 8 },
-    calcDropPlaceholder: { flex: 1, fontSize: 12, color: '#CBD5E1' },
-    // Product Dropdown
     dropWrap: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 0.5, borderColor: '#E2E8F0', marginTop: 2, marginBottom: 8, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 10, elevation: 6 },
     dropSearch: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9' },
     dropSearchInput: { flex: 1, fontSize: 13, color: '#0F172A' },
@@ -1072,16 +1751,13 @@ const S = StyleSheet.create({
     dropItemCap: { fontSize: 11, color: '#94A3B8' },
     dropItemPrice: { fontSize: 12, fontWeight: '600', color: '#185FA5' },
     dropEmpty: { padding: 14, fontSize: 13, color: '#94A3B8', textAlign: 'center' },
-    // Template dropdown trigger
     dropTrigger: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     dropTriggerText: { flex: 1, fontSize: 13, color: '#0F172A', fontWeight: '500' },
     dropTriggerPlaceholder: { flex: 1, fontSize: 13, color: '#CBD5E1' },
     calcProdName: { fontSize: 12, fontWeight: '600', color: '#0F172A', marginBottom: 6 },
     calcInputs: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-    calcField: { gap: 3 },
     calcFieldLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '600' },
     tInput: { fontSize: 13, fontWeight: '600', color: '#0F172A', backgroundColor: '#F8FAFC', borderWidth: 0.5, borderColor: '#E2E8F0', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, textAlign: 'center' },
-    lineTotal: { fontSize: 13, fontWeight: '700', color: '#185FA5', paddingVertical: 6 },
     discRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     statRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7 },
     statLabel: { fontSize: 12, color: '#64748B' },
@@ -1089,13 +1765,7 @@ const S = StyleSheet.create({
     totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 9, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 0.5, borderColor: '#E2E8F0', marginTop: 4 },
     totalLabel: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
     totalVal: { fontSize: 17, fontWeight: '700', color: '#185FA5' },
-    readOnlyLabel: {
-        fontSize: 12,
-        color: '#64748B',
-        marginRight: 10,
-    },
-    readOnlyVal: {
-        fontWeight: '600',
-        color: '#0F172A',
-    },
+    wordsText: { fontSize: 11.5, fontStyle: 'italic', color: '#475569', marginTop: 8 },
+    readOnlyLabel: { fontSize: 12, color: '#64748B', marginRight: 10 },
+    readOnlyVal: { fontWeight: '600', color: '#0F172A' },
 });

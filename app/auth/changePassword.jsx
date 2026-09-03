@@ -120,7 +120,9 @@ export default function ChangePassword() {
 
 const S = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC', justifyContent: 'center' },
-    backBtn: { position: 'absolute', top: Platform.OS == 'web' && Dimensions.get('window').width ? 20 : 50, left: 20, zIndex: 10 },
+    // `&& Dimensions.get('window').width` cũ là điều kiện chết — width luôn khác 0 nên
+    // luôn truthy. Rút gọn về đúng ý định: web 20, native 50 (chừa chỗ status bar).
+    backBtn: { position: 'absolute', top: Platform.OS === 'web' ? 20 : 50, left: 20, zIndex: 10 },
     icon: { alignItems: 'center', marginBottom: 12 },
     iconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#BFDBFE' },
     title: { textAlign: 'center', fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 8 },

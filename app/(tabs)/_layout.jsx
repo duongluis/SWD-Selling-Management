@@ -55,7 +55,9 @@ const NAV_SECTIONS = [
       { key: 'region', link: '(tabs)/regionAnalytics', label: 'Báo cáo khu vực', icon: 'map-outline', activeIcon: 'map' },
       { key: 'news', link: '(tabs)/news', label: 'Tin tức', icon: 'newspaper-outline', activeIcon: 'newspaper', visible: () => true },
       { key: 'information', link: '(tabs)/information', label: 'Bảng giá', icon: 'pricetag-outline', activeIcon: 'pricetag', visible: () => true },
-      { key: 'quotation', link: 'orderContract?mode=template', label: 'Form báo giá', icon: 'document-text-outline', activeIcon: 'document-text', visible: () => true },
+      // Form báo giá chỉ dùng được trên máy tính: bảng nhập nhiều cột và luồng xuất PDF
+      // bằng window.print() không chạy trên mobile → ẩn hẳn khỏi menu ở màn hình nhỏ.
+      { key: 'quotation', link: 'orderContract?mode=template', label: 'Form báo giá', icon: 'document-text-outline', activeIcon: 'document-text', visible: (r, isDesktop) => isDesktop },
       { key: 'calculator', link: '(tabs)/calculator', label: 'Tính toán', icon: 'calculator-outline', activeIcon: 'calculator' },
     ],
   },
@@ -140,12 +142,15 @@ function NavItem({ item, isActive, collapsed, onPress }) {
 function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, isAdvisor, router, onClose }) {
   const [showLogout, setShowLogout] = useState(false);
   const roleLabel = getRoleLabel(role);
+  // Cùng component này được dùng cho sidebar desktop lẫn drawer mobile, nên phải tự biết
+  // đang ở khổ màn hình nào để ẩn các mục chỉ dành cho máy tính.
+  const { isDesktop } = useLayout();
 
   const shouldShowItem = (item) => {
     const gd = role === 'giamdoc';
     const admin = role === 'admin';
 
-    if (item.visible) return item.visible(role);
+    if (item.visible) return item.visible(role, isDesktop);
 
     if (item.key === 'commission' || item.key === 'calculator') {
       if (gd) return true;
