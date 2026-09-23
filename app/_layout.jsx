@@ -160,15 +160,17 @@ export default function RootLayout() {
 
     // ── Chặn non-admin truy cập route admin ─────────────────
     const accessingAdmin = ADMIN_ROUTES.some(r => fullPath.includes(r));
+
     if (accessingAdmin && !isAdmin) {
       console.warn('🚫 Truy cập trái phép:', fullPath);
       router.replace('/(tabs)/home');
       return;
     }
 
-    // ── Đã xác thực đang ở trang auth/index → vào app ───────
-    if (segment === 'auth' || segment === 'index' || segment === '') {
+    const AUTH_ENTRY_SCREENS = ['auth/signIn', 'auth/signUp', 'index', ''];
+    if (AUTH_ENTRY_SCREENS.includes(fullPath)) {
       router.replace('/(tabs)/home');
+      return;
     }
 
   }, [loaded, authChecked, userDetail, segments]);
