@@ -23,7 +23,6 @@ import { db } from '../../config/firebaseConfig';
 import { useLayout } from '@/components/Main/TabScreenLayout';
 
 import BANKS from '../../config/banks.json';
-import { normalizePhone } from '@/components/Utils/formatters';
 
 function getInitials(name) {
     if (!name) return 'U';
@@ -172,7 +171,7 @@ export default function EditProfileScreen() {
         try {
             const payload = {
                 name: form.name.trim(),
-                phone: normalizePhone(form.phone),
+                phone: form.phone.trim(),
                 address: form.address.trim(),
                 notifyPush,
                 notifyEmail,
@@ -282,7 +281,7 @@ export default function EditProfileScreen() {
                                             <Ionicons name="lock-closed-outline" size={14} color="#94A3B8" />
                                         </View>
                                     </View>
-                                    <EditInput label="Số điện thoại" value={form.phone} onChange={v => set('phone')(normalizePhone(v))} keyboardType="phone-pad" />
+                                    <EditInput label="Số điện thoại" value={form.phone} onChange={set('phone')} keyboardType="phone-pad" />
                                     <EditInput label="Địa chỉ" value={form.address} onChange={set('address')} multiline />
                                     {isCompany && (
                                         <>
