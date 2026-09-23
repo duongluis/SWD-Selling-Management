@@ -165,8 +165,6 @@ function ProductModal({ visible, onClose, onSaved, existingCount, editData = nul
     const handleSave = async () => {
         if (!form.name.trim()) { showAlert('Thông báo', 'Vui lòng nhập tên sản phẩm'); return; }
         if (!form.price) { showAlert('Thông báo', 'Vui lòng nhập giá niêm yết'); return; }
-        const price = form.price;
-        price
         setSaving(true);
         try {
             const payload = {

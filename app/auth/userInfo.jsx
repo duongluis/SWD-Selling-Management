@@ -15,6 +15,7 @@ import { showAlert } from '../../components/Main/showAlert';
 import BANKS from '../../config/banks.json';
 import { db } from '../../config/firebaseConfig';
 import { clearRegistrationPending, markRegistrationPending } from '../_layout';
+import { normalizePhone } from '@/components/Utils/formatters';
 
 const COMMITTED_REVENUE_MIN = 100_000_000;
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
@@ -387,7 +388,7 @@ export default function UserInfoView() {
             const roleMap = { daily: 'đại lý', partner: 'Đối tác', ctv: 'cộng tác viên', sale: 'Nhân viên bán hàng' };
             const payload = {
                 uid, email,
-                phone: phone.trim(), address: address.trim(),
+                phone: normalizePhone(phone), address: address.trim(),
                 role: roleMap[role], member: roleMap[role],
                 bizModel, verified: false,
                 createdAt: new Date().toISOString(),
@@ -561,7 +562,7 @@ export default function UserInfoView() {
             <Text style={S.stepSub}>Điền thông tin để chúng tôi liên hệ với bạn</Text>
 
             <View style={S.fg}><Text style={S.label}>Số điện thoại <Text style={S.req}>*</Text></Text>
-                <View style={F.inputBox}><Ionicons name="call-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={phone} onChangeText={setPhone} /></View>
+                <View style={F.inputBox}><Ionicons name="call-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="0901234567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={phone} onChangeText={v => setPhone(normalizePhone(v))} maxLength={11} /></View>
             </View>
             <View style={S.fg}><Text style={S.label}>Email liên hệ <Text style={S.optional}>(tuỳ chọn)</Text></Text>
                 <View style={F.inputBox}><Ionicons name="mail-outline" size={15} color="#94A3B8" /><TextInput style={F.input} placeholder="email@example.com" placeholderTextColor="#94A3B8" keyboardType="email-address" autoCapitalize="none" value={signUpEmail} onChangeText={setEmailContact} /></View>
@@ -604,7 +605,7 @@ export default function UserInfoView() {
                         <Text style={S.label}>Số điện thoại người liên hệ</Text>
                         <View style={F.inputBox}>
                             <Ionicons name="call-outline" size={15} color="#94A3B8" />
-                            <TextInput style={F.input} placeholder="0901 234 567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={contactPhone} onChangeText={setContactPhone} />
+                            <TextInput style={F.input} placeholder="0901234567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={contactPhone} onChangeText={setContactPhone} />
                         </View>
                     </View>
                 </View>

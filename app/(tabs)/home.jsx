@@ -297,7 +297,7 @@ export default function HomeView() {
   const router = useRouter();
   const { userDetail } = useContext(UserDetailContext);
   const role = getRole(userDetail);
-  const { isMobile } = useLayout();
+  const { isMobile, isDesktop } = useLayout();
   const { data: customerList, loading: customerLoading } = useScreenData('customers');
 
   const [exportOpen, setExportOpen] = useState(false);
@@ -323,7 +323,11 @@ export default function HomeView() {
     ...(role !== 'giamdoc' ?
       [
         { name: 'Phòng chat', icon: 'chatbubbles-outline', action: () => router.push('/chatList'), color: '#059669', bg: '#ECFDF5' },
-        { name: 'Hợp đồng', icon: 'document-text-outline', action: () => router.push('/orderContract?mode=template'), color: '#0C447C', bg: '#EFF6FF' },
+        // Lối vào thứ hai của màn báo giá — cũng chỉ hiện trên máy tính, khớp với
+        // mục "Form báo giá" ở sidebar (xem app/(tabs)/_layout.jsx).
+        ...(isDesktop ? [
+          { name: 'Hợp đồng', icon: 'document-text-outline', action: () => router.push('/orderContract?mode=template'), color: '#0C447C', bg: '#EFF6FF' },
+        ] : []),
       ] : []),
   ];
 
