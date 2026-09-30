@@ -3,6 +3,7 @@ import { useScreenData } from '@/components/Hooks/useScreenData';
 import BgWatermark from '@/components/Main/BgWatermark';
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import UserDetail from '@/components/UI/UserDetail';
+import { getRole } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
@@ -15,18 +16,27 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fmtPhone } from '../../components/Utils/formatters';
 
+// Khoá theo role đã chuẩn hoá (getRole) — Firestore lưu role không đồng nhất
+// ("Nhân viên bán hàng" / "nhân viên bán hàng" / "sale"...), gom theo chuỗi thô sẽ tách
+// cùng 1 role thành nhiều nhóm.
 const ROLE_DISPLAY = {
-    'đại lý': 'Đại lý',
-    'Đối tác': 'Đối tác',
-    'đối tác': 'Đối tác',
-    'cộng tác viên': 'CTV',
-    'ctv': 'CTV',
-    'admin': 'Admin',
-    'giamdoc': 'Giám đốc',
+    daily: 'Đại lý',
+    phantan: 'Đối tác',
+    ctv: 'CTV',
+    sale: 'Nhân viên bán hàng',
+    admin: 'Admin',
+    giamdoc: 'Giám đốc',
 };
 
+// Role lạ (getRole trả 'other') vẫn tách nhóm theo chuỗi gốc, chỉ bỏ khác biệt hoa thường/khoảng trắng
+const roleKey = (m) => {
+    const r = getRole(m);
+    return r !== 'other' ? r : (String(m.role || '').trim().toLowerCase() || 'other');
+};
+const roleTitle = (m) => ROLE_DISPLAY[getRole(m)] || String(m.role || '').trim() || '—';
+
 function MemberCard({ member, onPress }) {
-    const roleLabel = ROLE_DISPLAY[member.role?.toLowerCase()] || member.role || '—';
+    const roleLabel = roleTitle(member);
     return (
         <TouchableOpacity style={styles.card} onPress={() => onPress(member)} activeOpacity={0.7}>
             <View style={styles.avatar}>
@@ -59,23 +69,17 @@ export default function TeamView() {
     const [selectedMember, setSelectedMember] = useState(null);
 
     const grouped = members.reduce((acc, m) => {
-        const role = m.role || 'other';
-        if (!acc[role]) acc[role] = [];
-        acc[role].push(m);
+        const key = roleKey(m);
+        if (!acc[key]) acc[key] = { title: roleTitle(m), data: [] };
+        acc[key].data.push(m);
         return acc;
     }, {});
 
-    const ROLE_ORDER = { 'đại lý': 1, 'đối tác': 2, 'Đối tác': 2, 'cộng tác viên': 3, 'ctv': 3 };
+    const ROLE_ORDER = { daily: 1, phantan: 2, ctv: 3 };
 
     const roleSections = Object.entries(grouped)
-        .map(([role, items]) => ({
-            title: ROLE_DISPLAY[role?.toLowerCase()] || role,
-            data: items,
-        }))
-        .sort((a, b) => {
-            const order = { 'Đại lý': 1, 'Đối tác': 2, 'CTV': 3 };
-            return (order[a.title] || 99) - (order[b.title] || 99);
-        });
+        .sort(([a], [b]) => (ROLE_ORDER[a] || 99) - (ROLE_ORDER[b] || 99))
+        .map(([, section]) => section);
 
     if (loading) {
         return (

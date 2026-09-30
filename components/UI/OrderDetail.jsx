@@ -3,7 +3,7 @@
 
 import { showAlert } from '@/components/Main/showAlert';
 import { createNotification, getSupportRoomId, sendStatusUpdateMessage } from '@/components/Utils/chatService';
-import { computeOrderCommission } from '@/components/Utils/commissionCalc';
+import { buildAdminShareRecord, computeOrderCommission } from '@/components/Utils/commissionCalc';
 import { fmtCurrency } from '@/components/Utils/formatters';
 import { linesTotal, productItems, productTotal } from '@/components/Utils/orderItems';
 import { isAdmin as checkAdmin } from '@/components/Utils/roleHelper';
@@ -605,8 +605,8 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                     );
                     await Promise.all(svcSnap.docs.map(d => deleteDoc(doc(db, 'service', d.id))));
 
-                    // 2. Xoá hoa hồng/thưởng của đơn — gồm cả 2 dòng chia "2 phần"/"1 phần"
-                    //    (docId `{orderId}-2`, `{orderId}-3`) sinh ra khi admin duyệt trả.
+                    // 2. Xoá hoa hồng/thưởng của đơn — gồm cả dòng chia "2 phần" (`{orderId}-2`)
+                    //    và dòng "1 phần" (`{orderId}-3`) của bản ghi 7/2/1 cũ.
                     const commSnap = await getDocs(
                         query(collection(db, 'commissions'), where('orderId', '==', localOrder.id))
                     );
@@ -685,16 +685,21 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                                 `Đơn #${localOrder.id}: có sản phẩm chưa được điền "${payload.basePriceField}" trong bảng giá (productPrice). `
                                 + `Hoa hồng đang bị tính thành 0 vì không có giá gốc để so. Hãy cập nhật bảng giá rồi đặt lại trạng thái đơn.`
                             );
-                            await setDoc(doc(db, 'commissions', localOrder.id), payload);
                         } else if (payload.commission <= 0 && payload.bonusAmount <= 0) {
                             showAlert(
                                 'Hoa hồng bằng 0',
                                 `Đơn #${localOrder.id}: hình thức thanh toán "${payload.paymentMethod}", giá gốc so theo "${payload.basePriceField}". `
                                 + `Hoa hồng chỉ phát sinh khi khách hàng tự thanh toán ("customer") và giá bán cao hơn giá gốc của vai trò.`
                             );
+                        }
+                        if (payload) {
                             await setDoc(doc(db, 'commissions', localOrder.id), payload);
-                        } else {
-                            await setDoc(doc(db, 'commissions', localOrder.id), payload);
+                            // Đơn sale chia 8/2: dòng 2 phần chỉ admin thấy, hiện từ cuối
+                            // quý (releaseAt) — cùng lúc sale thấy dòng 8 phần ở trên.
+                            const adminShare = buildAdminShareRecord(payload);
+                            if (adminShare) {
+                                await setDoc(doc(db, 'commissions', `${localOrder.id}-2`), adminShare);
+                            }
                         }
                     } catch (e) {
                         console.error(`Ghi commission cho đơn #${localOrder.id} thất bại:`, e);

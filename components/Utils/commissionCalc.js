@@ -36,7 +36,7 @@ export function calcCommission(items = [], basePriceField = 'price') {
             const sellPrice = parseFloat(p.price || 0);
             const basePrice = parseFloat(p[basePriceField] || p.basePrice || p.price || 0);
             const qty = parseFloat(p.qty || 1);
-            // Không nhân 0.7 ở đây: phần chia 70/30 cho đơn sale được áp 1 lần duy nhất
+            // Không nhân 0.8 ở đây: phần chia 8/2 cho đơn sale được áp 1 lần duy nhất
             // tại computeOrderCommission (visibleCommission).
             return sum + (sellPrice - basePrice) * qty;
         }, 0),
@@ -139,9 +139,12 @@ export async function computeOrderCommission(order) {
         && basePriceField !== 'price'
         && items.some(p => !(parseFloat(p[basePriceField]) > 0));
 
-    // Đơn của sale → chỉ ghi 70% công khai trước, 30% còn lại sinh ra khi admin duyệt trả.
-    // Đơn của role khác → ghi đủ 100% như trước, không chia.
-    const visibleCommission = isSaleOrder ? Math.round(totalCommission * 0.7) : totalCommission;
+    // Đơn của sale chia 8/2, trả theo quý (releaseAt = ngày cuối quý thanh toán, GMT+7):
+    // - dòng gốc 8 phần: admin thấy ngay, sale thấy từ releaseAt
+    // - dòng 2 phần (buildAdminShareRecord, adminOnly): admin thấy từ releaseAt
+    // Đơn của role khác → ghi đủ 100% như trước, không chia, hiện ngay.
+    const paidAt = new Date();
+    const visibleCommission = isSaleOrder ? Math.round(totalCommission * 0.8) : totalCommission;
 
     const collaboratorEmail = creatorData.collaboration || null;
     let bonusAmount = 0;
@@ -167,7 +170,8 @@ export async function computeOrderCommission(order) {
         orderType: order.orderType || null,
         paymentMethod: order.paymentMethod || null,
         createdAt: order.createdAt || null,
-        paidAt: new Date().toISOString(),
+        paidAt: paidAt.toISOString(),
+        releaseAt: isSaleOrder ? quarterEnd(paidAt).toISOString() : null,
         totalValue,
         basePriceField,
         missingBasePrice,
@@ -180,5 +184,41 @@ export async function computeOrderCommission(order) {
         adminOnly: false,
         creatorRole,
         splitEligible: isSaleOrder,
+        splitScheme: isSaleOrder ? '8/2' : null,
+    };
+}
+
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000; // GMT+7
+
+/**
+ * 00:00 (GMT+7) ngày cuối quý chứa `date` (quý tính theo giờ GMT+7, không theo giờ máy).
+ * Vd thanh toán 15/02 → 31/03 00:00 GMT+7 (= 30/03 17:00 UTC).
+ */
+export function quarterEnd(date) {
+    const vn = new Date(new Date(date).getTime() + VN_OFFSET_MS);
+    const firstMonthOfNextQuarter = Math.floor(vn.getUTCMonth() / 3) * 3 + 3;
+    return new Date(Date.UTC(vn.getUTCFullYear(), firstMonthOfNextQuarter, 0) - VN_OFFSET_MS);
+}
+
+/**
+ * Bản ghi hoa hồng đã tới kỳ chưa (releaseAt = cuối quý): trước đó sale chưa thấy dòng
+ * 8 phần, admin chưa thấy dòng 2 phần và chưa duyệt trả được.
+ */
+export const isCommissionReleased = (c, now = new Date()) =>
+    !c.releaseAt || new Date(c.releaseAt) <= now;
+
+/**
+ * Dòng "2 phần" (adminOnly) đi kèm dòng 8 phần của đơn sale — ghi vào docId `{orderId}-2`.
+ * Trả về null nếu đơn không thuộc diện chia.
+ */
+export function buildAdminShareRecord(payload) {
+    if (!payload?.splitEligible) return null;
+    return {
+        ...payload,
+        commission: Math.max(0, payload.commissionTotal - payload.commission),
+        bonusAmount: 0,
+        bonusStatus: 'paid',
+        adminOnly: true,
+        splitPart: 2,
     };
 }

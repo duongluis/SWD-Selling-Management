@@ -6,6 +6,7 @@ import { showAlert } from '@/components/Main/showAlert';
 import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import FilterChips from '@/components/UI/FilterChips';
 import { createNotification } from '@/components/Utils/chatService';
+import { isCommissionReleased } from '@/components/Utils/commissionCalc';
 import { getRole, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,9 +24,14 @@ const IS_DESKTOP = Platform.OS === 'web' && width >= 768;
 
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 
-// Đơn của sale chia hoa hồng 7/2/1: dòng gốc 7 phần trả cho sale, sau khi trả thì sinh
-// thêm 2 dòng 2 phần và 1 phần — chỉ admin/giám đốc thấy (adminOnly).
+// Đơn của sale chia hoa hồng 8/2 (splitScheme '8/2'), trả theo quý: dòng gốc 8 phần admin
+// thấy ngay, sale thấy và admin duyệt trả được từ ngày cuối quý thanh toán (releaseAt, GMT+7);
+// dòng 2 phần sinh cùng lúc đơn thanh toán nhưng cũng chỉ hiện từ releaseAt, chỉ admin/giám
+// đốc thấy (adminOnly). Bản ghi cũ (7/2/1, không có splitScheme) vẫn sinh dòng 2 phần +
+// 1 phần khi admin duyệt trả dòng gốc.
 const SPLIT_LABEL = { 2: '2 phần', 3: '1 phần' };
+// releaseAt là 00:00 GMT+7 → hiển thị theo giờ Việt Nam, không theo giờ máy
+const fmtReleaseDate = iso => new Date(iso).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
 const fmtShort = n => {
     if (!n) return '0';
     if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + ' tỷ';
@@ -126,6 +132,7 @@ function CommCardMobile({ r, isAdmin, canPay, onApprove }) {
                     <Text style={MR.date}>
                         {r.createdAt?.slice(0, 10) || '—'}
                         {r.splitPart ? ` · ${SPLIT_LABEL[r.splitPart]}` : ''}
+                        {r.locked ? ` · Trả ngày ${fmtReleaseDate(r.releaseAt)}` : ''}
                     </Text>
                 </View>
                 <View style={{ gap: 4, alignItems: 'flex-end' }}>
@@ -154,7 +161,7 @@ function CommCardMobile({ r, isAdmin, canPay, onApprove }) {
                     )}
                 </View>
             </View>
-            {canPay && r.status !== 'paid' && (
+            {canPay && r.status !== 'paid' && !r.locked && (
                 <TouchableOpacity style={MR.approveBtn} onPress={() => onApprove(r)}>
                     <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
                     <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>Xác nhận trả</Text>
@@ -225,6 +232,7 @@ function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
                 <Text style={DT.sub}>
                     {r.createdAt?.slice(0, 10) || '—'}
                     {r.splitPart ? ` · ${SPLIT_LABEL[r.splitPart]}` : ''}
+                    {r.locked ? ` · Trả ngày ${fmtReleaseDate(r.releaseAt)}` : ''}
                 </Text>
             </View>
             <View style={COL.customer}>
@@ -253,6 +261,9 @@ function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
             </View>
             {canPay && (
                 <View style={COL.action}>
+                    {r.locked && !isPaid ? (
+                        <Text style={DT.sub}>Chờ cuối quý</Text>
+                    ) : (
                     <TouchableOpacity
                         style={isPaid ? DT.btnDone : DT.btnPending}
                         onPress={() => !isPaid && onApprove(r)}
@@ -267,6 +278,7 @@ function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
                             {isPaid ? 'Đã trả' : 'Xác nhận trả'}
                         </Text>
                     </TouchableOpacity>
+                    )}
                 </View>
             )}
         </View>
@@ -326,7 +338,11 @@ export default function CommissionScreen() {
     const orders = useMemo(() => {
         const map = new Map(teamCommissions.map(o => [o.docId, o]));
         collabBonuses.forEach(o => map.set(o.docId, o));
-        let list = [...map.values()];
+        // Chưa tới cuối quý: admin vẫn thấy dòng 8 phần (khoá nút trả), sale thì chưa;
+        // dòng 2 phần (adminOnly) cũng chỉ hiện từ cuối quý.
+        let list = [...map.values()]
+            .map(o => ({ ...o, locked: !isCommissionReleased(o) }))
+            .filter(o => !o.locked || (isAdmin && !o.adminOnly));
         if (!isAdmin) list = list.filter(o => !o.adminOnly);
         return list;
     }, [teamCommissions, collabBonuses, isAdmin]);
@@ -338,7 +354,7 @@ export default function CommissionScreen() {
         const statusField = isBonus ? 'bonusStatus' : 'commissionStatus';
         const targetEmail = isBonus ? r.collaboratorEmail : r.sellerEmail;
 
-        if (r.status === 'paid') return;
+        if (r.status === 'paid' || r.locked) return;
         showAlert(
             `Xác nhận thanh toán ${isBonus ? 'thưởng' : 'hoa hồng'}`,
             `Trả ${fmt(amount)} cho ${targetEmail || '—'}?\n\nĐơn: #${r.id}\nKhách hàng: ${r.customer || '—'}`,
@@ -352,13 +368,14 @@ export default function CommissionScreen() {
                 }
 
                 try {
-                    // Sinh thêm 2 dòng 2 phần / 1 phần khi:
+                    // Chỉ cho bản ghi cũ theo công thức 7/2/1 — sinh thêm 2 dòng 2 phần / 1 phần khi:
                     // - đang duyệt commission (không phải bonus)
                     // - đây là dòng công khai gốc (chưa từng là dòng adminOnly)
                     // - đơn được tạo bởi tài khoản role "sale"
-                    //   (splitEligible do computeOrderCommission ghi; bản ghi cũ chưa có
+                    //   (splitEligible do computeOrderCommission ghi; bản ghi cũ hơn chưa có
                     //    trường này nên fallback về creatorRole)
-                    const isSplitParent = !isBonus && !r.adminOnly
+                    // Bản ghi 8/2 (có splitScheme) đã có dòng 2 phần từ lúc đơn thanh toán.
+                    const isSplitParent = !isBonus && !r.adminOnly && !r.splitScheme
                         && (r.splitEligible ?? r.creatorRole === 'sale');
 
                     if (isSplitParent) {
