@@ -83,6 +83,7 @@ const getCostPriceField = (order, role, rootAdvisorRoles) => {
 
 const canShowCost = (userDetail, role) => {
   if (isAdminOrGD(role)) return true;
+  if (role === 'sale') return false; // sale không được xem tiền nhập
   return userDetail?.advisor == null;
 };
 

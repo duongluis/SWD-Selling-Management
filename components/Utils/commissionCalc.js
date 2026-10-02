@@ -139,9 +139,10 @@ export async function computeOrderCommission(order) {
         && basePriceField !== 'price'
         && items.some(p => !(parseFloat(p[basePriceField]) > 0));
 
-    // Đơn của sale chia 8/2, trả theo quý (releaseAt = ngày cuối quý thanh toán, GMT+7):
-    // - dòng gốc 8 phần: admin thấy ngay, sale thấy từ releaseAt
-    // - dòng 2 phần (buildAdminShareRecord, adminOnly): admin thấy từ releaseAt
+    // Đơn của sale chia 8/2:
+    // - dòng gốc 8 phần: sale và admin thấy ngay, admin duyệt trả được ngay (như 7 phần cũ)
+    // - dòng 2 phần (buildAdminShareRecord, adminOnly): admin thấy và duyệt trả từ
+    //   ngày cuối quý thanh toán (releaseAt, GMT+7)
     // Đơn của role khác → ghi đủ 100% như trước, không chia, hiện ngay.
     const paidAt = new Date();
     const visibleCommission = isSaleOrder ? Math.round(totalCommission * 0.8) : totalCommission;
@@ -171,7 +172,7 @@ export async function computeOrderCommission(order) {
         paymentMethod: order.paymentMethod || null,
         createdAt: order.createdAt || null,
         paidAt: paidAt.toISOString(),
-        releaseAt: isSaleOrder ? quarterEnd(paidAt).toISOString() : null,
+        releaseAt: null,
         totalValue,
         basePriceField,
         missingBasePrice,
@@ -201,8 +202,8 @@ export function quarterEnd(date) {
 }
 
 /**
- * Bản ghi hoa hồng đã tới kỳ chưa (releaseAt = cuối quý): trước đó sale chưa thấy dòng
- * 8 phần, admin chưa thấy dòng 2 phần và chưa duyệt trả được.
+ * Bản ghi hoa hồng đã tới kỳ chưa (releaseAt = cuối quý): trước đó admin chưa thấy
+ * dòng 2 phần nên cũng chưa duyệt trả được.
  */
 export const isCommissionReleased = (c, now = new Date()) =>
     !c.releaseAt || new Date(c.releaseAt) <= now;
@@ -216,6 +217,7 @@ export function buildAdminShareRecord(payload) {
     return {
         ...payload,
         commission: Math.max(0, payload.commissionTotal - payload.commission),
+        releaseAt: quarterEnd(payload.paidAt).toISOString(),
         bonusAmount: 0,
         bonusStatus: 'paid',
         adminOnly: true,

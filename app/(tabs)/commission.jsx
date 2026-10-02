@@ -24,14 +24,12 @@ const IS_DESKTOP = Platform.OS === 'web' && width >= 768;
 
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 
-// Đơn của sale chia hoa hồng 8/2 (splitScheme '8/2'), trả theo quý: dòng gốc 8 phần admin
-// thấy ngay, sale thấy và admin duyệt trả được từ ngày cuối quý thanh toán (releaseAt, GMT+7);
-// dòng 2 phần sinh cùng lúc đơn thanh toán nhưng cũng chỉ hiện từ releaseAt, chỉ admin/giám
-// đốc thấy (adminOnly). Bản ghi cũ (7/2/1, không có splitScheme) vẫn sinh dòng 2 phần +
-// 1 phần khi admin duyệt trả dòng gốc.
+// Đơn của sale chia hoa hồng 8/2 (splitScheme '8/2'): dòng gốc 8 phần hiện và duyệt trả
+// được ngay như dòng 7 phần cũ; dòng 2 phần sinh cùng lúc đơn thanh toán nhưng chỉ hiện (và
+// duyệt trả được) từ ngày cuối quý thanh toán (releaseAt, GMT+7), chỉ admin/giám đốc thấy
+// (adminOnly). Bản ghi cũ (7/2/1, không có splitScheme) vẫn sinh dòng 2 phần + 1 phần khi
+// admin duyệt trả dòng gốc.
 const SPLIT_LABEL = { 2: '2 phần', 3: '1 phần' };
-// releaseAt là 00:00 GMT+7 → hiển thị theo giờ Việt Nam, không theo giờ máy
-const fmtReleaseDate = iso => new Date(iso).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
 const fmtShort = n => {
     if (!n) return '0';
     if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + ' tỷ';
@@ -132,7 +130,6 @@ function CommCardMobile({ r, isAdmin, canPay, onApprove }) {
                     <Text style={MR.date}>
                         {r.createdAt?.slice(0, 10) || '—'}
                         {r.splitPart ? ` · ${SPLIT_LABEL[r.splitPart]}` : ''}
-                        {r.locked ? ` · Trả ngày ${fmtReleaseDate(r.releaseAt)}` : ''}
                     </Text>
                 </View>
                 <View style={{ gap: 4, alignItems: 'flex-end' }}>
@@ -161,7 +158,7 @@ function CommCardMobile({ r, isAdmin, canPay, onApprove }) {
                     )}
                 </View>
             </View>
-            {canPay && r.status !== 'paid' && !r.locked && (
+            {canPay && r.status !== 'paid' && (
                 <TouchableOpacity style={MR.approveBtn} onPress={() => onApprove(r)}>
                     <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
                     <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>Xác nhận trả</Text>
@@ -232,7 +229,6 @@ function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
                 <Text style={DT.sub}>
                     {r.createdAt?.slice(0, 10) || '—'}
                     {r.splitPart ? ` · ${SPLIT_LABEL[r.splitPart]}` : ''}
-                    {r.locked ? ` · Trả ngày ${fmtReleaseDate(r.releaseAt)}` : ''}
                 </Text>
             </View>
             <View style={COL.customer}>
@@ -261,9 +257,6 @@ function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
             </View>
             {canPay && (
                 <View style={COL.action}>
-                    {r.locked && !isPaid ? (
-                        <Text style={DT.sub}>Chờ cuối quý</Text>
-                    ) : (
                     <TouchableOpacity
                         style={isPaid ? DT.btnDone : DT.btnPending}
                         onPress={() => !isPaid && onApprove(r)}
@@ -278,7 +271,6 @@ function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
                             {isPaid ? 'Đã trả' : 'Xác nhận trả'}
                         </Text>
                     </TouchableOpacity>
-                    )}
                 </View>
             )}
         </View>
@@ -338,11 +330,9 @@ export default function CommissionScreen() {
     const orders = useMemo(() => {
         const map = new Map(teamCommissions.map(o => [o.docId, o]));
         collabBonuses.forEach(o => map.set(o.docId, o));
-        // Chưa tới cuối quý: admin vẫn thấy dòng 8 phần (khoá nút trả), sale thì chưa;
-        // dòng 2 phần (adminOnly) cũng chỉ hiện từ cuối quý.
-        let list = [...map.values()]
-            .map(o => ({ ...o, locked: !isCommissionReleased(o) }))
-            .filter(o => !o.locked || (isAdmin && !o.adminOnly));
+        // Dòng 2 phần (adminOnly) chỉ hiện từ cuối quý. Chỉ xét releaseAt trên dòng adminOnly
+        // để dòng 8 phần luôn hiện ngay, kể cả bản ghi đã lỡ ghi releaseAt trước đó.
+        let list = [...map.values()].filter(o => !o.adminOnly || isCommissionReleased(o));
         if (!isAdmin) list = list.filter(o => !o.adminOnly);
         return list;
     }, [teamCommissions, collabBonuses, isAdmin]);
@@ -354,7 +344,7 @@ export default function CommissionScreen() {
         const statusField = isBonus ? 'bonusStatus' : 'commissionStatus';
         const targetEmail = isBonus ? r.collaboratorEmail : r.sellerEmail;
 
-        if (r.status === 'paid' || r.locked) return;
+        if (r.status === 'paid') return;
         showAlert(
             `Xác nhận thanh toán ${isBonus ? 'thưởng' : 'hoa hồng'}`,
             `Trả ${fmt(amount)} cho ${targetEmail || '—'}?\n\nĐơn: #${r.id}\nKhách hàng: ${r.customer || '—'}`,

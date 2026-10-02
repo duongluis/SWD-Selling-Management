@@ -694,8 +694,8 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         }
                         if (payload) {
                             await setDoc(doc(db, 'commissions', localOrder.id), payload);
-                            // Đơn sale chia 8/2: dòng 2 phần chỉ admin thấy, hiện từ cuối
-                            // quý (releaseAt) — cùng lúc sale thấy dòng 8 phần ở trên.
+                            // Đơn sale chia 8/2: dòng 8 phần ở trên hiện ngay; dòng 2 phần
+                            // chỉ admin thấy, hiện từ cuối quý (releaseAt).
                             const adminShare = buildAdminShareRecord(payload);
                             if (adminShare) {
                                 await setDoc(doc(db, 'commissions', `${localOrder.id}-2`), adminShare);

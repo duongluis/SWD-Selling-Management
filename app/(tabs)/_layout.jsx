@@ -149,6 +149,8 @@ function SidebarContent({ activeTab, role, userDetail, collapsed, onNavigate, is
 
     if (item.key === 'commission' || item.key === 'calculator') {
       if (gd) return true;
+      // Sale luôn có hoa hồng riêng (8 phần) trên đơn mình tạo, kể cả khi có advisor
+      if (item.key === 'commission' && role === 'sale') return true;
       if (userDetail?.advisor) return false;
       if (role === 'daily') return false;
       return role === 'admin' || role === 'phantan' || role === 'ctv' || role === 'sale';
