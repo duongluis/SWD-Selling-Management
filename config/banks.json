@@ -5,7 +5,7 @@
         "shortName": "VCB",
         "bin": "970436",
         "minLen": 4,
-        "maxLen": 13
+        "maxLen": 20
     },
     {
         "id": "BIDV",
@@ -13,7 +13,7 @@
         "shortName": "BIDV",
         "bin": "970418",
         "minLen": 4,
-        "maxLen": 14
+        "maxLen": 20
     },
     {
         "id": "VTB",
@@ -21,7 +21,7 @@
         "shortName": "CTG",
         "bin": "970415",
         "minLen": 4,
-        "maxLen": 14
+        "maxLen": 20
     },
     {
         "id": "AGR",
@@ -29,7 +29,7 @@
         "shortName": "AGR",
         "bin": "970405",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "TCB",
@@ -37,7 +37,7 @@
         "shortName": "TCB",
         "bin": "970407",
         "minLen": 4,
-        "maxLen": 14
+        "maxLen": 20
     },
     {
         "id": "MB",
@@ -45,7 +45,7 @@
         "shortName": "MB",
         "bin": "970422",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "ACB",
@@ -53,7 +53,7 @@
         "shortName": "ACB",
         "bin": "970416",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "VPB",
@@ -61,7 +61,7 @@
         "shortName": "VPB",
         "bin": "970432",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "TPB",
@@ -69,7 +69,7 @@
         "shortName": "TPB",
         "bin": "970423",
         "minLen": 4,
-        "maxLen": 14
+        "maxLen": 20
     },
     {
         "id": "STB",
@@ -77,7 +77,7 @@
         "shortName": "STB",
         "bin": "970403",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "HDB",
@@ -85,7 +85,7 @@
         "shortName": "HDB",
         "bin": "970437",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "OCB",
@@ -93,7 +93,7 @@
         "shortName": "OCB",
         "bin": "970448",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "MSB",
@@ -101,7 +101,7 @@
         "shortName": "MSB",
         "bin": "970426",
         "minLen": 4,
-        "maxLen": 12
+        "maxLen": 20
     },
     {
         "id": "EIB",
@@ -109,7 +109,7 @@
         "shortName": "EIB",
         "bin": "970431",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "SHB",
@@ -117,7 +117,7 @@
         "shortName": "SHB",
         "bin": "970443",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "LPB",
@@ -125,7 +125,7 @@
         "shortName": "LPB",
         "bin": "970449",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "BAB",
@@ -133,7 +133,7 @@
         "shortName": "BAB",
         "bin": "970409",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "NAB",
@@ -141,7 +141,7 @@
         "shortName": "NAB",
         "bin": "970428",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "PGB",
@@ -149,7 +149,7 @@
         "shortName": "PGB",
         "bin": "970438",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "VIB",
@@ -157,7 +157,7 @@
         "shortName": "VIB",
         "bin": "970441",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "ABB",
@@ -165,7 +165,7 @@
         "shortName": "ABB",
         "bin": "970425",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "BVB",
@@ -173,7 +173,7 @@
         "shortName": "BVB",
         "bin": "970454",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "KLB",
@@ -181,7 +181,7 @@
         "shortName": "KLB",
         "bin": "970452",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "IVB",
@@ -189,7 +189,7 @@
         "shortName": "IVB",
         "bin": "970434",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "SEA",
@@ -197,7 +197,7 @@
         "shortName": "SEA",
         "bin": "970440",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "WOO",
@@ -205,7 +205,7 @@
         "shortName": "WOO",
         "bin": "970457",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "CAKE",
@@ -213,7 +213,7 @@
         "shortName": "CAKE",
         "bin": "970432",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     },
     {
         "id": "TIMO",
@@ -221,6 +221,6 @@
         "shortName": "TIMO",
         "bin": "970454",
         "minLen": 4,
-        "maxLen": 16
+        "maxLen": 20
     }
 ]

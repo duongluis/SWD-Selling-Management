@@ -1,6 +1,6 @@
 import BgWatermark from '@/components/Main/BgWatermark';
-import { normalizePhone } from '@/components/Utils/formatters';
 import { formatThousand, parseThousand } from '@/components/Utils/formatNumber';
+import { normalizePhone } from '@/components/Utils/formatters';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -19,10 +19,10 @@ import {
   SERVICE_TYPE_TO_CATEGORY,
   fetchStatusList,
 } from '../../components/Hooks/getStatus';
-import { nextOrderId, nextServiceId } from '../../components/Utils/docId';
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { useLayout } from '../../components/Main/TabScreenLayout';
+import { nextOrderId, nextServiceId } from '../../components/Utils/docId';
 import { db } from '../../config/firebaseConfig';
 
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
@@ -1395,6 +1395,18 @@ export default function AddOrder() {
           </View>
 
           <View style={W.colRight}>
+            {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
+            {(isLevel1 || isSale) && (
+              <PaymentMethodField
+                ws={isDesktop}
+                orderType={orderType}
+                useFixedPrice={useFixedPrice}
+                fixedPayment={fixedPayment}
+                paymentMethod={paymentMethod}
+                setPaymentMethod={handleSetPaymentMethod}
+              />
+            )}
+
             <View style={W.card}>
               <View style={W.cardHeader}>
                 <Ionicons name="cube-outline" size={16} color="#2563EB" />
@@ -1408,6 +1420,8 @@ export default function AddOrder() {
                 )} */}
                 {/* <View style={W.roleBadge}><Ionicons name="pricetag-outline" size={11} color="#059669" /><Text style={W.roleBadgeText}>{priceLabel}</Text></View> */}
               </View>
+
+
               {products.map(p => (
                 <View key={p.id} style={W.productRow}>
                   <View style={W.productIcon}><Ionicons name="water-outline" size={14} color="#2563EB" /></View>
@@ -1478,17 +1492,7 @@ export default function AddOrder() {
               </View>
             )}
 
-            {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
-            {(isLevel1 || isSale) && (
-              <PaymentMethodField
-                ws={isDesktop}
-                orderType={orderType}
-                useFixedPrice={useFixedPrice}
-                fixedPayment={fixedPayment}
-                paymentMethod={paymentMethod}
-                setPaymentMethod={handleSetPaymentMethod}
-              />
-            )}
+
 
             <TouchableOpacity style={[W.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting} activeOpacity={0.85}>
               <Ionicons name={submitting ? 'hourglass-outline' : 'checkmark-circle-outline'} size={18} color="#fff" />

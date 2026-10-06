@@ -13,7 +13,7 @@ import { fmtDate, getInitials } from '@/components/Utils/formatters';
 import { isAdminOrGD } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     FlatList, Modal, Pressable, RefreshControl,
     StyleSheet, Text, TouchableOpacity, View,
@@ -140,6 +140,13 @@ export default function UsersScreen() {
     const [filter, setFilter] = useState('all');
     const [selected, setSelected] = useState(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
+
+    // Dữ liệu tải lại (vd vừa sửa ở màn editUser) → panel chi tiết đang mở phải theo bản mới
+    useEffect(() => {
+        if (!selected) return;
+        const latest = data.find(u => u.email === selected.email);
+        if (latest) setSelected(latest);
+    }, [data]);
 
     const canAccess = isAdminOrGD(role);
     const canCreateAccount = role === 'admin'; // chỉ admin được tạo tài khoản hộ

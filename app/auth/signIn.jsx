@@ -140,12 +140,13 @@ export default function SignIn() {
         <TouchableOpacity style={styles.social}><Text>iOS</Text></TouchableOpacity>
       </View> */}
 
+      {/* Ẩn tự đăng ký — tài khoản do admin tạo hộ (CreateAccountModal)
       <Text style={styles.signup}>
         Bạn chưa có tài khoản?{" "}
         <Text style={styles.link} onPress={() => router.push("/auth/signUp")}>
           Đăng ký ngay
         </Text>
-      </Text>
+      </Text> */}
     </View>
   );
 }

@@ -6,7 +6,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
     KeyboardAvoidingView, Platform, ScrollView,
-    StyleSheet, Text, TextInput, TouchableOpacity, View,
+    StyleSheet, Switch, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from '../../../components/Main/showAlert';
@@ -15,6 +15,7 @@ import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import HelpButton from '@/components/Help/HelpButton';
+import { DEFAULT_VAT_RATE, getVatRate } from '@/components/Utils/roleHelper';
 
 const ROLE_CONFIG = {
     'đại lý': { color: '#2563EB', bg: '#EFF6FF', label: 'Đại lý / NPP' },
@@ -104,12 +105,20 @@ export default function EditUserScreen() {
     const [distributionType] = useState(user.distributionType || '');
     // Bank
     const [accountName, setAccountName] = useState(user.bank?.accountName || '');
+    // VAT — tài khoản chưa có trường vatRate mặc định là có VAT
+    const [vatEnabled, setVatEnabled] = useState(getVatRate(user) > 0);
+    const [vatRate, setVatRate] = useState(String(getVatRate(user) || DEFAULT_VAT_RATE));
 
     const [saving, setSaving] = useState(false);
 
     const handleSave = async () => {
         if (!name.trim()) { showAlert('Thông báo', 'Vui lòng nhập họ tên'); return; }
         if (!phone.trim()) { showAlert('Thông báo', 'Vui lòng nhập số điện thoại'); return; }
+        const vatValue = vatEnabled ? Number(vatRate.replace(',', '.')) : 0;
+        if (vatEnabled && (!vatRate.trim() || isNaN(vatValue) || vatValue <= 0 || vatValue > 100)) {
+            showAlert('Thông báo', 'Phí VAT phải là số lớn hơn 0 và không quá 100 (%)');
+            return;
+        }
 
         setSaving(true);
         try {
@@ -118,6 +127,7 @@ export default function EditUserScreen() {
                 phone: phone.trim(),
                 address: address.trim(),
                 adminNote: adminNote.trim(),
+                vatRate: vatValue,
             };
             if (isCompany) {
                 payload.companyName = companyName.trim();
@@ -234,6 +244,25 @@ export default function EditUserScreen() {
 
 
 
+                            {/* VAT */}
+                            <Section icon="calculator-outline" title="Thuế VAT" color="#DC2626">
+                                <View style={S.vatRow}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={F.label}>Áp dụng VAT</Text>
+                                        <Text style={[F.hint, { marginTop: 2 }]}>
+                                            {vatEnabled
+                                                ? 'Tiền nhập tính theo giá vai trò đã gồm VAT'
+                                                : 'Bỏ VAT — tiền nhập theo giá vai trò sẽ được trừ phần VAT'}
+                                        </Text>
+                                    </View>
+                                    <Switch value={vatEnabled} onValueChange={setVatEnabled} />
+                                </View>
+                                {vatEnabled && (
+                                    <Field label="Phí VAT (%)" value={vatRate} onChange={setVatRate} keyboard="numeric"
+                                        hint={`(mặc định ${DEFAULT_VAT_RATE}%)`} />
+                                )}
+                            </Section>
+
                             {/* Trạng thái */}
                             <Section icon="shield-checkmark-outline" title="Trạng thái tài khoản" color="#64748B">
                                 <Field
@@ -295,6 +324,7 @@ const S = StyleSheet.create({
     section: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', borderLeftWidth: 3, paddingLeft: 8 },
     sectionTitle: { fontSize: 13, fontWeight: '700' },
+    vatRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
     bottomBar: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E2E8F0', flexDirection: 'row', gap: 10 },
     cancelBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
     cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#64748B' },

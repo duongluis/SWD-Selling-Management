@@ -2,7 +2,7 @@
 
 import { showAlert } from '@/components/Main/showAlert';
 import { createNotification, getSupportRoomId, sendSystemMessage } from '@/components/Utils/chatService';
-import { fmtCurrency, fmtDate, fmtPhone } from '@/components/Utils/formatters';
+import { fmtCurrency, fmtDateOnly, fmtPhone } from '@/components/Utils/formatters';
 import { productItems } from '@/components/Utils/orderItems';
 import { getRole } from '@/components/Utils/roleHelper';
 import { isServiceStatusLocked, syncOrderStatusFromService } from '@/components/Utils/syncOrderStatus';
@@ -97,7 +97,7 @@ function InfoRow({ icon, label, value }) {
     );
 }
 
-export default function ServiceDetail({ service, onClose, onUpdated }) {
+export default function ServiceDetail({ service, typeName, onClose, onUpdated }) {
     const router = useRouter();
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
@@ -175,7 +175,8 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
         });
     };
 
-    const typLabel = TYPE_LABEL[local.type] || 'Dịch vụ';
+    // typeName: tên loại tra từ bảng giá dịch vụ (servicePrice) — cùng nguồn với danh sách
+    const typLabel = typeName || TYPE_LABEL[local.type] || 'Dịch vụ';
     const statusCfg = scfg(local.status);
     // orderItems là bản chụp sản phẩm của đơn — lọc lần nữa phòng dịch vụ cũ chụp cả dòng dịch vụ
     const items = productItems({ items: local.orderItems || local.items || [] });
@@ -250,7 +251,7 @@ export default function ServiceDetail({ service, onClose, onUpdated }) {
                                 : `x${Number(local.qty) || 1} · ${fmtCurrency((Number(local.price) || 0) * (Number(local.qty) || 1))}`}
                         />
                     )}
-                    <InfoRow icon="calendar-outline" label="Ngày tạo" value={fmtDate(local.createdAt)} />
+                    <InfoRow icon="calendar-outline" label="Ngày tạo" value={fmtDateOnly(local.createdAt)} />
                     {local.note && <InfoRow icon="document-text-outline" label="Ghi chú" value={local.note} />}
                 </View>
 

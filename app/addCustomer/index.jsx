@@ -396,9 +396,9 @@ export default function AddCustomer() {
 
               <View style={W.inputGroup}>
                 <Text style={W.label}>Ghi chú</Text>
-                <View style={[W.inputBox, { alignItems: 'flex-start', minHeight: 90 }]}>
+                <View style={[W.inputBox, { alignItems: 'flex-start' }]}>
                   <TextInput
-                    style={[W.input, { textAlignVertical: 'top' }]}
+                    style={[W.input, { textAlignVertical: 'top', minHeight: 120 }]}
                     placeholder="Thông tin bổ sung về sở thích hoặc lịch sử giao dịch..."
                     placeholderTextColor="#94A3B8"
                     multiline
@@ -804,7 +804,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, fontWeight: '600', color: Colors.Gray, marginBottom: 6, letterSpacing: 0.3 },
   required: { color: Colors.Danger },
   input: { backgroundColor: Colors.Background, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.TextPrimary, borderWidth: 1, borderColor: Colors.Border },
-  textArea: { backgroundColor: Colors.Background, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.TextPrimary, borderWidth: 1, borderColor: Colors.Border, minHeight: 100 },
+  textArea: { backgroundColor: Colors.Background, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.TextPrimary, borderWidth: 1, borderColor: Colors.Border, minHeight: 120 },
 
   // Picker + Dropdown ("Người được hỗ trợ")
   pickerBox: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

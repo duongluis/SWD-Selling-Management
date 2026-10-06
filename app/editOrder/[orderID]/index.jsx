@@ -2,13 +2,14 @@
 
 import BgWatermark from '@/components/Main/BgWatermark';
 import { createNotification } from '@/components/Utils/chatService';
+import { getRoleFromUserData, getRolePriceField } from '@/components/Utils/commissionCalc';
 import { productItems } from '@/components/Utils/orderItems';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { useContext, useState } from 'react';
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { useContext, useEffect, useState } from 'react';
 import {
     KeyboardAvoidingView, Modal, Platform, Pressable,
     ScrollView, StatusBar, StyleSheet, Text, TextInput,
@@ -90,6 +91,125 @@ function DateField({ value, onChange, webStyle }) {
         );
 }
 
+// Trường giá bán áp cho sản phẩm thêm mới — phải khớp quy tắc ở app/addOrder (priceField):
+// khách hàng tự thanh toán → giá niêm yết; người bán thanh toán → giá vai trò của người
+// tạo đơn (hoặc của advisor cấp 1 nếu người tạo đơn có advisor).
+async function resolveOrderPriceField(order) {
+    const paymentMethod = order.paymentMethod || (order.orderType === 'buon' ? 'company' : 'customer');
+    if (paymentMethod === 'customer' || !order.createdBy) return 'price';
+    try {
+        const snap = await getDoc(doc(db, 'users', order.createdBy));
+        if (!snap.exists()) return 'price';
+        let user = snap.data();
+        const visited = new Set();
+        while (user.advisor && !visited.has(user.advisor)) {
+            visited.add(user.advisor);
+            const advSnap = await getDoc(doc(db, 'users', user.advisor));
+            if (!advSnap.exists()) break;
+            user = advSnap.data();
+        }
+        return getRolePriceField(getRoleFromUserData(user));
+    } catch (e) {
+        console.warn('resolve order price field error:', e);
+        return 'price';
+    }
+}
+
+// ── Add Product Form ──────────────────────────────────────────
+function AddProductForm({ catalog, priceField, canEditPrice, onAdd, onCancel }) {
+    const [selected, setSelected] = useState(null);
+    const [showDrop, setShowDrop] = useState(true);
+    const [search, setSearch] = useState('');
+    const [qty, setQty] = useState('1');
+    const [price, setPrice] = useState('');
+
+    const filtered = catalog.filter(p => (p.name || '').toLowerCase().includes(search.toLowerCase()));
+
+    const selectProduct = (p) => {
+        setSelected(p);
+        setPrice(String(p[priceField] || p.price || 0));
+        setShowDrop(false);
+        setSearch('');
+    };
+
+    const confirm = () => {
+        if (!selected) { showAlert('Thông báo', 'Vui lòng chọn sản phẩm'); return; }
+        onAdd(selected, Math.max(1, parseInt(qty) || 1), Math.max(0, parseInt(price) || 0));
+    };
+
+    return (
+        <View style={AP.form}>
+            <View>
+                <TouchableOpacity style={AP.input} onPress={() => setShowDrop(!showDrop)} activeOpacity={0.8}>
+                    <Ionicons name="cube-outline" size={14} color={selected ? '#0F172A' : '#94A3B8'} />
+                    <Text style={{ flex: 1, fontSize: 14, color: selected ? '#0F172A' : '#94A3B8' }} numberOfLines={1}>
+                        {selected?.name || 'Bấm để chọn sản phẩm...'}
+                    </Text>
+                    <Ionicons name={showDrop ? 'chevron-up' : 'chevron-down'} size={14} color="#94A3B8" />
+                </TouchableOpacity>
+                {showDrop && (
+                    <View style={AP.drop}>
+                        <View style={AP.searchRow}>
+                            <Ionicons name="search-outline" size={14} color="#94A3B8" />
+                            <TextInput style={AP.searchInput} placeholder="Tìm sản phẩm..." placeholderTextColor="#94A3B8" value={search} onChangeText={setSearch} />
+                            {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={14} color="#94A3B8" /></TouchableOpacity>}
+                        </View>
+                        <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={true}>
+                            {filtered.length === 0
+                                ? <Text style={AP.empty}>Không tìm thấy</Text>
+                                : filtered.map(p => (
+                                    <TouchableOpacity key={String(p.id || p.docId)} style={AP.dropItem} onPress={() => selectProduct(p)} activeOpacity={0.7}>
+                                        <View style={AP.dropIcon}><Ionicons name="water-outline" size={13} color="#2563EB" /></View>
+                                        <Text style={AP.dropName} numberOfLines={1}>{p.name}</Text>
+                                        <Text style={AP.dropPrice}>{fmt(p[priceField] || p.price || 0)}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                        </ScrollView>
+                    </View>
+                )}
+            </View>
+            <View style={AP.row}>
+                <TextInput
+                    style={[AP.input, { flex: 1 }]}
+                    placeholder="Số lượng"
+                    placeholderTextColor="#B0B0C8"
+                    keyboardType="numeric"
+                    value={qty}
+                    onChangeText={v => setQty(v.replace(/\D/g, ''))}
+                />
+                {canEditPrice ? (
+                    <View style={[AP.input, { flex: 2 }]}>
+                        <Ionicons name="create-outline" size={13} color="#2563EB" />
+                        <TextInput
+                            style={{ flex: 1, fontSize: 14, color: '#0F172A', fontWeight: '500' }}
+                            placeholder="Giá sản phẩm"
+                            placeholderTextColor="#94A3B8"
+                            keyboardType="numeric"
+                            value={price}
+                            onChangeText={v => setPrice(v.replace(/\D/g, ''))}
+                        />
+                    </View>
+                ) : (
+                    <View style={[AP.input, { flex: 2, backgroundColor: '#F1F5F9' }]}>
+                        <Ionicons name="lock-closed-outline" size={13} color="#94A3B8" />
+                        <Text style={{ flex: 1, fontSize: 14, color: price ? '#0F172A' : '#94A3B8' }}>
+                            {price ? fmt(Number(price)) : 'Giá sản phẩm'}
+                        </Text>
+                    </View>
+                )}
+            </View>
+            <View style={AP.row}>
+                <TouchableOpacity style={AP.cancel} onPress={onCancel}>
+                    <Text style={AP.cancelText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={AP.confirm} onPress={confirm}>
+                    <Text style={AP.confirmText}>Thêm</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+}
+
 export default function EditOrder() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
@@ -115,6 +235,54 @@ export default function EditOrder() {
     // màn Dịch vụ. Xem components/Utils/orderItems.js.
     const [items, setItems] = useState(() => productItems(existing));
     const [submitting, setSubmitting] = useState(false);
+
+    // Thêm sản phẩm: bảng giá + trường giá áp cho đơn này
+    const [catalog, setCatalog] = useState([]);
+    const [priceField, setPriceField] = useState(null);   // null = đang tải
+    const [showAddProduct, setShowAddProduct] = useState(false);
+
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            try {
+                const [snap, field] = await Promise.all([
+                    getDocs(collection(db, 'productPrice')),
+                    resolveOrderPriceField(existing),
+                ]);
+                if (!alive) return;
+                setCatalog(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
+                setPriceField(field);
+            } catch (e) {
+                console.error('Fetch catalog error:', e);
+                if (alive) setPriceField('price');
+            }
+        })();
+        return () => { alive = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [existing.id]);
+
+    // Dòng mới giữ đúng cấu trúc item của app/addOrder (kèm các trường price_* để
+    // commissionCalc có giá gốc so). Trùng sản phẩm + trùng giá thì cộng dồn số lượng.
+    const addItem = (p, qty, price) => {
+        const productId = String(p.id || p.docId);
+        setItems(prev => {
+            const dup = prev.find(it => String(it.productId) === productId && Number(it.price) === price);
+            if (dup) return prev.map(it => it === dup ? { ...it, qty: (parseInt(it.qty) || 1) + qty } : it);
+            return [...prev, {
+                name: p.name,
+                qty,
+                price,
+                basePrice: p.price || 0,
+                price_a: p.price_a || 0,
+                price_p: p.price_p || 0,
+                price_c: p.price_c || 0,
+                price_s: p.price_s || 0,
+                productId,
+                id: Date.now().toString(),
+            }];
+        });
+        setShowAddProduct(false);
+    };
 
     const updateItemQty = (id, qty) =>
         setItems(prev => prev.map(p => p.id === id ? { ...p, qty: Math.max(1, parseInt(qty) || 1) } : p));
@@ -195,6 +363,30 @@ export default function EditOrder() {
 
     const statusCfg = STATUS_CONFIG[existing.status] || STATUS_CONFIG.PENDING;
     const typeCfg = ORDER_TYPE_CONFIG[existing.orderType];
+
+    // Dùng chung cho cả layout web và mobile
+    const addProductSection = canEdit && (
+        showAddProduct ? (
+            <AddProductForm
+                catalog={catalog}
+                priceField={priceField || 'price'}
+                canEditPrice={canEditPrice}
+                onAdd={addItem}
+                onCancel={() => setShowAddProduct(false)}
+            />
+        ) : (
+            <TouchableOpacity
+                style={[AP.addBtn, !priceField && { opacity: 0.6 }]}
+                onPress={() => setShowAddProduct(true)}
+                disabled={!priceField}
+                activeOpacity={0.8}
+            >
+                <Ionicons name="add" size={16} color="#2563EB" />
+                <Text style={AP.addBtnText}>{priceField ? 'Thêm sản phẩm' : 'Đang tải bảng giá...'}</Text>
+            </TouchableOpacity>
+        )
+    );
+
     const mobileBody = (
         <View style={[S.formCard, { borderTopLeftRadius: 28, borderTopRightRadius: 28 }]}>
 
@@ -278,6 +470,7 @@ export default function EditOrder() {
                         )}
                     </View>
                 ))}
+                {addProductSection}
                 <View style={S.totalRow}>
                     <Text style={S.totalLabel}>Tổng cộng</Text>
                     <Text style={S.totalValue}>{fmt(total)}</Text>
@@ -483,6 +676,8 @@ export default function EditOrder() {
                                 </View>
                             ))}
 
+                            {addProductSection}
+
                             {/* Divider */}
                             <View style={W.divider} />
 
@@ -542,6 +737,27 @@ export default function EditOrder() {
             </View>
         );
 }
+
+// ── Add Product Styles (dùng chung web + mobile) ──────────────
+const AP = StyleSheet.create({
+    addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, marginTop: 8, marginBottom: 8, borderStyle: 'dashed', borderWidth: 1.5, borderColor: '#BFDBFE', borderRadius: 9, backgroundColor: '#EFF6FF' },
+    addBtnText: { color: '#2563EB', fontWeight: '600', fontSize: 13 },
+    form: { backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, marginTop: 8, marginBottom: 8, gap: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+    input: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0', minHeight: 42 },
+    row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    drop: { backgroundColor: '#FFF', borderRadius: 10, marginTop: 4, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' },
+    searchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    searchInput: { flex: 1, fontSize: 13, color: '#0F172A' },
+    dropItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+    dropIcon: { width: 24, height: 24, borderRadius: 6, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+    dropName: { flex: 1, fontSize: 13, fontWeight: '600', color: '#374151' },
+    dropPrice: { fontSize: 12, fontWeight: '600', color: '#2563EB' },
+    empty: { padding: 16, fontSize: 13, color: '#94A3B8', textAlign: 'center' },
+    cancel: { flex: 1, padding: 9, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', backgroundColor: '#FFF' },
+    cancelText: { color: '#64748B', fontWeight: '600', fontSize: 13 },
+    confirm: { flex: 1, padding: 9, borderRadius: 8, backgroundColor: '#2563EB', alignItems: 'center' },
+    confirmText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+});
 
 // ── Web Styles ────────────────────────────────────────────────
 const W = StyleSheet.create({

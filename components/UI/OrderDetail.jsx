@@ -532,8 +532,8 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
         })
         : null;
     const paymentDateStr = localOrder.paymentDate
-        ? new Date(localOrder.paymentDate).toLocaleString('vi-VN', {
-            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        ? new Date(localOrder.paymentDate).toLocaleDateString('vi-VN', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
         })
         : null;
 
@@ -684,12 +684,6 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                                 'Thiếu giá gốc trong bảng giá',
                                 `Đơn #${localOrder.id}: có sản phẩm chưa được điền "${payload.basePriceField}" trong bảng giá (productPrice). `
                                 + `Hoa hồng đang bị tính thành 0 vì không có giá gốc để so. Hãy cập nhật bảng giá rồi đặt lại trạng thái đơn.`
-                            );
-                        } else if (payload.commission <= 0 && payload.bonusAmount <= 0) {
-                            showAlert(
-                                'Hoa hồng bằng 0',
-                                `Đơn #${localOrder.id}: hình thức thanh toán "${payload.paymentMethod}", giá gốc so theo "${payload.basePriceField}". `
-                                + `Hoa hồng chỉ phát sinh khi khách hàng tự thanh toán ("customer") và giá bán cao hơn giá gốc của vai trò.`
                             );
                         }
                         if (payload) {

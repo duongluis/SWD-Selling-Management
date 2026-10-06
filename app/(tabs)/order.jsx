@@ -9,7 +9,7 @@ import OrderDetail from '@/components/UI/OrderDetail';
 import StatBar from '@/components/UI/StatBar';
 import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
 import { productItems, productTotal } from '@/components/Utils/orderItems';
-import { canAdd, getPriceField, getRole, isAdmin, isAdminOrGD } from '@/components/Utils/roleHelper';
+import { applyVatRate, canAdd, DEFAULT_VAT_RATE, getPriceField, getRole, getVatRate, isAdmin, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -81,6 +81,21 @@ const getCostPriceField = (order, role, rootAdvisorRoles) => {
   // return getPriceField(role); // fallback
 };
 
+// Tiền nhập của 1 đơn theo giá vai trò của rootAdvisor (bảng giá đã gồm VAT mặc định).
+const getOrderBaseCost = (order, role, rootAdvisorRoles) => {
+  const priceField = getCostPriceField(order, role, rootAdvisorRoles);
+  return productItems(order).reduce((s, p) =>
+    s + getItemCost(p, priceField) * PARSE(p.qty || 1), 0
+  );
+};
+
+// Tiền nhập thực tế — quy đổi theo mức VAT của rootAdvisor (admin bỏ VAT → trừ phần VAT).
+const getOrderCost = (order, role, rootAdvisorRoles, rootAdvisorVat) =>
+  applyVatRate(
+    getOrderBaseCost(order, role, rootAdvisorRoles),
+    rootAdvisorVat[order?.rootAdvisor] ?? DEFAULT_VAT_RATE
+  );
+
 const canShowCost = (userDetail, role) => {
   if (isAdminOrGD(role)) return true;
   if (role === 'sale') return false; // sale không được xem tiền nhập
@@ -132,7 +147,7 @@ function TotalRow({ totalCost, totalRevenue, showCost, showCreator, tableStyles 
 }
 
 // ── Dòng dữ liệu đơn hàng ────────────────────────────────────
-function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles, tableStyles, showCreator, creatorNames }) {
+function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles, advisorVat, tableStyles, showCreator, creatorNames }) {
   const tcfg = TYPE_CFG[item.orderType];
   const pcfg = PAYMENT_CFG[item.paymentMethod] || { label: item.paymentMethod || '—', c: '#64748B', bg: '#F1F5F9' };
   const total = productTotal(item);   // doanh thu sản phẩm, không gồm dịch vụ
@@ -145,10 +160,7 @@ function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles
     ? new Date(item.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : '—';
 
-  const priceField = getCostPriceField(item, role, advisorRoles);
-  const totalCostRow = productItems(item).reduce((s, p) =>
-    s + getItemCost(p, priceField) * PARSE(p.qty || 1), 0
-  );
+  const totalCostRow = getOrderCost(item, role, advisorRoles, advisorVat);
 
   return (
     <TouchableOpacity
@@ -243,6 +255,7 @@ export default function OrderScreen() {
   const { styles: tableStyles } = useTableStyles();
 
   const [advisorRoles, setAdvisorRoles] = useState({});
+  const [advisorVat, setAdvisorVat] = useState({});   // rootAdvisor email → VAT (%)
 
   const [creatorNames, setCreatorNames] = useState({});
   const showCreator = isAdmin(role) || role === 'daily';
@@ -317,13 +330,8 @@ export default function OrderScreen() {
     if (!showCostField) return 0;
     return filtered
       .filter(o => !['Đã hủy', 'CANCELLED'].includes(o.status))
-      .reduce((sum, o) => {
-        const priceField = getCostPriceField(o, role, advisorRoles);
-        return sum + productItems(o).reduce((s, p) =>
-          s + getItemCost(p, priceField) * PARSE(p.qty || 1), 0
-        );
-      }, 0);
-  }, [filtered, role, advisorRoles, showCostField]); // ← bỏ productPrices
+      .reduce((sum, o) => sum + getOrderCost(o, role, advisorRoles, advisorVat), 0);
+  }, [filtered, role, advisorRoles, advisorVat, showCostField]); // ← bỏ productPrices
 
   useEffect(() => {
     if (!data.length || !showCreator) return;
@@ -360,15 +368,18 @@ export default function OrderScreen() {
 
     const fetchRootAdvisorRoles = async () => {
       const roles = {};
+      const vats = {};
       await Promise.all(rootAdvisors.map(async (email) => {
         try {
           const snap = await getDoc(doc(db, 'users', email));
           if (snap.exists()) {
             roles[email] = getRole(snap.data()); // lấy role trực tiếp, không traverse
+            vats[email] = getVatRate(snap.data());
           }
         } catch (_) { }
       }));
       setAdvisorRoles(roles); // key: rootAdvisor email → role
+      setAdvisorVat(vats);
     };
 
     fetchRootAdvisorRoles();
@@ -393,22 +404,21 @@ export default function OrderScreen() {
       .reduce((s, o) => s + productTotal(o), 0)
     , [data]);
 
-  const totalCost = useMemo(() => {
-    if (!showCostField) return 0;
+  const { totalCost, revenueExVat } = useMemo(() => {
+    if (!showCostField) return { totalCost: 0, revenueExVat: 0 };
     return data
       .filter(o => !['Đã hủy', 'CANCELLED'].includes(o.status))
-      .reduce((sum, o) => {
-        const priceField = getCostPriceField(o, role, advisorRoles);
-        return sum + productItems(o).reduce((s, p) =>
-          s + getItemCost(p, priceField) * PARSE(p.qty || 1), 0
-        );
-      }, 0);
-  }, [data, role, advisorRoles]); // ← bỏ productPrices
+      .reduce((acc, o) => ({
+        totalCost: acc.totalCost + getOrderCost(o, role, advisorRoles, advisorVat),
+        // Giá sản phẩm đã bao gồm VAT mặc định → DT chưa VAT = giá / 1.08
+        revenueExVat: acc.revenueExVat + getOrderBaseCost(o, role, advisorRoles) / (1 + DEFAULT_VAT_RATE / 100),
+      }), { totalCost: 0, revenueExVat: 0 });
+  }, [data, role, advisorRoles, advisorVat]); // ← bỏ productPrices
 
   const isAdminOrGDRole = isAdminOrGD(role);
-  // Giá sản phẩm đã bao gồm VAT → tách VAT theo công thức: VAT = DT/1.08*0.08, DT chưa VAT = DT/1.08
-  const vatAmount = totalCost / 1.08 * 0.08;
-  const revenueExVat = totalCost / 1.08;
+  // VAT thực thu = DT (đã quy đổi theo VAT từng tài khoản) − DT chưa VAT;
+  // tài khoản bị bỏ VAT đóng góp 0.
+  const vatAmount = totalCost - revenueExVat;
 
   const statCards = [
     { icon: 'receipt-outline', label: 'Đơn hàng', value: String(stats.total || 0), color: THEME.colors.primary, bg: THEME.colors.primaryLight },
@@ -658,6 +668,7 @@ export default function OrderScreen() {
                   showCost={showCostField}
                   role={role}
                   advisorRoles={advisorRoles}
+                  advisorVat={advisorVat}
 
                   tableStyles={tableStyles}
                   showCreator={showCreator}

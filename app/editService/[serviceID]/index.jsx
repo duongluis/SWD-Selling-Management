@@ -7,7 +7,7 @@ import { productItems, productTotal } from '@/components/Utils/orderItems';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
     KeyboardAvoidingView, Platform, ScrollView,
@@ -31,6 +31,20 @@ const SERVICE_TYPES = [
     { key: 'CONSULTING', label: 'Tư vấn', icon: 'chatbubbles-outline', color: '#EC4899', bg: '#FDF2F8' },
 ];
 
+// Loại dịch vụ lưu trong service.type là ID document của collection servicePrice (giống
+// app/addService). SERVICE_TYPES ở trên chỉ còn là dự phòng + nguồn icon/màu theo tên.
+const toTypeOption = (id, data = {}) => {
+    const name = data.name || id;
+    const preset = SERVICE_TYPES.find(t => t.key === id || name.toLowerCase().includes(t.label.toLowerCase()));
+    return {
+        key: id,
+        label: name,
+        icon: preset?.icon || 'flash-outline',
+        color: data.color || preset?.color || '#2563EB',
+        bg: data.bg || preset?.bg || '#EFF6FF',
+    };
+};
+
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
 export default function EditService() {
@@ -46,6 +60,25 @@ export default function EditService() {
 
     // ── Form state — pre-filled ───────────────────────────────
     const [serviceType, setServiceType] = useState(existingService.type || 'MAINTENANCE');
+    const [serviceTypes, setServiceTypes] = useState(SERVICE_TYPES);
+
+    useEffect(() => {
+        getDocs(collection(db, 'servicePrice'))
+            .then(snap => {
+                const types = snap.docs.map(d => toTypeOption(d.id, d.data()));
+                if (types.length === 0) return;
+                setServiceTypes(types);
+                // Dịch vụ từng bị lưu bằng mã cố định cũ (vd INSTALLATION) → quy về đúng loại
+                // trong bảng giá theo tên, để lần lưu này ghi lại ID chuẩn.
+                setServiceType(cur => {
+                    if (types.some(t => t.key === cur)) return cur;
+                    const legacy = SERVICE_TYPES.find(t => t.key === cur);
+                    const match = legacy && types.find(t => t.label.toLowerCase().includes(legacy.label.toLowerCase()));
+                    return match ? match.key : cur;
+                });
+            })
+            .catch(err => console.warn('Lỗi tải dịch vụ:', err));
+    }, []);
     const [customerName, setCustomerName] = useState(existingService.customer || '');
     const [customerPhone, setCustomerPhone] = useState(existingService.phone || '');
     const [address, setAddress] = useState(existingService.address || '');
@@ -173,7 +206,7 @@ export default function EditService() {
         }
     };
 
-    const selectedType = SERVICE_TYPES.find(t => t.key === serviceType);
+    const selectedType = serviceTypes.find(t => t.key === serviceType);
 
     // ── Order Picker Dropdown ─────────────────────────────────
     const OrderPickerDropdown = () => (
@@ -250,7 +283,7 @@ export default function EditService() {
                         <View style={W.card}>
                             <View style={W.cardHeader}><Ionicons name="construct-outline" size={16} color="#2563EB" /><Text style={W.cardTitle}>Loại hình dịch vụ</Text></View>
                             <View style={W.typeGrid}>
-                                {SERVICE_TYPES.map(type => {
+                                {serviceTypes.map(type => {
                                     const active = serviceType === type.key;
                                     return (
                                         <TouchableOpacity key={type.key}
@@ -336,7 +369,7 @@ export default function EditService() {
                             </View>
                             <View style={W.inputGroup}>
                                 <Text style={W.label}>Ghi chú</Text>
-                                <View style={[W.inputBox, { alignItems: 'flex-start', minHeight: 90 }]}><TextInput style={[W.input, { textAlignVertical: 'top' }]} placeholder="Yêu cầu cụ thể..." placeholderTextColor="#94A3B8" multiline value={note} onChangeText={setNote} /></View>
+                                <View style={[W.inputBox, { alignItems: 'flex-start' }]}><TextInput style={[W.input, { textAlignVertical: 'top', minHeight: 120 }]} placeholder="Yêu cầu cụ thể..." placeholderTextColor="#94A3B8" multiline value={note} onChangeText={setNote} /></View>
                             </View>
                         </View>
 
@@ -398,7 +431,7 @@ export default function EditService() {
                         <View style={M.card}>
                             <Text style={M.sectionTitle}>LOẠI HÌNH DỊCH VỤ</Text>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={M.typeScroll}>
-                                {SERVICE_TYPES.map(type => {
+                                {serviceTypes.map(type => {
                                     const active = serviceType === type.key;
                                     return (
                                         <TouchableOpacity key={type.key}
@@ -459,7 +492,7 @@ export default function EditService() {
                             <Text style={M.fieldLabel}>ĐỊA CHỈ</Text>
                             <View style={M.inputBox}><Ionicons name="location-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="Quận/Huyện, TP..." placeholderTextColor="#94A3B8" value={address} onChangeText={setAddress} /></View>
                             <Text style={M.fieldLabel}>GHI CHÚ</Text>
-                            <View style={[M.inputBox, { alignItems: 'flex-start', minHeight: 100 }]}><TextInput style={[M.input, { textAlignVertical: 'top', paddingTop: 2 }]} placeholder="Yêu cầu cụ thể..." placeholderTextColor="#94A3B8" multiline value={note} onChangeText={setNote} /></View>
+                            <View style={[M.inputBox, { alignItems: 'flex-start' }]}><TextInput style={[M.input, { textAlignVertical: 'top', paddingTop: 2, minHeight: 120 }]} placeholder="Yêu cầu cụ thể..." placeholderTextColor="#94A3B8" multiline value={note} onChangeText={setNote} /></View>
                         </View>
 
                         <View style={{ height: insets.bottom + 100 }} />

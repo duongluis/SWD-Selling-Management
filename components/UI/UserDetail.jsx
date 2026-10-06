@@ -14,7 +14,7 @@ import {
     Platform,
     ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
-import { getRole } from '../Utils/roleHelper';
+import { getRole, getVatRate } from '../Utils/roleHelper';
 
 const AVATAR_COLORS = ['#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2'];
 const hashColor = s => AVATAR_COLORS[(s || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
@@ -423,6 +423,10 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                         )}
                         {local.collaboration && (
                             <InfoRow icon="link-outline" label="Cộng tác" value={local.collaboration} />
+                        )}
+                        {isAdminUser && (
+                            <InfoRow icon="calculator-outline" label="Phí VAT"
+                                value={getVatRate(local) > 0 ? `${getVatRate(local)}%` : 'Không áp dụng'} />
                         )}
                         <InfoRow icon="calendar-outline" label="Ngày tạo" value={fmtDate(local.createdAt)} />
                     </Section>

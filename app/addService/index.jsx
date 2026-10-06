@@ -28,9 +28,9 @@ import { db } from '../../config/firebaseConfig';
 const NotesInput = memo(({ value, onChange, label }) => (
     <View style={W.inputGroup}>
         <Text style={W.label}>{label}</Text>
-        <View style={[W.inputBox, { alignItems: 'flex-start', minHeight: 90 }]}>
+        <View style={[W.inputBox, { alignItems: 'flex-start' }]}>
             <TextInput
-                style={[W.input, { textAlignVertical: 'top' }]}
+                style={[W.input, { textAlignVertical: 'top', minHeight: 120 }]}
                 placeholder="Yêu cầu cụ thể..."
                 placeholderTextColor="#94A3B8"
                 multiline
@@ -45,9 +45,9 @@ NotesInput.displayName = 'NotesInput';
 const NotesInputMobile = memo(({ value, onChange }) => (
     <>
         <Text style={M.fieldLabel}>GHI CHÚ</Text>
-        <View style={[M.inputBox, { alignItems: 'flex-start', minHeight: 100 }]}>
+        <View style={[M.inputBox, { alignItems: 'flex-start' }]}>
             <TextInput
-                style={[M.input, { textAlignVertical: 'top', paddingTop: 2 }]}
+                style={[M.input, { textAlignVertical: 'top', paddingTop: 2, minHeight: 120 }]}
                 placeholder="Yêu cầu cụ thể..."
                 placeholderTextColor="#94A3B8"
                 multiline

@@ -13,6 +13,17 @@ export const fmtDate = (str) => {
     } catch { return str; }
 };
 
+// Chỉ ngày, không kèm giờ (dd/mm/yyyy)
+export const fmtDateOnly = (str) => {
+    if (!str) return '—';
+    try {
+        return new Date(str).toLocaleDateString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            day: '2-digit', month: '2-digit', year: 'numeric',
+        });
+    } catch { return str; }
+};
+
 export const fmtPhone = (p) => {
     if (!p) return '—';
     const d = p.replace(/\D/g, '');

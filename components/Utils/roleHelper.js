@@ -35,6 +35,22 @@ export const isGD = (role) => role === 'giamdoc';
 export const getPriceField = (role) =>
     ({ daily: 'price_a', phantan: 'price_p', ctv: 'price_c', sale: 'price_s' }[role] || 'price');
 
+/** VAT (%) — bảng giá sản phẩm đã gồm sẵn VAT mặc định */
+export const DEFAULT_VAT_RATE = 8;
+
+/** VAT (%) áp cho 1 tài khoản; tài khoản chưa có trường vatRate → mặc định có VAT */
+export const getVatRate = (userDetail) => {
+    const v = userDetail?.vatRate;
+    if (v == null || v === '' || isNaN(Number(v))) return DEFAULT_VAT_RATE;
+    return Number(v);
+};
+
+/** Quy đổi số tiền đã gồm VAT mặc định sang mức VAT của tài khoản (0 = bỏ VAT) */
+export const applyVatRate = (amount, vatRate = DEFAULT_VAT_RATE) => {
+    if (vatRate === DEFAULT_VAT_RATE) return amount;
+    return Math.round(amount / (1 + DEFAULT_VAT_RATE / 100) * (1 + vatRate / 100));
+};
+
 /** Type đơn hàng mặc định theo role */
 export const getDefaultOrderType = (role) =>
     ({ daily: 'buon', phantan: 'le', ctv: 'le', sale: 'le' }[role] || null);

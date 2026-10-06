@@ -211,9 +211,9 @@ export default function EditCustomerScreen() {
 
                             <View style={W.inputGroup}>
                                 <Text style={W.label}>Ghi chú</Text>
-                                <View style={[W.inputBox, { alignItems: 'flex-start', minHeight: 90 }]}>
+                                <View style={[W.inputBox, { alignItems: 'flex-start' }]}>
                                     <TextInput
-                                        style={[W.input, { textAlignVertical: 'top' }]}
+                                        style={[W.input, { textAlignVertical: 'top', minHeight: 120 }]}
                                         placeholder="Thông tin bổ sung về sở thích hoặc lịch sử giao dịch..."
                                         placeholderTextColor="#94A3B8"
                                         multiline
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     label: { fontSize: 12, fontWeight: '600', color: Colors.Gray, marginBottom: 6, letterSpacing: 0.3 },
     required: { color: Colors.Danger },
     input: { backgroundColor: Colors.Background, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.TextPrimary, borderWidth: 1, borderColor: Colors.Border },
-    textArea: { backgroundColor: Colors.Background, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.TextPrimary, borderWidth: 1, borderColor: Colors.Border, minHeight: 100 },
+    textArea: { backgroundColor: Colors.Background, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.TextPrimary, borderWidth: 1, borderColor: Colors.Border, minHeight: 120 },
     saveBtn: { backgroundColor: Colors.Primary, borderRadius: 14, paddingVertical: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12, shadowColor: Colors.Primary, shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
     saveBtnText: { color: Colors.White, fontSize: 15, fontWeight: '700', marginLeft: 6 },
     cancelBtn: { alignItems: 'center', paddingVertical: 12 },

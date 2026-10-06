@@ -1,4 +1,5 @@
 import BgWatermark from '@/components/Main/BgWatermark';
+import { fmtDateOnly } from '@/components/Utils/formatters';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -345,7 +346,7 @@ export default function ServiceDetailScreen() {
                                             <Ionicons name={typeCfg.icon} size={12} color={typeCfg.color} />
                                             <Text style={[styles.typePillText, { color: typeCfg.color }]}>{typeCfg.label}</Text>
                                         </View>
-                                        <Text style={styles.createdAt}>{service.createdAt ? new Date(service.createdAt).toLocaleString('vi-VN') : '—'}</Text>
+                                        <Text style={styles.createdAt}>{fmtDateOnly(service.createdAt)}</Text>
                                     </View>
                                 </View>
                             </View>
@@ -388,7 +389,7 @@ export default function ServiceDetailScreen() {
                                             <Text style={[styles.statusPillText, { color: statusCfg.color }]}>{statusCfg.label}</Text>
                                         </View>
                                     </View>
-                                    <Text style={styles.createdAt}>{service.createdAt ? new Date(service.createdAt).toLocaleString('vi-VN') : '—'}</Text>
+                                    <Text style={styles.createdAt}>{fmtDateOnly(service.createdAt)}</Text>
                                 </View>
                             </View>
                         </View>

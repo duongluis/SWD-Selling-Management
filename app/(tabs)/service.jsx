@@ -10,7 +10,7 @@ import FilterChips from '@/components/UI/FilterChips';
 import ServiceDetail from '@/components/UI/ServiceDetail';
 import StatBar from '@/components/UI/StatBar';
 import { getSupportRoomId, sendSystemMessage } from '@/components/Utils/chatService';
-import { fmtDate } from '@/components/Utils/formatters';
+import { fmtDateOnly } from '@/components/Utils/formatters';
 import { canAdd } from '@/components/Utils/roleHelper';
 import { isServiceStatusLocked, syncOrderStatusFromService } from '@/components/Utils/syncOrderStatus';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,10 +47,13 @@ const TYPE_KEYWORDS = [
   { keyword: 'giao hàng', label: 'Giao hàng', icon: 'car-outline', c: '#2563EB', bg: '#EFF6FF' },
 ];
 
+const LEGACY_TYPE_NAME = { INSTALLATION: 'Lắp đặt', MAINTENANCE: 'Bảo dưỡng', DELIVERY: 'Giao hàng' };
+
 // Xác định nhóm của 1 service dựa vào type key hoặc name
 const getTypeGroup = (item, servicePriceMap) => {
   // servicePriceMap: { [key]: { name, ... } }
-  const name = (servicePriceMap[item.type]?.name || item.type || '').toLowerCase();
+  // LEGACY_TYPE_NAME: dịch vụ cũ lưu type bằng mã cố định thay vì ID trong servicePrice
+  const name = (servicePriceMap[item.type]?.name || LEGACY_TYPE_NAME[item.type] || item.type || '').toLowerCase();
   const found = TYPE_KEYWORDS.find(t => name.includes(t.keyword));
   return found?.label || 'Khác';
 };
@@ -177,7 +180,7 @@ function ServiceRow({ item, index, isActive, onPress, isAdmin, onStatusPress, ta
       {/* Ngày tạo */}
       {isDesktop && (
         <View style={[R.col, { flex: 0.8 }]}>
-          <Text style={R.colSub}>{fmtDate(item.createdAt)}</Text>
+          <Text style={R.colSub}>{fmtDateOnly(item.createdAt)}</Text>
         </View>
       )}
 
@@ -185,7 +188,7 @@ function ServiceRow({ item, index, isActive, onPress, isAdmin, onStatusPress, ta
         <View style={[R.col, { flex: 0.9 }]}>
           {item.completedDate ? (
             <Text style={[R.colSub, { color: '#16A34A', fontWeight: '600' }]}>
-              {fmtDate(item.completedDate)}
+              {fmtDateOnly(item.completedDate)}
             </Text>
           ) : (
             <Text style={R.colSub}>—</Text>
@@ -394,6 +397,7 @@ export default function ServiceScreen() {
         {isDesktop && selected && (
           <ServiceDetail
             service={selected}
+            typeName={servicePriceMap[selected.type]?.name}
             onClose={() => setSelected(null)}
             onUpdated={u => { setSelected(u); refresh(); }}
           />
