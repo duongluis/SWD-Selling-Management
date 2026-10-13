@@ -18,6 +18,20 @@ export const productItems = (order) => (order?.items || []).filter(i => !isServi
 export const productTotal = (order) =>
     productItems(order).reduce((s, p) => s + PARSE(p.price) * PARSE(p.qty || 1), 0);
 
+/**
+ * Giá trị đơn tính theo giá niêm yết (không phụ thuộc giá vai trò người bán đã mua).
+ * Ưu tiên `basePrice` chụp lúc tạo đơn; đơn cũ chưa có thì tra bảng giá hiện tại
+ * (`listPrices`: productId hoặc tên → giá niêm yết), cuối cùng mới lùi về giá bán.
+ */
+export const listPriceTotal = (order, listPrices = {}) =>
+    productItems(order).reduce((s, p) => {
+        const unit = PARSE(p.basePrice)
+            || PARSE(listPrices[String(p.productId)])
+            || PARSE(listPrices[p.name])
+            || PARSE(p.price);
+        return s + unit * PARSE(p.qty || 1);
+    }, 0);
+
 /** Tổng tiền của 1 danh sách dòng bất kỳ (sản phẩm hoặc dịch vụ đã lọc sẵn) */
 export const linesTotal = (lines = []) =>
     (lines || []).reduce((s, p) => s + (p?.included ? 0 : PARSE(p.price) * PARSE(p.qty || 1)), 0);

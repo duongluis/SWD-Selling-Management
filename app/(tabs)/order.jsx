@@ -147,7 +147,7 @@ function TotalRow({ totalCost, totalRevenue, showCost, showCreator, tableStyles 
 }
 
 // ── Dòng dữ liệu đơn hàng ────────────────────────────────────
-function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles, advisorVat, tableStyles, showCreator, creatorNames }) {
+function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles, advisorVat, tableStyles, showCreator, creatorNames, isDesktop }) {
   const tcfg = TYPE_CFG[item.orderType];
   const pcfg = PAYMENT_CFG[item.paymentMethod] || { label: item.paymentMethod || '—', c: '#64748B', bg: '#F1F5F9' };
   const total = productTotal(item);   // doanh thu sản phẩm, không gồm dịch vụ
@@ -161,6 +161,51 @@ function OrderRow({ item, index, isActive, onPress, showCost, role, advisorRoles
     : '—';
 
   const totalCostRow = getOrderCost(item, role, advisorRoles, advisorVat);
+
+  // Mobile: gọn 2 dòng — các cột desktop có minWidth cố định nên không vừa màn hẹp
+  if (!isDesktop) {
+    return (
+      <TouchableOpacity
+        style={[tableStyles.row, isCancelled && tableStyles.rowCancelled]}
+        onPress={() => onPress(item)}
+        activeOpacity={0.72}
+      >
+        <View style={[COL.lead, ROW.avatar, { backgroundColor: avatarColor + '22' }]}>
+          <Text style={[ROW.avatarText, { color: avatarColor }]}>{getInitials(item.customer)}</Text>
+        </View>
+
+        <View style={ROW.mInfo}>
+          <View style={ROW.nameRow}>
+            <Text style={[ROW.orderId, ROW.mOrderId, isCancelled && ROW.textStrike]} numberOfLines={1}>
+              #{item.id}
+            </Text>
+            {tcfg && (
+              <View style={[ROW.badge, { backgroundColor: tcfg.bg }]}>
+                <Text style={[ROW.badgeText, { color: tcfg.c }]}>{tcfg.label}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={[ROW.customer, isCancelled && ROW.textMuted]} numberOfLines={1}>{item.customer}</Text>
+          <Text style={ROW.mMeta} numberOfLines={1}>
+            {date} · {pcfg.label}
+            {showCreator ? ` · ${creatorNames[item.createdBy] || item.createdBy?.split('@')[0] || '—'}` : ''}
+          </Text>
+        </View>
+
+        <View style={ROW.mRight}>
+          <Text style={[ROW.mAmount, isCancelled && ROW.textMuted]} numberOfLines={1}>
+            {fmtCurrency(total)}
+          </Text>
+          <View style={[ROW.statusPill, { backgroundColor: scfg.bg, borderColor: scfg.bd }]}>
+            <View style={[ROW.statusDot, { backgroundColor: scfg.c }]} />
+            <Text style={[ROW.statusLabel, { color: scfg.c }]} numberOfLines={1}>
+              {item.status || 'Chờ xác nhận'}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <TouchableOpacity
@@ -673,6 +718,7 @@ export default function OrderScreen() {
                   tableStyles={tableStyles}
                   showCreator={showCreator}
                   creatorNames={creatorNames}
+                  isDesktop={isDesktop}
                 />
               )}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -744,6 +790,11 @@ const ROW = StyleSheet.create({
   },
   paymentText: { fontSize: 11, fontWeight: '600' },
   cellCreator: { lineHeight: 14 },
+  mInfo: { flex: 1, minWidth: 0 },
+  mOrderId: { flexShrink: 1 },
+  mMeta: { fontSize: 11, color: THEME.colors.textMuted, marginTop: 2 },
+  mRight: { alignItems: 'flex-end', gap: 4, flexShrink: 0, maxWidth: '45%' },
+  mAmount: { fontSize: 13, fontWeight: '700', color: THEME.colors.textPrimary },
   cellMuted: {
     fontSize: 11,
     color: THEME.colors.textMuted,

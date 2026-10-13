@@ -283,9 +283,9 @@ export const HELP_GUIDE = {
                 title: 'Các thẻ KPI doanh thu',
                 image: require('../../assets/images/help/analytics_01.png'),
                 description:
-                    'Màn báo cáo hiển thị 3 thẻ chính: Tổng thu nhập (bao gồm cả chưa thanh toán), Đang chờ xử lý (đơn đã tạo nhưng chưa thu tiền) và Đã thanh toán tháng này (doanh thu thực thu).',
+                    'Màn báo cáo hiển thị 4 thẻ chính: Doanh thu tháng này (kèm % so với tháng trước), Đã thanh toán tháng này (doanh thu thực thu), Chờ thanh toán (đơn chưa thu tiền) và Tổng doanh thu (bao gồm cả chưa thanh toán).',
                 tips: [
-                    '"Tổng thu nhập" = doanh thu đã thu + doanh thu dự kiến — dùng để theo dõi toàn bộ.',
+                    '"Tổng doanh thu" = doanh thu đã thu + doanh thu chờ thanh toán — dùng để theo dõi toàn bộ.',
                     '"Đã thanh toán tháng này" là con số thực tế quan trọng nhất.',
                 ],
             },
@@ -303,9 +303,9 @@ export const HELP_GUIDE = {
                 title: 'Biểu đồ xu hướng',
                 image: require('../../assets/images/help/analytics_03.png'),
                 description:
-                    'Biểu đồ cột so sánh doanh thu theo quý (Q1–Q4) hoặc theo từng tháng trong năm. Cột màu đậm là kỳ đang dẫn đầu. Dùng bộ lọc góc phải để chuyển giữa "Theo quý" và "Theo năm".',
+                    'Biểu đồ cột so sánh doanh thu theo tháng, theo quý hoặc theo năm. Cột màu đậm là kỳ đang chọn. Bộ chọn kỳ ở đầu màn ("Theo tháng", "Theo quý", "Theo năm") quyết định số liệu của mọi mục: thẻ KPI, lịch sử giao dịch, sản phẩm hàng đầu và top doanh số.',
                 tips: [
-                    'Nhấn vào một cột để xem chi tiết danh sách đơn trong kỳ đó.',
+                    'Nhấn vào một cột, hoặc dùng mũi tên cạnh tên kỳ, để xem số liệu của kỳ đó.',
                     'Dùng biểu đồ để xác định tháng cao điểm và lập kế hoạch bán hàng.',
                 ],
             },

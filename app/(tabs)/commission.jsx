@@ -5,12 +5,13 @@ import ScreenHeader from '@/components/Main/ScreenHeader';
 import { showAlert } from '@/components/Main/showAlert';
 import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import FilterChips from '@/components/UI/FilterChips';
-import { createNotification } from '@/components/Utils/chatService';
-import { isCommissionReleased } from '@/components/Utils/commissionCalc';
+import CommissionAdjustModal from '@/components/UI/CommissionAdjustModal';
+import { createNotification, sendCommissionAdjustMessage } from '@/components/Utils/chatService';
+import { adjustCommission, canAdjustCommission, canAdjustCommissionAccount, convertLegacySplit, isCommissionReleased, isLegacySplitRecord } from '@/components/Utils/commissionCalc';
 import { getRole, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, doc, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator, Dimensions, Platform,
@@ -25,13 +26,15 @@ const IS_DESKTOP = Platform.OS === 'web' && width >= 768;
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 
 // Đơn của sale chia hoa hồng 8/2 (splitScheme '8/2'): dòng gốc 8 phần hiện và duyệt trả
-// được ngay như dòng 7 phần cũ; dòng 2 phần sinh cùng lúc đơn thanh toán nhưng chỉ hiện (và
-// duyệt trả được) từ ngày cuối quý thanh toán (releaseAt, GMT+7), chỉ admin/giám đốc thấy
-// (adminOnly). Bản ghi cũ (7/2/1, không có splitScheme) vẫn sinh dòng 2 phần + 1 phần khi
-// admin duyệt trả dòng gốc.
+// được ngay; dòng 2 phần sinh cùng lúc đơn thanh toán, chỉ admin/giám đốc thấy (adminOnly),
+// hiện (và duyệt trả được) từ ngày cuối quý của createdAt đơn (splitReleaseAt, GMT+7)
+// và hiện mãi về sau. Mô hình 7/2/1 đã bỏ: bản ghi cũ chưa trả (không có splitScheme) phải
+// được admin chuyển sang 8/2 (convertLegacySplit) trước khi duyệt trả; dòng 2 phần / 1 phần
+// của các bản ghi 7/2/1 đã trả trước đây vẫn hiển thị như cũ.
 const SPLIT_LABEL = { 2: '2 phần', 3: '1 phần' };
 const fmtShort = n => {
     if (!n) return '0';
+    if (n < 0) return '-' + fmtShort(-n);   // hoa hồng có thể âm sau khi điều chỉnh
     if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + ' tỷ';
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + ' tr';
     if (n >= 1_000) return (n / 1_000).toFixed(0) + 'k';
@@ -120,8 +123,9 @@ const TB = StyleSheet.create({
 });
 
 // ── Mobile Card ───────────────────────────────────────────────
-function CommCardMobile({ r, isAdmin, canPay, onApprove }) {
+function CommCardMobile({ r, isAdmin, canPay, onApprove, onAdjust }) {
     const isBonus = r.recordType === 'bonus';
+    const adjustable = !!onAdjust && !isBonus && canAdjustCommission(r);
     return (
         <View style={MR.card}>
             <View style={MR.top}>
@@ -151,6 +155,11 @@ function CommCardMobile({ r, isAdmin, canPay, onApprove }) {
                     <Text style={[MR.infoValue, { color: isBonus ? '#7C3AED' : '#2563EB', fontWeight: '800' }]}>
                         {fmt(r.commission)}
                     </Text>
+                    {!isBonus && r.adjustments?.length > 0 && (
+                        <Text style={[MR.infoLabel, { marginTop: 2, fontSize: 9 }]} numberOfLines={1}>
+                            Gốc: {fmt(r.commissionOriginal)}
+                        </Text>
+                    )}
                     {isAdmin && (isBonus ? r.collaboratorEmail : r.sellerEmail) && (
                         <Text style={[MR.infoLabel, { marginTop: 2, fontSize: 9 }]} numberOfLines={1}>
                             {(isBonus ? r.collaboratorEmail : r.sellerEmail).split('@')[0]}
@@ -158,11 +167,21 @@ function CommCardMobile({ r, isAdmin, canPay, onApprove }) {
                     )}
                 </View>
             </View>
-            {canPay && r.status !== 'paid' && (
-                <TouchableOpacity style={MR.approveBtn} onPress={() => onApprove(r)}>
-                    <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
-                    <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>Xác nhận trả</Text>
-                </TouchableOpacity>
+            {((canPay && r.status !== 'paid') || adjustable) && (
+                <View style={MR.actions}>
+                    {adjustable && (
+                        <TouchableOpacity style={MR.adjustBtn} onPress={() => onAdjust(r)}>
+                            <Ionicons name="create-outline" size={14} color="#D97706" />
+                            <Text style={{ fontSize: 12, color: '#D97706', fontWeight: '700' }}>Điều chỉnh</Text>
+                        </TouchableOpacity>
+                    )}
+                    {canPay && r.status !== 'paid' && (
+                        <TouchableOpacity style={MR.approveBtn} onPress={() => onApprove(r)}>
+                            <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
+                            <Text style={{ fontSize: 12, color: '#fff', fontWeight: '700' }}>Xác nhận trả</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
             )}
         </View>
     );
@@ -176,8 +195,9 @@ const MR = StyleSheet.create({
     infoCol: { flex: 1 },
     infoLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 3 },
     infoValue: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
-    approveBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563EB', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14, marginTop: 12, alignSelf: 'flex-end' },
-});
+    actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 12 },
+    approveBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563EB', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14 },
+    adjustBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 8, paddingVertical: 7, paddingHorizontal: 14 },});
 
 // ── Desktop Table ─────────────────────────────────────────────
 const WRAP_BASE = { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 };
@@ -218,10 +238,11 @@ function TableHeader({ isAdmin, canPay, mainTab }) {
     );
 }
 
-function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
+function CommRowDesktop({ r, isAdmin, canPay, onApprove, onAdjust, odd }) {
     const COL = isAdmin ? COL_ADMIN : COL_BASE;
     const isPaid = r.status === 'paid';
     const isBonus = r.recordType === 'bonus';
+    const adjustable = !!onAdjust && !isBonus && canAdjustCommission(r);
     return (
         <View style={[WRAP_BASE, DT.row, odd && DT.rowOdd]}>
             <View style={COL.order}>
@@ -251,12 +272,15 @@ function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
                 <Text style={[DT.td, { fontWeight: '800', color: isBonus ? '#7C3AED' : '#2563EB' }]} numberOfLines={1}>
                     {fmt(r.commission)}
                 </Text>
+                {!isBonus && r.adjustments?.length > 0 && (
+                    <Text style={DT.sub} numberOfLines={1}>Gốc: {fmt(r.commissionOriginal)}</Text>
+                )}
             </View>
             <View style={COL.status}>
                 <StatusBadge status={r.status} />
             </View>
             {canPay && (
-                <View style={COL.action}>
+                <View style={[COL.action, { gap: 6 }]}>
                     <TouchableOpacity
                         style={isPaid ? DT.btnDone : DT.btnPending}
                         onPress={() => !isPaid && onApprove(r)}
@@ -271,6 +295,12 @@ function CommRowDesktop({ r, isAdmin, canPay, onApprove, odd }) {
                             {isPaid ? 'Đã trả' : 'Xác nhận trả'}
                         </Text>
                     </TouchableOpacity>
+                    {adjustable && (
+                        <TouchableOpacity style={DT.btnAdjust} onPress={() => onAdjust(r)}>
+                            <Ionicons name="create-outline" size={13} color="#D97706" />
+                            <Text style={DT.btnTextAdjust}>Điều chỉnh</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             )}
         </View>
@@ -287,7 +317,8 @@ const DT = StyleSheet.create({
     btnDone: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#DCFCE7', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' },
     btnTextPending: { fontSize: 11, color: '#fff', fontWeight: '700' },
     btnTextDone: { fontSize: 11, color: '#16A34A', fontWeight: '700' },
-});
+    btnAdjust: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' },
+    btnTextAdjust: { fontSize: 11, color: '#D97706', fontWeight: '700' },});
 
 // ── Main Tabs ─────────────────────────────────────────────────
 const MAIN_TABS = [
@@ -307,6 +338,9 @@ export default function CommissionScreen() {
     const [mainTab, setMainTab] = useState('commission'); // 'commission' | 'bonus'
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const canAdjust = canAdjustCommissionAccount(userDetail?.email);
+    const [adjustTarget, setAdjustTarget] = useState(null);
+    const [visibleCount, setVisibleCount] = useState(20);
 
     // Bản ghi hoa hồng (được ghi vào 'commissions' khi đơn chuyển "Đã thanh toán")
     // — lọc theo team (createdBy) như các màn khác, thông qua useScreenData
@@ -330,12 +364,38 @@ export default function CommissionScreen() {
     const orders = useMemo(() => {
         const map = new Map(teamCommissions.map(o => [o.docId, o]));
         collabBonuses.forEach(o => map.set(o.docId, o));
-        // Dòng 2 phần (adminOnly) chỉ hiện từ cuối quý. Chỉ xét releaseAt trên dòng adminOnly
-        // để dòng 8 phần luôn hiện ngay, kể cả bản ghi đã lỡ ghi releaseAt trước đó.
+        // Dòng 2 phần (adminOnly) hiện từ cuối quý của createdAt đơn và hiện mãi về sau.
+        // Chỉ xét trên dòng adminOnly để dòng 8 phần luôn hiện ngay.
         let list = [...map.values()].filter(o => !o.adminOnly || isCommissionReleased(o));
         if (!isAdmin) list = list.filter(o => !o.adminOnly);
         return list;
     }, [teamCommissions, collabBonuses, isAdmin]);
+
+    // Bản ghi 7/2/1 cũ chưa trả — admin chuyển 1 lần sang 8/2 (ghi dữ liệu nên phải bấm xác nhận)
+    const legacyRecords = useMemo(
+        () => (canPay ? teamCommissions.filter(isLegacySplitRecord) : []),
+        [teamCommissions, canPay]
+    );
+    const [converting, setConverting] = useState(false);
+    const handleConvertLegacy = () => {
+        showAlert(
+            'Chuyển sang mô hình 8/2',
+            `Chuyển ${legacyRecords.length} bản ghi hoa hồng chưa trả từ mô hình 7/2/1 sang 8/2?\n\nDòng của nhân viên tăng từ 7 phần lên 8 phần, và sinh thêm dòng 2 phần hiển thị từ cuối quý theo ngày của đơn.`,
+            async () => {
+                setConverting(true);
+                try {
+                    const n = await convertLegacySplit(legacyRecords);
+                    refresh();
+                    showAlert('Hoàn tất', `Đã chuyển ${n} bản ghi sang mô hình 8/2.`);
+                } catch (e) {
+                    console.error('convertLegacySplit error:', e);
+                    showAlert('Lỗi', 'Không chuyển được bản ghi: ' + e.message);
+                } finally {
+                    setConverting(false);
+                }
+            }
+        );
+    };
 
     const handleApprove = useCallback((r) => {
         if (!userDetail?.email) return;
@@ -345,6 +405,11 @@ export default function CommissionScreen() {
         const targetEmail = isBonus ? r.collaboratorEmail : r.sellerEmail;
 
         if (r.status === 'paid') return;
+        // Mô hình 7/2/1 đã bỏ: không trả theo số 7 phần cũ nữa, phải chuyển sang 8/2 trước.
+        if (!isBonus && isLegacySplitRecord(r)) {
+            showAlert('Bản ghi theo mô hình cũ', `Hoa hồng đơn #${r.id} đang tính theo mô hình 7/2/1 đã bỏ. Hãy bấm "Chuyển sang 8/2" ở đầu trang trước khi xác nhận trả.`);
+            return;
+        }
         showAlert(
             `Xác nhận thanh toán ${isBonus ? 'thưởng' : 'hoa hồng'}`,
             `Trả ${fmt(amount)} cho ${targetEmail || '—'}?\n\nĐơn: #${r.id}\nKhách hàng: ${r.customer || '—'}`,
@@ -357,52 +422,6 @@ export default function CommissionScreen() {
                     return;
                 }
 
-                try {
-                    // Chỉ cho bản ghi cũ theo công thức 7/2/1 — sinh thêm 2 dòng 2 phần / 1 phần khi:
-                    // - đang duyệt commission (không phải bonus)
-                    // - đây là dòng công khai gốc (chưa từng là dòng adminOnly)
-                    // - đơn được tạo bởi tài khoản role "sale"
-                    //   (splitEligible do computeOrderCommission ghi; bản ghi cũ hơn chưa có
-                    //    trường này nên fallback về creatorRole)
-                    // Bản ghi 8/2 (có splitScheme) đã có dòng 2 phần từ lúc đơn thanh toán.
-                    const isSplitParent = !isBonus && !r.adminOnly && !r.splitScheme
-                        && (r.splitEligible ?? r.creatorRole === 'sale');
-
-                    if (isSplitParent) {
-                        // Làm tròn về số nguyên trước khi chia, và lấy phần 1 là phần dư
-                        // để 7 + 2 + 1 luôn khớp đúng tổng, không lệch vài đồng do rounding.
-                        const total = Math.round(r.commissionTotal ?? (r.commission / 0.7));
-                        const part2 = Math.round(total * 0.2);
-                        const part3 = Math.max(0, total - r.commission - part2);
-
-                        const orderIdKey = r.orderId || r.id;
-                        const splitBase = {
-                            orderId: r.orderId, id: r.id, createdBy: r.createdBy,
-                            sellerEmail: r.sellerEmail, rootAdvisor: r.rootAdvisor,
-                            customer: r.customer, phone: r.phone, orderType: r.orderType,
-                            paymentMethod: r.paymentMethod, createdAt: r.createdAt,
-                            paidAt: new Date().toISOString(), totalValue: r.totalValue,
-                            basePriceField: r.basePriceField, commissionTotal: total,
-                            commissionStatus: 'pending', collaboratorEmail: r.collaboratorEmail,
-                            bonusAmount: 0, bonusStatus: 'paid', adminOnly: true,
-                            creatorRole: r.creatorRole, splitEligible: true,
-                        };
-
-                        await Promise.all([
-                            setDoc(doc(db, 'commissions', `${orderIdKey}-2`), {
-                                ...splitBase, commission: part2, splitPart: 2,
-                            }),
-                            setDoc(doc(db, 'commissions', `${orderIdKey}-3`), {
-                                ...splitBase, commission: part3, splitPart: 3,
-                            }),
-                        ]);
-                    }
-                } catch (e) {
-                    console.error('handleApprove split error:', e);
-                }
-
-                // Thông báo tách khỏi try ở trên: lỗi khi sinh dòng 2/1 phần không được
-                // nuốt luôn cả thông báo trả hoa hồng cho người bán.
                 try {
                     if (targetEmail && targetEmail !== userDetail?.email) {
                         await createNotification({
@@ -421,6 +440,26 @@ export default function CommissionScreen() {
         );
     }, [userDetail?.email]);
 
+    // Điều chỉnh hoa hồng trực tiếp — chỉ admin@swd.vn (xem canAdjustCommission để biết
+    // đơn nào còn được điều chỉnh). Ném lỗi ra cho CommissionAdjustModal hiển thị.
+    const handleAdjust = useCallback(async ({ direction, amount, reason }) => {
+        const r = adjustTarget;
+        if (!r) return;
+        const { after } = await adjustCommission({
+            docId: r.docId, direction, amount, reason, adminEmail: userDetail?.email,
+        });
+        setAdjustTarget(null);
+        refresh();
+        try {
+            await sendCommissionAdjustMessage({
+                userEmail: r.sellerEmail, orderId: r.id, direction, amount, reason, after,
+            });
+        } catch (e) {
+            console.error('handleAdjust message error:', e);
+            showAlert('Đã điều chỉnh hoa hồng', 'Nhưng không gửi được tin nhắn cho thành viên: ' + e.message);
+        }
+    }, [adjustTarget, userDetail?.email, refresh]);
+
     // ── Records theo mainTab ──────────────────────────────────
     const commRecords = useMemo(() => {
         if (!userDetail?.email) return [];
@@ -435,7 +474,8 @@ export default function CommissionScreen() {
                     status: o.commissionStatus || 'pending',
                     recordType: 'commission',
                 }))
-                .filter(o => o.commission > 0);
+                // Hoa hồng bị điều chỉnh về 0 vẫn hiện để còn tăng lại / xem lịch sử
+                .filter(o => o.commission > 0 || o.adjustments?.length > 0);
         } else {
             // Thưởng: chỉ đơn mà mình là collaborator
             return orders
@@ -544,6 +584,18 @@ export default function CommissionScreen() {
                     <StatCard label="Tổng cộng" value={fmtShort(pending + paid)} color={accentColor} borderColor={mainTab === 'bonus' ? '#DDD6FE' : '#BFDBFE'} />
                 </View>
 
+                {legacyRecords.length > 0 && mainTab === 'commission' && (
+                    <View style={[S.zeroWarn, { alignItems: 'center' }]}>
+                        <Ionicons name="alert-circle-outline" size={15} color="#B45309" />
+                        <Text style={S.zeroWarnText}>
+                            {legacyRecords.length} bản ghi hoa hồng chưa trả đang theo mô hình cũ 7/2/1.
+                        </Text>
+                        <TouchableOpacity style={S.convertBtn} onPress={handleConvertLegacy} disabled={converting}>
+                            <Text style={S.convertText}>{converting ? 'Đang chuyển...' : 'Chuyển sang 8/2'}</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 {/* {hiddenZero.count > 0 && (
                     <View style={S.zeroWarn}>
                         <Ionicons name="alert-circle-outline" size={15} color="#B45309" />
@@ -599,22 +651,34 @@ export default function CommissionScreen() {
                         </View>
                     ) : isMobile ? (
                         <View style={{ marginTop: 4 }}>
-                            {filteredRecords.slice(0, 20).map((r, i) => (
-                                <CommCardMobile key={`${r.id}-${r.recordType}-${i}`} r={r} isAdmin={isAdmin} canPay={canPay} onApprove={handleApprove} />
+                            {filteredRecords.slice(0, visibleCount).map((r, i) => (
+                                <CommCardMobile key={`${r.id}-${r.recordType}-${i}`} r={r} isAdmin={isAdmin} canPay={canPay} onApprove={handleApprove} onAdjust={canAdjust ? setAdjustTarget : null} />
                             ))}
                         </View>
                     ) : (
                         <>
                             <TableHeader isAdmin={isAdmin} canPay={canPay} mainTab={mainTab} />
-                            {filteredRecords.slice(0, 20).map((r, i) => (
-                                <CommRowDesktop key={`${r.id}-${r.recordType}-${i}`} r={r} isAdmin={isAdmin} canPay={canPay} onApprove={handleApprove} odd={i % 2 === 1} />
+                            {filteredRecords.slice(0, visibleCount).map((r, i) => (
+                                <CommRowDesktop key={`${r.id}-${r.recordType}-${i}`} r={r} isAdmin={isAdmin} canPay={canPay} onApprove={handleApprove} onAdjust={canAdjust ? setAdjustTarget : null} odd={i % 2 === 1} />
                             ))}
                         </>
+                    )}
+
+                    {filteredRecords.length > visibleCount && (
+                        <TouchableOpacity style={S.moreBtn} onPress={() => setVisibleCount(c => c + 20)}>
+                            <Text style={S.moreText}>Xem thêm ({filteredRecords.length - visibleCount})</Text>
+                        </TouchableOpacity>
                     )}
                 </View>
 
                 <View style={{ height: 80 }} />
             </ScrollView>
+
+            <CommissionAdjustModal
+                record={adjustTarget}
+                onClose={() => setAdjustTarget(null)}
+                onConfirm={handleAdjust}
+            />
         </TabScreenLayout>
     );
 }
@@ -639,4 +703,8 @@ const S = StyleSheet.create({
     countText: { fontSize: 12, color: '#64748B', fontWeight: '600' },
     emptyWrap: { alignItems: 'center', paddingVertical: 32, gap: 8 },
     emptyText: { fontSize: 14, color: '#94A3B8' },
+    convertBtn: { backgroundColor: '#B45309', borderRadius: 8, paddingVertical: 7, paddingHorizontal: 12 },
+    convertText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+    moreBtn: { alignSelf: 'center', marginTop: 12, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 20, backgroundColor: '#F1F5F9' },
+    moreText: { fontSize: 12, fontWeight: '700', color: '#475569' },
 });

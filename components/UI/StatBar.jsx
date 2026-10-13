@@ -4,23 +4,24 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLayout } from '@/components/Main/TabScreenLayout';
 
 
-function StatCard({ icon, label, value, color, bg }) {
+function StatCard({ icon, label, value, color, bg, valueStyle }) {
     const { isDesktop } = useLayout();
     return (
-        <View style={[S.card, isDesktop && S.cardWeb]}>
+        <View style={[S.card, isDesktop ? S.cardWeb : S.cardMobile]}>
             <View style={[S.iconWrap, { backgroundColor: bg }]}>
                 <Ionicons name={icon} size={16} color={color} />
             </View>
-            <View>
+            {/* flexShrink + minWidth 0 để giá trị dài (vd tên người) bị cắt "…" thay vì tràn thẻ */}
+            <View style={S.textWrap}>
                 <Text style={S.label} numberOfLines={1}>{label}</Text>
-                <Text style={[S.value, { color }]}>{value}</Text>
+                <Text style={[S.value, { color }, valueStyle]} numberOfLines={1}>{value}</Text>
             </View>
         </View>
     );
 }
 
 /**
- * @param stats - array of { icon, label, value, color, bg }
+ * @param stats - array of { icon, label, value, color, bg, valueStyle? }
  */
 export default function StatBar({ stats = [] }) {
     const { isDesktop } = useLayout();
@@ -70,7 +71,9 @@ const S = StyleSheet.create({
         minWidth: 130,        // ← giảm từ 140 xuống 130
         height: 56, // ✅ chiều cao cố định
     },
-    cardWeb: { flex: 1 },
+    cardWeb: { flex: 1, minWidth: 0 },
+    cardMobile: { maxWidth: 240 },
+    textWrap: { flexShrink: 1, minWidth: 0 },
     iconWrap: { width: 36, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
     label: { fontSize: 11, color: '#64748B', marginBottom: 2, flexShrink: 1 },
     value: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },

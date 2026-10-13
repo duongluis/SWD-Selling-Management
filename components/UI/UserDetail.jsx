@@ -29,7 +29,7 @@ function InfoRow({ icon, label, value }) {
         <View style={S.infoRow}>
             <View style={S.infoIconWrap}><Ionicons name={icon} size={13} color="#94A3B8" /></View>
             <Text style={S.infoLabel}>{label}</Text>
-            <Text style={S.infoValue} numberOfLines={2}>{value}</Text>
+            <Text style={S.infoValue}>{value}</Text>
         </View>
     );
 }
@@ -57,6 +57,18 @@ function NicknameTab({ user, onSaved }) {
         finally { setSaving(false); }
     };
 
+    const handleRemove = () => {
+        showAlert('Xác nhận', `Xoá biệt danh "${user.nickname}"?`, async () => {
+            try {
+                await updateDoc(doc(db, 'users', user.email), { nickname: null });
+                setNickname('');
+                onSaved?.({ ...user, nickname: null });
+            } catch (e) {
+                showAlert('Lỗi', e.message);
+            }
+        });
+    };
+
     return (
         <View style={{ padding: 16 }}>
             <Text style={NT.label}>Biệt danh</Text>
@@ -81,7 +93,10 @@ function NicknameTab({ user, onSaved }) {
             {user.nickname && (
                 <View style={NT.currentWrap}>
                     <Text style={NT.currentLabel}>Biệt danh hiện tại:</Text>
-                    <Text style={NT.currentValue}>{user.nickname}</Text>
+                    <Text style={[NT.currentValue, { flex: 1 }]}>{user.nickname}</Text>
+                    <TouchableOpacity style={CL.removeBtn} onPress={handleRemove}>
+                        <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
+                    </TouchableOpacity>
                 </View>
             )}
         </View>
@@ -306,7 +321,7 @@ export default function UserDetail({ user, onClose, onUpdated }) {
                         <Ionicons name="close" size={15} color="#64748B" />
                     </TouchableOpacity>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={S.title} numberOfLines={1}>{local.name || local.companyName || '—'}</Text>
+                        <Text style={S.title}>{local.name || local.companyName || '—'}</Text>
                         <Text style={S.subtitle} numberOfLines={1}>{local.email}</Text>
                     </View>
                     {locked ? (
@@ -397,14 +412,16 @@ export default function UserDetail({ user, onClose, onUpdated }) {
 
 
 
-            {/* Content theo tab */}
+            {/* Content theo tab — key theo email để ô nhập không giữ lại nội dung của user trước */}
             {tab === 'nickname' ? (
                 <NicknameTab
+                    key={local.email}
                     user={local}
                     onSaved={next => { setLocal(next); onUpdated?.(next); }}
                 />
             ) : tab === 'collaboration' ? (
                 <CollaborationTab
+                    key={local.email}
                     user={local}
                     onSaved={next => { setLocal(next); onUpdated?.(next); }}
                 />

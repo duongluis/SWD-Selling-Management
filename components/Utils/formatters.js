@@ -64,6 +64,39 @@ export const getInitials = (name) => {
     return name.trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2);
 };
 
+/**
+ * Rút gọn tên dài hơn `max` ký tự: 2 từ đầu + chữ cái đầu các từ ở giữa + 2 từ cuối.
+ * Vd "Công ty Trách nhiệm hữu hạn Thương mại Dịch vụ An Phát" → "Công ty TNHHTMDV An Phát".
+ * Tên từ 4 từ trở xuống không có từ ở giữa nên giữ nguyên.
+ * Từ ở giữa vốn đã là chữ viết tắt (vd TNHH, MTV) được giữ nguyên chứ
+ * không rút tiếp còn 1 chữ: "Công ty TNHH Thương mại Dịch vụ An Phát" → "Công ty TNHH TMDV An Phát".
+ */
+export const fmtName = (name, max = 30) => {
+    const s = String(name || '').trim().replace(/\s+/g, ' ');
+    if (s.length <= max) return s;
+    const words = s.split(' ');
+    if (words.length <= 4) return s;
+    // Chữ viết tắt = từ không có nguyên âm (TNHH, MTV, CP... — đúng cả khi tên viết hoa toàn
+    // bộ hay gõ "Tnhh"), hoặc từ viết hoa toàn bộ nằm trong một tên viết thường (vd "ABC").
+    const allCaps = s === s.toUpperCase();
+    const hasVowel = w => /[aeiouy]/i.test(w.normalize('NFD').replace(/[̀-ͯ]/g, ''));
+    const isAbbr = w => w.length > 1 && (
+        !hasVowel(w) || (!allCaps && w === w.toUpperCase() && w !== w.toLowerCase())
+    );
+    const middle = [];
+    let initials = '';
+    words.slice(2, -2).forEach(w => {
+        if (isAbbr(w)) {
+            if (initials) { middle.push(initials); initials = ''; }
+            middle.push(w);
+        } else {
+            initials += w[0].toUpperCase();
+        }
+    });
+    if (initials) middle.push(initials);
+    return [...words.slice(0, 2), ...middle, ...words.slice(-2)].join(' ');
+};
+
 export const timeAgo = (str) => {
     if (!str) return '';
     const diff = Date.now() - new Date(str).getTime();

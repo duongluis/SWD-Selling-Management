@@ -1395,7 +1395,7 @@ export default function AddOrder() {
           </View>
 
           <View style={W.colRight}>
-            {/* Hình thức thanh toán - Chỉ hiển thị cho người dùng Cấp 1 */}
+            {/* Hình thức thanh toán */}
             {(isLevel1 || isSale) && (
               <PaymentMethodField
                 ws={isDesktop}

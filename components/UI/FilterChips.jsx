@@ -12,7 +12,7 @@ export default function FilterChips({ options = [], value, onChange }) {
         <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={{ flexGrow: 0 }}
+            style={{ flexGrow: 0, flexShrink: 0 }}
             contentContainerStyle={[S.row, isDesktop && S.rowWeb]}
         >
             {options.map(opt => {
@@ -35,7 +35,7 @@ export default function FilterChips({ options = [], value, onChange }) {
 }
 
 const S = StyleSheet.create({
-    row: { paddingHorizontal: 16, paddingBottom: 10, gap: 8, flexDirection: 'row' },
+    row: { paddingHorizontal: 16, paddingBottom: 10, gap: 8, flexDirection: 'row', alignItems: 'center' },
     rowWeb: { paddingHorizontal: 32 },
     chip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
     chipActive: { backgroundColor: '#2563EB', borderColor: '#2563EB' },

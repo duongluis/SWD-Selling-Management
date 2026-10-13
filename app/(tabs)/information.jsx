@@ -1040,7 +1040,7 @@ const IS_WEB = Platform.OS === 'web' && Dimensions.get('window').width >= 768;
 
 const S = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },
-    container: { flex: 1, backgroundColor: 'transparent', paddingTop: IS_WEB ? 0 : 44 },
+    container: { flex: 1, backgroundColor: 'transparent', paddingTop: Platform.OS === 'web' ? 0 : 44 },
     header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: IS_WEB ? 32 : 16, paddingVertical: IS_WEB ? 20 : 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
     headerTitle: { fontSize: IS_WEB ? 22 : 18, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },

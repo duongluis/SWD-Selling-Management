@@ -5,16 +5,14 @@ import ScreenHeader from '@/components/Main/ScreenHeader';
 import TabScreenLayout from '@/components/Main/TabScreenLayout';
 import FilterChips from '@/components/UI/FilterChips';
 import StatBar from '@/components/UI/StatBar';
-import { fmtCurrency, getInitials } from '@/components/Utils/formatters';
-import { productTotal } from '@/components/Utils/orderItems';
+import { fmtCurrency, fmtName, getInitials } from '@/components/Utils/formatters';
+import { listPriceTotal } from '@/components/Utils/orderItems';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { useFocusEffect } from 'expo-router';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
-  Dimensions,
   FlatList,
-  Platform,
   RefreshControl,
   StyleSheet, Text,
   View
@@ -24,27 +22,24 @@ import { db } from '../../config/firebaseConfig';
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import { getRole } from '@/components/Utils/roleHelper';
 
-const width = Dimensions.get('window').width
 const RANK_COLORS = ['#F59E0B', '#94A3B8', '#CD7F32'];
 const AVATAR_COLORS = ['#2563EB', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444'];
 const RANK_ICONS = ['🥇', '🥈', '🥉'];
 
-function normalizeRole(u) {
-  const r = (u.role || u.member || '').toLowerCase().trim();
-  if (r === 'admin') return 'admin';
-  if (r === 'đại lý' || r === 'daily') return 'daily';
-  if (r === 'đối tác' || r === 'phantan') return 'phantan';
-  if (r === 'cộng tác viên' || r === 'ctv' || r === 'collaborator') return 'ctv';
-  return r;
-}
+const normalizeRole = getRole;
+const emailKey = (e) => String(e || '').trim().toLowerCase();
 
-const ROLE_LABEL = { daily: 'Đại lý', phantan: 'Đối tác', ctv: 'Cộng tác viên' };
+const ROLE_LABEL = { daily: 'Đại lý', phantan: 'Đối tác', ctv: 'Cộng tác viên', sale: 'Nhân viên bán hàng' };
 
 function inPeriod(order, period) {
   if (period === 'all') return true;
-  const ts = order.createdAt;
+  // Xếp hạng theo ngày đơn được thanh toán. `createdAt` là ngày giao hàng người tạo đơn
+  // chọn (luôn từ hôm nay trở đi) nên đơn trả tiền tháng này có thể mang ngày tháng khác.
+  // Đơn cũ chưa có paymentDate thì lùi về createdAt.
+  const ts = order.paymentDate || order.createdAt;
   if (!ts) return false;
   const d = ts.toDate ? ts.toDate() : new Date(ts);
+  if (isNaN(d.getTime())) return false;
   const now = new Date();
   if (period === 'day') {
     return d.getDate() === now.getDate() &&
@@ -74,7 +69,7 @@ function LeaderCard({ item, rank }) {
         <Text style={L.avatarText}>{getInitials(item.name)}</Text>
       </View>
       <View style={L.info}>
-        <Text style={L.name}>{item.name || item.email}</Text>
+        <Text style={L.name}>{fmtName(item.name) || item.email}</Text>
         <Text style={L.role}>{item.role || item.member}</Text>
       </View>
       <View style={L.right}>
@@ -87,8 +82,9 @@ function LeaderCard({ item, rank }) {
 }
 
 function SectionHeader({ title }) {
+  const { isDesktop } = useLayout();
   return (
-    <View style={L.sectionHeader}>
+    <View style={[L.sectionHeader, { paddingHorizontal: isDesktop ? 32 : 16 }]}>
       <Text style={L.sectionTitle}>{title}</Text>
     </View>
   );
@@ -130,7 +126,7 @@ const PERIOD_OPTIONS = [
 export default function LeaderboardScreen() {
   const { userDetail } = useContext(UserDetailContext);
   const [allUsers, setAllUsers] = useState([]);
-  const [revenueByEmail, setRevenueByEmail] = useState({});
+  const [listPrices, setListPrices] = useState({});
   const [allOrders, setAllOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -156,8 +152,18 @@ export default function LeaderboardScreen() {
         .map(d => ({ ...d.data(), docId: d.id }))
         .filter(o => o.createdBy); // đảm bảo có người tạo
 
+      // Bảng giá niêm yết — chỉ để tra cho đơn cũ chưa lưu basePrice trong items
+      const priceSnap = await getDocs(collection(db, 'productPrice'));
+      const prices = {};
+      priceSnap.docs.forEach(d => {
+        const p = d.data();
+        prices[String(p.id || d.id)] = p.price;
+        if (p.name) prices[p.name] = p.price;
+      });
+
       setAllUsers(rawUsers);
       setAllOrders(ordersFlat);
+      setListPrices(prices);
     } catch (e) {
       console.error(e);
     } finally {
@@ -173,13 +179,15 @@ export default function LeaderboardScreen() {
     const rev = {};
     allOrders.forEach(o => {
       if (!inPeriod(o, periodFilter)) return;
-      const val = productTotal(o);   // doanh số xếp hạng: chỉ sản phẩm
-      rev[o.createdBy] = (rev[o.createdBy] || 0) + val;
+      // doanh số xếp hạng: chỉ sản phẩm, theo giá niêm yết với mọi vai trò
+      const val = listPriceTotal(o, listPrices);
+      const key = emailKey(o.createdBy);
+      rev[key] = (rev[key] || 0) + val;
     });
     return allUsers
-      .map(u => ({ ...u, revenueTotal: rev[u.email] || 0 }))
+      .map(u => ({ ...u, revenueTotal: rev[emailKey(u.email)] || 0 }))
       .sort((a, b) => b.revenueTotal - a.revenueTotal);
-  }, [allUsers, allOrders, periodFilter]);
+  }, [allUsers, allOrders, listPrices, periodFilter]);
 
   const displayUsers = useMemo(() => {
     if (fullAccess) return users;
@@ -189,12 +197,13 @@ export default function LeaderboardScreen() {
   const dailyGroup = useMemo(() => users.filter(u => normalizeRole(u) === 'daily'), [users]);
   const phantanGroup = useMemo(() => users.filter(u => normalizeRole(u) === 'phantan'), [users]);
   const ctvGroup = useMemo(() => users.filter(u => normalizeRole(u) === 'ctv'), [users]);
+  const saleGroup = useMemo(() => users.filter(u => normalizeRole(u) === 'sale'), [users]);
 
   const top3Revenue = displayUsers.slice(0, 3).reduce((s, u) => s + (u.revenueTotal || 0), 0);
   const statCards = [
     { icon: 'trophy-outline', label: 'Tham gia', value: String(displayUsers.length), color: '#F59E0B', bg: '#FFFBEB' },
     { icon: 'cash-outline', label: 'Top 3 DT', value: fmtCurrency(top3Revenue), color: '#10B981', bg: '#ECFDF5' },
-    { icon: 'medal-outline', label: 'Dẫn đầu', value: displayUsers[0]?.name || '—', color: '#2563EB', bg: '#EFF6FF' },
+    { icon: 'medal-outline', label: 'Dẫn đầu', value: fmtName(displayUsers[0]?.name) || '—', color: '#2563EB', bg: '#EFF6FF', valueStyle: { fontSize: 14 } },
   ];
 
   return (
@@ -217,6 +226,7 @@ export default function LeaderboardScreen() {
                 <RoleSection title={`Đại lý (${dailyGroup.length})`} data={dailyGroup} />
                 <RoleSection title={`Đối tác (${phantanGroup.length})`} data={phantanGroup} />
                 <RoleSection title={`Cộng tác viên (${ctvGroup.length})`} data={ctvGroup} />
+                <RoleSection title={`Nhân viên bán hàng (${saleGroup.length})`} data={saleGroup} />
               </View>
             )}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
@@ -248,7 +258,7 @@ export default function LeaderboardScreen() {
 }
 
 const L = StyleSheet.create({
-  sectionHeader: { paddingHorizontal: Platform.OS === 'web' && width >= 768 ? 32 : 16, paddingTop: 16, paddingBottom: 8 },
+  sectionHeader: { paddingTop: 16, paddingBottom: 8 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0', gap: 10 },
   rankBadge: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

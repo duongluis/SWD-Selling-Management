@@ -293,7 +293,7 @@ ${logoBase64 ? `<img class="watermark" src="${logoBase64}" alt="" />` : ''}
   <div class="bankCol">
     <div class="sectionTitle2">Thông tin ngân hàng</div>
     <table class="bankTable">
-      <tr><td>Tên TK</td><td>${bankInfo?.bankAccountName || seller?.name || 'CÔNG TY CỔ PHẦN SPRING WATER DELIVERY'}</td></tr>
+      <tr><td>Tên TK</td><td>${bankInfo?.bankAccountName || 'CÔNG TY CỔ PHẦN SPRING WATER DELIVERY'}</td></tr>
       <tr><td>Số TK</td><td>${bankInfo?.bankAccountNumber || '803838'}</td></tr>
       <tr><td>Ngân hàng</td><td>${bankInfo?.bankName || 'Ngân hàng TMCP Kỹ Thương Việt Nam - TECHCOMBANK'}</td></tr>
     </table>

@@ -235,6 +235,54 @@ export const sendStatusUpdateMessage = async ({ orderId, newStatus, changedBy, c
 };
 
 // ─────────────────────────────────────────────────────────────
+// 7b. Send commission adjustment message (into the member's support room)
+// ─────────────────────────────────────────────────────────────
+export const sendCommissionAdjustMessage = async ({ userEmail, orderId, direction, amount, reason, after }) => {
+    if (!userEmail) return;
+    const money = (n) => (n || 0).toLocaleString('vi-VN') + ' đ';
+    const isDecrease = direction === 'decrease';
+
+    // Trả về phòng có sẵn, chưa có thì tạo mới
+    const roomId = await createSupportRoom({ userEmail });
+
+    const text = `💰 Hoa hồng đơn hàng #${orderId} đã được điều chỉnh ${isDecrease ? 'giảm' : 'tăng'} ${money(amount)}.`
+        + `\nLý do: ${reason}`
+        + `\nHoa hồng sau điều chỉnh: ${money(after)}`;
+
+    await addDoc(collection(db, 'chatRooms', roomId, 'messages'), {
+        text,
+        sender: 'system',
+        senderName: 'Hệ thống',
+        type: 'system',
+        orderId,
+        createdAt: serverTimestamp(),
+        readBy: [],
+    });
+
+    const roomRef = doc(db, 'chatRooms', roomId);
+    const roomSnap = await getDoc(roomRef);
+    if (roomSnap.exists()) {
+        const unread = { ...(roomSnap.data().unreadCount || {}) };
+        unread[userEmail] = (unread[userEmail] || 0) + 1;
+        await updateDoc(roomRef, {
+            lastMessage: `Điều chỉnh hoa hồng đơn #${orderId}: ${isDecrease ? '-' : '+'}${money(amount)}`,
+            lastAt: new Date().toISOString(),
+            unreadCount: unread,
+        });
+    }
+
+    await createNotification({
+        userEmail,
+        type: 'commission_adjusted',
+        title: '💰 Hoa hồng được điều chỉnh',
+        body: `Đơn #${orderId}: ${isDecrease ? 'giảm' : 'tăng'} ${money(amount)}. Lý do: ${reason}`,
+        orderId,
+        roomId,
+        path: `/chat/${roomId}`,
+    });
+};
+
+// ─────────────────────────────────────────────────────────────
 // 8. Mark room as read
 // ─────────────────────────────────────────────────────────────
 export const markRoomAsRead = async (roomId, userEmail) => {

@@ -26,6 +26,7 @@ import HelpModal from '../../components/Help/helpModal';
 
 const HELP_SEEN_KEY = '@swd_help_tooltip_seen';
 const BANNER_IMAGE = require('../../assets/images/layout-img.png');
+const MOBILE_TOPBAR_HEIGHT = 52;
 
 
 function getInitials(name) {
@@ -369,7 +370,7 @@ const MB = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 10, paddingHorizontal: 12,
-    overflow: 'hidden', minHeight: 52,
+    overflow: 'hidden', height: MOBILE_TOPBAR_HEIGHT,
     backgroundColor: '#40668d',
   },
   topBarBanner: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, width: '100%', height: '100%', opacity: 1 },
@@ -562,7 +563,11 @@ export default function TabLayout() {
           tabBar={(props) =>
             isDesktop ? null : <MobileTabBar {...props} activeKey={activeTab} />
           }
-          screenOptions={{ headerShown: false }}
+          // Topbar mobile nổi (absolute) phía trên Tabs → chừa chỗ để không đè lên nội dung màn
+          screenOptions={{
+            headerShown: false,
+            sceneStyle: { paddingTop: !isDesktop && Platform.OS === 'web' ? MOBILE_TOPBAR_HEIGHT : 0 },
+          }}
         >
           {tabScreens}
         </Tabs>
