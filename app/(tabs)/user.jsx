@@ -18,6 +18,7 @@ import {
     FlatList, Modal, Pressable, RefreshControl,
     StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import { useCardStyles } from '@/components/Styles/cardStyles';
@@ -151,6 +152,7 @@ export default function UsersScreen() {
     const canAccess = isAdminOrGD(role);
     const canCreateAccount = role === 'admin'; // chỉ admin được tạo tài khoản hộ
     const { isDesktop } = useLayout();
+    const insets = useSafeAreaInsets();
     const { styles: cardStyles } = useCardStyles();
     const { styles: tableStyles } = useTableStyles();
 
@@ -230,10 +232,10 @@ export default function UsersScreen() {
 
             {/* Mobile view: Hiện UserDetail dạng Modal lớp phủ phía dưới */}
             {!isDesktop && selected && (
-                <Modal visible={!!selected} animationType="slide" transparent>
+                <Modal visible={!!selected} animationType="slide" transparent onRequestClose={() => setSelected(null)}>
                     <View style={styles.modalBackdrop}>
                         <Pressable style={{ flex: 1 }} onPress={() => setSelected(null)} />
-                        <View style={styles.modalContent}>
+                        <View style={[styles.modalContent, { paddingBottom: insets.bottom }]}>
                             <UserDetail
                                 user={selected}
                                 onClose={() => setSelected(null)}

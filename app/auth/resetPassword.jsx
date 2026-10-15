@@ -86,7 +86,8 @@ export default function ResetPassword() {
 
 const styles = StyleSheet.create({
   container: {
-    width: 350,
+    width: "92%",
+    maxWidth: 350,
     marginTop: 50,
     alignSelf: "center",
     padding: 20,

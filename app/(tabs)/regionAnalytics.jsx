@@ -1,6 +1,6 @@
 // app/(tabs)/regionReport.jsx — Báo cáo khu vực
 
-import TabScreenLayout from '@/components/Main/TabScreenLayout';
+import TabScreenLayout, { useLayout } from '@/components/Main/TabScreenLayout';
 import { productItems, productTotal } from '@/components/Utils/orderItems';
 import { getRole, isAdminOrGD } from '@/components/Utils/roleHelper';
 import { UserDetailContext } from '@/context/UserDetailContext';
@@ -10,8 +10,6 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
-    Dimensions,
-    Platform,
     RefreshControl,
     ScrollView, StyleSheet, Text, TouchableOpacity,
     View
@@ -20,7 +18,6 @@ import { db } from '../../config/firebaseConfig';
 import provinceData from '../../config/province.json';
 
 
-const width = Dimensions.get('window').width
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtShort = n => {
     if (!n) return '0';
@@ -95,6 +92,7 @@ export default function RegionReportScreen() {
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
     const isAdmin = isAdminOrGD(role);
+    const { isDesktop } = useLayout();
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -183,10 +181,10 @@ export default function RegionReportScreen() {
     return (
         <TabScreenLayout>
             <ScrollView showsVerticalScrollIndicator={true}
-                contentContainerStyle={G.scroll}
+                contentContainerStyle={[G.scroll, isDesktop && G.scrollDesktop]}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}>
 
-                <Text style={G.pageTitle}>Báo cáo khu vực</Text>
+                <Text style={[G.pageTitle, isDesktop && G.pageTitleDesktop]}>Báo cáo khu vực</Text>
 
                 {loading ? (
                     <View style={{ alignItems: 'center', paddingTop: 60 }}>
@@ -194,24 +192,25 @@ export default function RegionReportScreen() {
                     </View>
                 ) : (<>
                     {/* Summary bar */}
-                    <View style={G.summaryBar}>
-                        <View style={G.summaryItem}>
+                    {/* Mobile: xếp dọc — 3 cột trên màn hẹp làm số tiền dài bị xuống dòng/tràn */}
+                    <View style={[G.summaryBar, !isDesktop && G.summaryBarMobile]}>
+                        <View style={[G.summaryItem, !isDesktop && G.summaryItemMobile]}>
                             <Ionicons name="bar-chart-outline" size={18} color="#2563EB" />
                             <View>
                                 <Text style={G.summaryLabel}>Tổng doanh thu</Text>
                                 <Text style={G.summaryValue}>{fmt(totalRevenue)}</Text>
                             </View>
                         </View>
-                        <View style={G.summaryDivider} />
-                        <View style={G.summaryItem}>
+                        <View style={[G.summaryDivider, !isDesktop && G.summaryDividerMobile]} />
+                        <View style={[G.summaryItem, !isDesktop && G.summaryItemMobile]}>
                             <Ionicons name="receipt-outline" size={18} color="#059669" />
                             <View>
                                 <Text style={G.summaryLabel}>Tổng đơn hàng</Text>
                                 <Text style={G.summaryValue}>{allOrders.length}</Text>
                             </View>
                         </View>
-                        <View style={G.summaryDivider} />
-                        <View style={G.summaryItem}>
+                        <View style={[G.summaryDivider, !isDesktop && G.summaryDividerMobile]} />
+                        <View style={[G.summaryItem, !isDesktop && G.summaryItemMobile]}>
                             <Ionicons name="people-outline" size={18} color="#7C3AED" />
                             <View>
                                 <Text style={G.summaryLabel}>Khách hàng</Text>
@@ -222,7 +221,7 @@ export default function RegionReportScreen() {
 
                     {/* Region cards */}
                     <Text style={G.sectionTitle}>Phân bổ theo khu vực</Text>
-                    <View style={G.regionCards}>
+                    <View style={[G.regionCards, isDesktop && G.regionCardsDesktop]}>
                         {REGIONS.map(r => (
                             <RegionCard key={r} region={r} data={regionData[r] || { revenue: 0, orders: 0 }}
                                 total={totalRevenue} isSelected={selected === r} onSelect={setSelected} />
@@ -239,20 +238,20 @@ export default function RegionReportScreen() {
                                 </TouchableOpacity>
                             </View>
                             {/* Stats */}
-                            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-                                <View style={G.detailStat}>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                                <View style={[G.detailStat, !isDesktop && G.detailStatMobile]}>
                                     <Text style={G.detailStatLabel}>Doanh thu</Text>
                                     <Text style={G.detailStatValue}>{fmt(detailData.revenue)}</Text>
                                 </View>
-                                <View style={G.detailStat}>
+                                <View style={[G.detailStat, !isDesktop && G.detailStatMobile]}>
                                     <Text style={G.detailStatLabel}>Đơn hàng</Text>
                                     <Text style={G.detailStatValue}>{detailData.orders}</Text>
                                 </View>
-                                <View style={G.detailStat}>
+                                <View style={[G.detailStat, !isDesktop && G.detailStatMobile]}>
                                     <Text style={G.detailStatLabel}>Người bán</Text>
                                     <Text style={G.detailStatValue}>{detailData.users?.length || 0}</Text>
                                 </View>
-                                <View style={G.detailStat}>
+                                <View style={[G.detailStat, !isDesktop && G.detailStatMobile]}>
                                     <Text style={G.detailStatLabel}>Khách hàng</Text>
                                     <Text style={[G.detailStatValue, { color: '#7C3AED' }]}>{detailData.customerCount || 0}</Text>
                                 </View>
@@ -329,19 +328,26 @@ export default function RegionReportScreen() {
 }
 
 const G = StyleSheet.create({
-    scroll: { padding: Platform.OS === 'web' && width >= 768 ? 32 : 16, paddingTop: Platform.OS === 'web' && width >= 768 ? 24 : 16 },
-    pageTitle: { fontSize: Platform.OS === 'web' && width >= 768 ? 26 : 22, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5, marginBottom: 20 },
+    scroll: { padding: 16, paddingTop: 16 },
+    scrollDesktop: { padding: 32, paddingTop: 24 },
+    pageTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5, marginBottom: 20 },
+    pageTitleDesktop: { fontSize: 26 },
     summaryBar: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
     summaryItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
     summaryDivider: { width: 1, backgroundColor: '#F1F5F9', marginHorizontal: 8 },
+    summaryBarMobile: { flexDirection: 'column', gap: 12 },
+    summaryItemMobile: { flex: 0 },
+    summaryDividerMobile: { width: '100%', height: 1, marginHorizontal: 0 },
     summaryLabel: { fontSize: 11, color: '#94A3B8' },
     summaryValue: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
     sectionTitle: { fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 12 },
-    regionCards: { flexDirection: Platform.OS === 'web' && width >= 768 ? 'row' : 'column', gap: 12, marginBottom: 16 },
+    regionCards: { flexDirection: 'column', gap: 12, marginBottom: 16 },
+    regionCardsDesktop: { flexDirection: 'row' },
     detailCard: { backgroundColor: '#fff', borderRadius: 14, padding: 20, marginBottom: 14, borderWidth: 1, borderColor: '#BFDBFE', borderLeftWidth: 4, borderLeftColor: '#2563EB', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
     card: { backgroundColor: '#fff', borderRadius: 14, padding: 20, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
     cardTitle: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
     detailStat: { flex: 1, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, alignItems: 'center' },
+    detailStatMobile: { flexBasis: '45%' }, // 2×2 thay vì 4 ô trên 1 hàng
     detailStatLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 },
     detailStatValue: { fontSize: 18, fontWeight: '900', color: '#0F172A' },
 });

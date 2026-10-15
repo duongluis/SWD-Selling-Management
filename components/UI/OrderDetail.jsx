@@ -3,7 +3,8 @@
 
 import { showAlert } from '@/components/Main/showAlert';
 import { createNotification, getSupportRoomId, sendStatusUpdateMessage } from '@/components/Utils/chatService';
-import { buildAdminShareRecord, computeOrderCommission } from '@/components/Utils/commissionCalc';
+import { buildAdminShareRecord, claimReferralForOrder, computeOrderCommission } from '@/components/Utils/commissionCalc';
+import { getDropdownPosition, MENU_ITEM_HEIGHT } from '@/components/Utils/dropdownPosition';
 import { fmtCurrency } from '@/components/Utils/formatters';
 import { linesTotal, productItems, productTotal } from '@/components/Utils/orderItems';
 import { isAdmin as checkAdmin } from '@/components/Utils/roleHelper';
@@ -17,7 +18,7 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator, Dimensions, Modal, Platform, ScrollView, StyleSheet,
+    ActivityIndicator, Modal, Platform, ScrollView, StyleSheet,
     Text, TouchableOpacity, View,
 } from 'react-native';
 import banksData from '../../config/banks.json';
@@ -498,8 +499,8 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
     const openMenu = () => {
         if (!canChangeStatus || !chipRef.current) return;
         chipRef.current.measure((_fx, _fy, width, height, pageX, pageY) => {
-            const sw = Dimensions.get('window').width;
-            setMenuPos({ top: pageY + height + 4, right: sw - pageX - width });
+            const optionCount = getStatusOptions(localOrder.orderType).length;
+            setMenuPos(getDropdownPosition({ pageX, pageY, width, height }, optionCount * MENU_ITEM_HEIGHT));
             setMenuOpen(true);
         });
     };
@@ -700,6 +701,16 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         showAlert('Lỗi ghi hoa hồng', `Đơn #${localOrder.id}: ${e.message}`);
                     }
 
+                    // Hoa hồng giới thiệu: đơn thanh toán đầu tiên của khách "Được giới thiệu"
+                    // → ghi dòng `{mãđơn}-ref` theo % (xem claimReferralForOrder). Đơn bị hủy
+                    // không qua đây nên quyền giới thiệu chuyển sang đơn thanh toán sau.
+                    try {
+                        await claimReferralForOrder({ ...localOrder, status: newStatus, paymentDate });
+                    } catch (e) {
+                        console.error(`Ghi hoa hồng giới thiệu cho đơn #${localOrder.id} thất bại:`, e);
+                        showAlert('Lỗi ghi hoa hồng giới thiệu', `Đơn #${localOrder.id}: ${e.message}`);
+                    }
+
                     // Cộng doanh thu vào users/{email}.revenueTotal cho người bán và advisor
                     // cấp trên. Bảng "Top nhân viên" ở màn Báo cáo đọc đúng trường này —
                     // trước đây không nơi nào gọi nên bảng đó luôn rỗng.
@@ -860,7 +871,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                         options={getStatusOptions(localOrder.orderType)}
                         onChange={handleStatusChange}
                         onClose={() => setMenuOpen(false)}
-                        style={{ top: menuPos.top, right: menuPos.right }}
+                        style={menuPos}
                     />
                 </Modal>
             )}
@@ -989,7 +1000,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                             <Ionicons name="qr-code-outline" size={18} color="#2563EB" />
                             <Text style={DP.qrTitle}>Thanh toán chuyển khoản</Text>
                         </View>
-                        <View style={DP.qrBody}>
+                        <View style={[DP.qrBody, isDesktop && DP.qrBodyDesktop]}>
                             <View style={DP.qrCode}>
                                 {Platform.OS === 'web' && QRCodeWeb ? (
                                     <QRCodeWeb value={qrString} size={140} />
@@ -1040,7 +1051,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
 }
 
 const DP = StyleSheet.create({
-    root: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', borderRadius: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
+    root: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', borderRadius: 12, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
     header: { padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 6 },
     headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     date: { fontSize: 11, color: '#94A3B8' },
@@ -1096,7 +1107,8 @@ const DP = StyleSheet.create({
     qrSection: { marginHorizontal: 16, marginTop: 8, marginBottom: 8, backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' },
     qrHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
     qrTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-    qrBody: { flexDirection: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 'row' : 'column', alignItems: 'center', gap: 16 },
+    qrBody: { flexDirection: 'column', alignItems: 'center', gap: 16 },
+    qrBodyDesktop: { flexDirection: 'row' },
     qrCode: { backgroundColor: '#fff', padding: 8, borderRadius: 12, alignSelf: 'center' },
     bankInfo: { flex: 1, gap: 4 },
     bankName: { fontSize: 14, fontWeight: '700', color: '#1E3A5F' },

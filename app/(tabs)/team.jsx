@@ -8,8 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
     ActivityIndicator,
-    Dimensions,
-    Platform,
+    Modal,
+    Pressable,
     RefreshControl,
     ScrollView, StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
@@ -110,7 +110,7 @@ export default function TeamView() {
                 <Text style={styles.headerSub}>{members.length} thành viên trực thuộc</Text>
             </View>
 
-            <View style={styles.contentRow}>
+            <View style={[styles.contentRow, isDesktop && styles.contentRowDesktop]}>
                 <View style={styles.listContainer}>
                     <ScrollView
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -155,12 +155,20 @@ export default function TeamView() {
                 )}
             </View>
 
+            {/* Mobile: hiện UserDetail dạng bottom sheet (giống màn Người dùng) */}
             {!isDesktop && selectedMember && (
-                <UserDetail
-                    user={selectedMember}
-                    onClose={() => setSelectedMember(null)}
-                    onUpdated={(updated) => setSelectedMember(updated)}
-                />
+                <Modal visible={!!selectedMember} animationType="slide" transparent onRequestClose={() => setSelectedMember(null)}>
+                    <View style={styles.modalBackdrop}>
+                        <Pressable style={{ flex: 1 }} onPress={() => setSelectedMember(null)} />
+                        <View style={[styles.modalContent, { paddingBottom: insets.bottom }]}>
+                            <UserDetail
+                                user={selectedMember}
+                                onClose={() => setSelectedMember(null)}
+                                onUpdated={(updated) => setSelectedMember(updated)}
+                            />
+                        </View>
+                    </View>
+                </Modal>
             )}
         </View>
     );
@@ -168,10 +176,13 @@ export default function TeamView() {
 
 const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    modalContent: { height: '80%', backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
     header: { paddingHorizontal: 20, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     headerTitle: { fontSize: 24, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
     headerSub: { fontSize: 14, color: '#64748B', marginTop: 4 },
-    contentRow: { flex: 1, flexDirection: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 'row' : 'column' },
+    contentRow: { flex: 1, flexDirection: 'column' },
+    contentRowDesktop: { flexDirection: 'row' },
     listContainer: { flex: 1, minWidth: 0 },
     scrollContent: { paddingHorizontal: 16, paddingTop: 12 },
     section: { marginBottom: 24 },

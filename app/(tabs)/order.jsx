@@ -485,7 +485,6 @@ export default function OrderScreen() {
     }
   };
 
-  console.log('userDetail.advisor:', userDetail?.advisor, '| showCostField:', showCostField);
   return (
     <TabScreenLayout>
       <ScreenHeader

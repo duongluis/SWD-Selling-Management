@@ -10,7 +10,6 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
     ActivityIndicator,
-    Dimensions,
     Platform,
     StyleSheet, Text,
     TextInput, TouchableOpacity, View
@@ -120,12 +119,12 @@ export default function ChangePassword() {
 
 const S = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC', justifyContent: 'center' },
-    backBtn: { position: 'absolute', top: Platform.OS == 'web' && Dimensions.get('window').width ? 20 : 50, left: 20, zIndex: 10 },
+    backBtn: { position: 'absolute', top: Platform.OS === 'web' ? 20 : 50, left: 20, zIndex: 10 },
     icon: { alignItems: 'center', marginBottom: 12 },
     iconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#BFDBFE' },
     title: { textAlign: 'center', fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 8 },
     subtitle: { fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 28, paddingHorizontal: 32 },
-    card: { width: 360, alignSelf: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.06, shadowRadius: 14, elevation: 3 },
+    card: { width: '92%', maxWidth: 360, alignSelf: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.06, shadowRadius: 14, elevation: 3 },
     formGroup: { marginBottom: 16 },
     label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 7 },
     inputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, backgroundColor: '#F8FAFC' },

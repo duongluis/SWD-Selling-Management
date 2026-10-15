@@ -11,9 +11,7 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    Dimensions,
     Linking,
-    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -403,7 +401,7 @@ const S = StyleSheet.create({
         borderLeftWidth: 0.5,
         borderLeftColor: '#E2E8F0',
         flexDirection: 'column',
-        borderRadius: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 12 : 0,
+        borderRadius: 12,
         overflow: 'hidden',
         shadowColor: '#0F172A',
         shadowOpacity: 0.08,

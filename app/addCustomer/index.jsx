@@ -3,6 +3,8 @@
 import HelpButton from '@/components/Help/HelpButton';
 import BgWatermark from '@/components/Main/BgWatermark';
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import ReferralSection, { EMPTY_REFERRAL_FORM, findBank } from '@/components/UI/ReferralSection';
+import { buildReferralData, canAdjustCommissionAccount, validateReferralForm } from '@/components/Utils/commissionCalc';
 import { isValidPhone, normalizePhone } from '@/components/Utils/formatters';
 import { getRole } from '@/components/Utils/roleHelper';
 import Colors from '@/constant/Colors';
@@ -104,6 +106,19 @@ export default function AddCustomer() {
   const [showAssistedPicker, setShowAssistedPicker] = useState(false);
   const [assistedSearch, setAssistedSearch] = useState('');
 
+  // "Được giới thiệu" — người ngoài (không có tài khoản) giới thiệu khách cho admin.
+  // Chỉ admin@swd.vn thấy; không áp dụng cho khách chuyển từ tư vấn của CTV (đã có người giới thiệu).
+  // Bật nút → ẩn "Người được hỗ trợ", khách thuộc admin@swd.vn (xem handleSave).
+  const canReferral = canAdjustCommissionAccount(userDetail?.email) && !fromConsult;
+  const [referralOn, setReferralOn] = useState(false);
+  const [referralForm, setReferralForm] = useState(EMPTY_REFERRAL_FORM);
+  const useReferral = canReferral && referralOn;
+  const handleReferralToggle = (on) => {
+    setReferralOn(on);
+    if (on) { setSelectedAssisted(null); setShowAssistedPicker(false); }
+  };
+  const handleReferralChange = (field, value) => setReferralForm(prev => ({ ...prev, [field]: value }));
+
   // ── Fetch danh sách Đối tác/Đại lý (chỉ admin — dùng cho "Người được hỗ trợ") ──
   useEffect(() => {
     if (role !== 'admin') return;
@@ -202,6 +217,11 @@ export default function AddCustomer() {
       showAlert('Số điện thoại không hợp lệ', 'Số điện thoại phải có từ 9 đến 11 chữ số.');
       return;
     }
+    const referralBank = useReferral ? findBank(referralForm.bankId) : null;
+    if (useReferral) {
+      const err = validateReferralForm(referralForm, referralBank);
+      if (err) { showAlert('Thông tin người giới thiệu', err); return; }
+    }
     setSubmitting(true);
     try {
       // Kiểm tra trùng phải nằm TRONG try: trước đây `return` sớm ở đây bỏ qua luôn
@@ -214,7 +234,7 @@ export default function AddCustomer() {
       let effectiveCreatorEmail = consultCreatedBy || userDetail?.email;
       let hierarchyEmail = userDetail.email;
       let hierarchyUserDetail = userDetail;
-      if (role === 'admin' && selectedAssisted?.email) {
+      if (role === 'admin' && selectedAssisted?.email && !useReferral) {
         effectiveCreatorEmail = selectedAssisted.email;
         hierarchyEmail = selectedAssisted.email;
         hierarchyUserDetail = selectedAssisted;
@@ -234,6 +254,8 @@ export default function AddCustomer() {
         rootAdvisor: rootAdvisor,
         level: level,
         createdBy: effectiveCreatorEmail,
+        // Khách được giới thiệu: đơn "Đã thanh toán" đầu tiên có hoa hồng theo % (commissionCalc)
+        ...(useReferral ? { referral: buildReferralData(referralForm, referralBank) } : {}),
       };
 
       await setDoc(doc(db, 'customers', newCustomer.phone), newCustomer, { merge: true });
@@ -277,15 +299,25 @@ export default function AddCustomer() {
           {/* LEFT */}
           <View style={W.col}>
 
+            {/* Được giới thiệu — nằm trên Thông tin cá nhân */}
+            {canReferral && (
+              <ReferralSection
+                enabled={referralOn}
+                onToggle={handleReferralToggle}
+                form={referralForm}
+                onChange={handleReferralChange}
+              />
+            )}
+
             {/* Thông tin cá nhân */}
             <View style={W.card}>
               <View style={W.cardHeader}>
                 <Ionicons name="person-circle-outline" size={16} color="#2563EB" />
-                <Text style={W.cardTitle}>Thông tin cá nhân</Text>
+                <Text style={W.cardTitle}>Thông tin khách hàng</Text>
                 <Text style={W.cardRequired}>* Bắt buộc</Text>
               </View>
 
-              {role === 'admin' && (
+              {role === 'admin' && !useReferral && (
                 <View style={[W.inputGroup, { zIndex: showAssistedPicker ? 100 : 1 }]}>
                   <Text style={W.label}>Người được hỗ trợ (Đối tác / Đại lý)</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -486,12 +518,22 @@ export default function AddCustomer() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled">
 
+            {/* Được giới thiệu — nằm trên Thông tin cá nhân */}
+            {canReferral && (
+              <ReferralSection
+                enabled={referralOn}
+                onToggle={handleReferralToggle}
+                form={referralForm}
+                onChange={handleReferralChange}
+              />
+            )}
+
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="person-circle-outline" size={20} color={Colors.Primary} />
                 <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
               </View>
-              {role === 'admin' && (
+              {role === 'admin' && !useReferral && (
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Người được hỗ trợ </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

@@ -2,6 +2,7 @@ import BgWatermark from '@/components/Main/BgWatermark';
 import { showAlert } from '@/components/Main/showAlert';
 import { showSuccess } from '@/components/Main/showSuccess';
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatThousand, parseThousand } from '@/components/Utils/formatNumber';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,8 +10,7 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, Dimensions, FlatList, Modal,
-    Platform,
+    ActivityIndicator, FlatList, Modal,
     ScrollView, StyleSheet, Text, TextInput,
     TouchableOpacity, View
 } from 'react-native';
@@ -551,6 +551,9 @@ const F = StyleSheet.create({
 
 // ── Product Detail Panel ──────────────────────────────────────
 function ProductDetail({ product, priceFields, isAdmin, onClose, onEdit, onDelete }) {
+    const { isDesktop } = useLayout();
+    const S = isDesktop ? S_DESKTOP : S_MOBILE;
+    const D = isDesktop ? D_DESKTOP : D_MOBILE;
     const specs = [
         { label: 'Nguồn nước xử lý', value: product.water_source },
         { label: 'Tiêu chuẩn nước', value: product.water_certificate },
@@ -791,6 +794,9 @@ function ServiceCategoryGrid({ services, isAdmin, onEdit, onDelete }) {
 // ── Main Screen ───────────────────────────────────────────────
 export default function InformationScreen() {
     const router = useRouter();
+    const { isDesktop } = useLayout();
+    const insets = useSafeAreaInsets();
+    const S = isDesktop ? S_DESKTOP : S_MOBILE;
     const { userDetail } = useContext(UserDetailContext);
     const role = getRole(userDetail);
     const isAdmin = role === 'admin';
@@ -901,7 +907,7 @@ export default function InformationScreen() {
                 editData={editingService}
             />
 
-            <View style={S.container}>
+            <View style={[S.container, { paddingTop: isDesktop ? 0 : insets.top }]}>
                 {/* Header */}
                 <View style={S.header}>
                     {/* <TouchableOpacity onPress={() => router.replace('/(tabs)/home')} style={S.backBtn}>
@@ -1036,11 +1042,11 @@ export default function InformationScreen() {
 }
 
 // ── Styles ────────────────────────────────────────────────────
-const IS_WEB = Platform.OS === 'web' && Dimensions.get('window').width >= 768;
-
-const S = StyleSheet.create({
+// IS_WEB: bản desktop của style; component chọn S_DESKTOP/S_MOBILE theo useLayout()
+// để tự cập nhật khi xoay máy / đổi kích thước cửa sổ
+const makeS = (IS_WEB) => StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },
-    container: { flex: 1, backgroundColor: 'transparent', paddingTop: Platform.OS === 'web' ? 0 : 44 },
+    container: { flex: 1, backgroundColor: 'transparent' },
     header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: IS_WEB ? 32 : 16, paddingVertical: IS_WEB ? 20 : 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
     headerTitle: { fontSize: IS_WEB ? 22 : 18, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
@@ -1095,7 +1101,7 @@ const SC = StyleSheet.create({
     deleteBtnText: { fontSize: 12, fontWeight: '700', color: '#EF4444' },
 });
 
-const D = StyleSheet.create({
+const makeD = (IS_WEB) => StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F8FAFC' },
     content: { paddingHorizontal: IS_WEB ? 32 : 16, paddingTop: 16 },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: IS_WEB ? 32 : 16, paddingTop: 16, paddingBottom: 8 },
@@ -1126,3 +1132,8 @@ const D = StyleSheet.create({
     featureCheck: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#D1FAE5', alignItems: 'center', justifyContent: 'center' },
     featureText: { fontSize: 12, color: '#059669', fontWeight: '600' },
 });
+
+const S_MOBILE = makeS(false);
+const S_DESKTOP = makeS(true);
+const D_MOBILE = makeD(false);
+const D_DESKTOP = makeD(true);

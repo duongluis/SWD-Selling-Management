@@ -4,7 +4,7 @@
 // trong collection 'commissions' để useScreenData đọc như các màn khác).
 
 import { db } from '@/config/firebaseConfig';
-import { collection, doc, getDoc, getDocs, query, runTransaction, where, writeBatch } from 'firebase/firestore';
+import { collection, deleteField, doc, getDoc, getDocs, query, runTransaction, where, writeBatch } from 'firebase/firestore';
 import { productItems } from './orderItems';
 
 export const normalizePhone = (p) => String(p || '').replace(/\D/g, '');
@@ -355,4 +355,148 @@ export async function convertLegacySplit(records = []) {
         await batch.commit();
     }
     return targets.length;
+}
+
+// ── Hoa hồng giới thiệu (người ngoài không có tài khoản) ──────
+// admin@swd.vn bật "Được giới thiệu" khi tạo khách → lưu `referral` trong customers/{SĐT}:
+//   { percent, name, phone, bankId, bankName, accountNo, accountOwner, status: 'active' | 'used', ... }
+// Đơn "Đã thanh toán" ĐẦU TIÊN của khách dùng quyền giới thiệu (active → used), kể cả khi
+// hoa hồng = 0 vì công ty thanh toán. Đơn bị hủy không chạm tới referral nên quyền
+// chuyển sang đơn thanh toán sau. Các đơn sau đó tính hoa hồng như bình thường.
+export const REFERRAL_DOC_SUFFIX = '-ref';
+
+export const REFERRAL_ACTIVE = 'active';
+export const REFERRAL_USED = 'used';
+
+/**
+ * Kiểm tra dữ liệu form giới thiệu (tất cả bắt buộc). Trả về thông báo lỗi hoặc null.
+ * `bank` là phần tử của config/banks.json (có minLen/maxLen số TK).
+ */
+export function validateReferralForm(f, bank) {
+    const percent = parseFloat(String(f.percent || '').replace(',', '.'));
+    if (!(percent > 0 && percent <= 100)) return 'Phần trăm hoa hồng phải lớn hơn 0 và không quá 100.';
+    if (!f.name?.trim()) return 'Vui lòng nhập tên người giới thiệu.';
+    const phone = normalizePhone(f.phone);
+    if (phone.length < 9 || phone.length > 11) return 'SĐT người giới thiệu phải có từ 9 đến 11 chữ số.';
+    if (!bank) return 'Vui lòng chọn ngân hàng của người giới thiệu.';
+    const acc = normalizePhone(f.accountNo);
+    if (acc.length < bank.minLen || acc.length > bank.maxLen) {
+        return `Số TK ${bank.name} phải có ${bank.minLen === bank.maxLen ? bank.minLen : `${bank.minLen}–${bank.maxLen}`} chữ số.`;
+    }
+    if (!f.accountOwner?.trim()) return 'Vui lòng nhập tên chủ tài khoản.';
+    return null;
+}
+
+/** Chuẩn hoá form → object `referral` lưu vào customers (giữ nguyên status/createdAt nếu có). */
+export function buildReferralData(f, bank, prev = null) {
+    return {
+        percent: parseFloat(String(f.percent).replace(',', '.')),
+        name: f.name.trim(),
+        phone: normalizePhone(f.phone),
+        bankId: bank.id,
+        bankName: bank.name,
+        accountNo: normalizePhone(f.accountNo),
+        accountOwner: f.accountOwner.trim().toUpperCase(),
+        status: prev?.status || REFERRAL_ACTIVE,
+        createdAt: prev?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
+}
+
+/**
+ * Màn Sửa khách hàng: lưu thông tin khách + sửa/tắt giới thiệu (nextReferral = null → tắt).
+ * Transaction kiểm tra lại ngay lúc ghi: nếu đơn đầu tiên vừa thanh toán (status đã 'used')
+ * thì báo lỗi thay vì ghi đè trạng thái về 'active'.
+ */
+export async function updateCustomerWithReferral(customerId, payload, nextReferral) {
+    const ref = doc(db, 'customers', customerId);
+    return runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        const cur = snap.exists() ? snap.data().referral : null;
+        if (cur && cur.status !== REFERRAL_ACTIVE) {
+            throw new Error(`Hoa hồng giới thiệu đã dùng cho đơn #${cur.usedOrderId || '—'}, không sửa được nữa.`);
+        }
+        tx.update(ref, { ...payload, referral: nextReferral || deleteField() });
+    });
+}
+
+/**
+ * Đơn vừa "Đã thanh toán": nếu khách còn quyền giới thiệu thì đánh dấu đã dùng cho đơn này
+ * và ghi dòng hoa hồng giới thiệu `{orderId}-ref` — cả hai trong 1 transaction để 2 đơn
+ * thanh toán sát nhau không cùng nhận, và không có chuyện đã "dùng" mà thiếu dòng hoa hồng.
+ * Công ty thanh toán → hoa hồng 0: vẫn tính là đã dùng (referral.usedOrderId lưu vết) nhưng
+ * không ghi dòng 0đ — màn Hoa hồng vốn ẩn dòng 0đ nên dòng đó không có tác dụng.
+ * Trả về bản ghi hoa hồng (có thể commission = 0) hoặc null nếu khách không có / đã dùng.
+ */
+export async function claimReferralForOrder(order) {
+    const customerId = order.customerId || normalizePhone(order.phone);
+    if (!customerId) return null;
+    const customerRef = doc(db, 'customers', customerId);
+    return runTransaction(db, async (tx) => {
+        const snap = await tx.get(customerRef);
+        const referral = snap.exists() ? snap.data().referral : null;
+        if (referral?.status !== REFERRAL_ACTIVE) return null;
+        const record = buildReferralCommissionRecord(order, referral);
+        tx.update(customerRef, {
+            'referral.status': REFERRAL_USED,
+            'referral.usedOrderId': order.id,
+            'referral.usedAt': record.paidAt,
+        });
+        if (record.commission > 0) {
+            tx.set(doc(db, 'commissions', `${order.id}${REFERRAL_DOC_SUFFIX}`), record);
+        }
+        return record;
+    });
+}
+
+/**
+ * Bản ghi hoa hồng giới thiệu cho đơn — ghi vào docId `{orderId}-ref`, tách khỏi bản ghi
+ * hoa hồng thường của đơn. Hoa hồng = % × tiền sản phẩm (không gồm dịch vụ), chỉ khi
+ * khách thanh toán (giống quy tắc hoa hồng hiện tại); công ty thanh toán → 0.
+ * sellerEmail = null: người nhận không có tài khoản, chỉ admin/giám đốc thấy dòng này.
+ */
+export function buildReferralCommissionRecord(order, referral) {
+    const items = productItems(order);
+    const totalValue = items.reduce(
+        (s, p) => s + parseFloat(p.price || 0) * parseFloat(p.qty || 1), 0
+    );
+    const percent = parseFloat(referral.percent) || 0;
+    const commission = order.paymentMethod === 'customer'
+        ? Math.round(totalValue * percent / 100)
+        : 0;
+    return {
+        orderId: order.id,
+        id: order.id,
+        createdBy: order.createdBy || null,
+        sellerEmail: null,
+        rootAdvisor: order.rootAdvisor || order.createdBy || null,
+        customer: order.customer || '',
+        phone: order.phone || '',
+        orderType: order.orderType || null,
+        paymentMethod: order.paymentMethod || null,
+        createdAt: order.createdAt || null,
+        paidAt: new Date().toISOString(),
+        releaseAt: null,
+        totalValue,
+        basePriceField: null,
+        missingBasePrice: false,
+        commission,
+        commissionTotal: commission,
+        commissionStatus: 'pending',
+        collaboratorEmail: null,
+        bonusAmount: 0,
+        bonusStatus: 'paid',
+        adminOnly: false,
+        creatorRole: 'admin',
+        splitEligible: false,
+        splitScheme: null,
+        referral: {
+            percent,
+            name: referral.name || '',
+            phone: referral.phone || '',
+            bankName: referral.bankName || '',
+            accountNo: referral.accountNo || '',
+            accountOwner: referral.accountOwner || '',
+        },
+    };
 }

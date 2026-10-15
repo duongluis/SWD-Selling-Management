@@ -10,10 +10,9 @@ import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    Dimensions,
-    Platform,
     ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
+import { useLayout } from '../Main/TabScreenLayout';
 import { getRole, getVatRate } from '../Utils/roleHelper';
 
 const AVATAR_COLORS = ['#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2'];
@@ -225,6 +224,7 @@ const CL = StyleSheet.create({
 
 export default function UserDetail({ user, onClose, onUpdated }) {
     const router = useRouter();
+    const { isDesktop } = useLayout();
     const { userDetail } = useContext(UserDetailContext);
     const isAdminUser = getRole(userDetail) === 'admin';
     const [local, setLocal] = useState(null);
@@ -313,7 +313,8 @@ export default function UserDetail({ user, onClose, onUpdated }) {
         : [];
 
     return (
-        <View style={S.panel}>
+        // Mobile: panel nằm trong bottom sheet → lấp đầy khung chứa thay vì rộng cố định 360
+        <View style={[S.panel, !isDesktop && S.panelMobile]}>
             {/* Header */}
             <View style={S.header}>
                 <View style={S.headerTop}>
@@ -505,7 +506,8 @@ const NT = StyleSheet.create({
 });
 
 const S = StyleSheet.create({
-    panel: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', flexDirection: 'column', borderRadius: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
+    panel: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', flexDirection: 'column', borderRadius: 12, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
+    panelMobile: { width: '100%', flex: 1, borderRadius: 0, borderLeftWidth: 0, elevation: 0, shadowOpacity: 0 },
     header: { padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 10 },
     headerTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
     closeBtn: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

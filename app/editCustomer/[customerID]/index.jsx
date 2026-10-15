@@ -4,13 +4,16 @@ import { showAlert } from '@/components/Main/showAlert';
 import { showSuccess } from '@/components/Main/showSuccess';
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import HelpButton from '@/components/Help/HelpButton';
+import ReferralSection, { findBank, referralToForm } from '@/components/UI/ReferralSection';
+import { buildReferralData, canAdjustCommissionAccount, REFERRAL_ACTIVE, updateCustomerWithReferral, validateReferralForm } from '@/components/Utils/commissionCalc';
 import { isValidPhone, normalizePhone } from '@/components/Utils/formatters';
 import { db } from '@/config/firebaseConfig';
 import Colors from '@/constant/Colors';
+import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -31,6 +34,7 @@ export default function EditCustomerScreen() {
     const params = useLocalSearchParams();
     const { isDesktop } = useLayout();
     const docId = params.customerId || params.docId || '';
+    const { userDetail } = useContext(UserDetailContext);
 
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -41,6 +45,15 @@ export default function EditCustomerScreen() {
         address: '',
         note: '',
     });
+
+    // "Được giới thiệu" — chỉ admin@swd.vn, chỉ với khách đã bật từ lúc tạo. Sửa/tắt được khi
+    // quyền giới thiệu còn 'active'; đã dùng cho đơn đầu tiên thì chỉ xem.
+    const [savedReferral, setSavedReferral] = useState(null);
+    const [referralOn, setReferralOn] = useState(false);
+    const [referralForm, setReferralForm] = useState(referralToForm(null));
+    const showReferral = canAdjustCommissionAccount(userDetail?.email) && !!savedReferral;
+    const referralEditable = showReferral && savedReferral.status === REFERRAL_ACTIVE;
+    const handleReferralChange = (field, value) => setReferralForm(prev => ({ ...prev, [field]: value }));
 
     // ── Fetch data ──────────────────────────────────────────────
     useEffect(() => {
@@ -60,6 +73,9 @@ export default function EditCustomerScreen() {
                     address: d.address || '',
                     note: d.note || '',
                 });
+                setSavedReferral(d.referral || null);
+                setReferralOn(!!d.referral);
+                setReferralForm(referralToForm(d.referral));
             })
             .catch(e => { showAlert('Lỗi', e.message); router.replace('(tabs)/customer'); })
             .finally(() => setLoading(false));
@@ -81,6 +97,11 @@ export default function EditCustomerScreen() {
             showAlert('Số điện thoại không hợp lệ', 'Số điện thoại phải có từ 9 đến 11 chữ số.');
             return;
         }
+        const referralBank = referralEditable && referralOn ? findBank(referralForm.bankId) : null;
+        if (referralEditable && referralOn) {
+            const err = validateReferralForm(referralForm, referralBank);
+            if (err) { showAlert('Thông tin người giới thiệu', err); return; }
+        }
         setSubmitting(true);
         try {
             const payload = {
@@ -91,7 +112,15 @@ export default function EditCustomerScreen() {
                 note: form.note?.trim() || '',
                 updatedAt: new Date().toISOString(),
             };
-            await updateDoc(doc(db, 'customers', docId), payload);
+            if (referralEditable) {
+                // Tắt nút → xoá referral; transaction chặn ghi đè nếu đơn đầu vừa thanh toán
+                await updateCustomerWithReferral(
+                    docId, payload,
+                    referralOn ? buildReferralData(referralForm, referralBank, savedReferral) : null
+                );
+            } else {
+                await updateDoc(doc(db, 'customers', docId), payload);
+            }
             showSuccess('Thành công', 'Đã cập nhật khách hàng!', () => router.replace('(tabs)/customer'));
         } catch (e) {
             showAlert('Lỗi', e.message);
@@ -132,6 +161,17 @@ export default function EditCustomerScreen() {
                 <View style={W.grid}>
                     {/* LEFT */}
                     <View style={W.col}>
+
+                        {/* Được giới thiệu — nằm trên Thông tin cá nhân */}
+                        {showReferral && (
+                            <ReferralSection
+                                enabled={referralOn}
+                                onToggle={setReferralOn}
+                                form={referralForm}
+                                onChange={handleReferralChange}
+                                usedOrderId={referralEditable ? null : (savedReferral.usedOrderId || '—')}
+                            />
+                        )}
 
                         {/* Thông tin cá nhân */}
                         <View style={W.card}>
@@ -301,11 +341,23 @@ export default function EditCustomerScreen() {
                 <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled">
 
+                        {/* Được giới thiệu — nằm trên Thông tin cá nhân */}
+                        {showReferral && (
+                            <ReferralSection
+                                enabled={referralOn}
+                                onToggle={setReferralOn}
+                                form={referralForm}
+                                onChange={handleReferralChange}
+                                usedOrderId={referralEditable ? null : (savedReferral.usedOrderId || '—')}
+                            />
+                        )}
+
                         <View style={styles.section}>
                             <View style={styles.sectionHeader}>
                                 <Ionicons name="person-circle-outline" size={20} color={Colors.Primary} />
                                 <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
                             </View>
+
                             {[
                                 { label: 'Họ và tên', field: 'name', placeholder: 'Nguyễn Văn A', required: true },
                                 { label: 'Số điện thoại', field: 'phone', placeholder: '0901 234 567', required: true, keyboard: 'phone-pad' },

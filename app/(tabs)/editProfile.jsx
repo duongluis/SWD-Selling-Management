@@ -10,7 +10,6 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Dimensions,
     KeyboardAvoidingView, Platform,
     ScrollView, StyleSheet, Switch, Text,
     TextInput, TouchableOpacity,
@@ -218,13 +217,13 @@ export default function EditProfileScreen() {
             </View>
 
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={S.scroll}>
+                <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={[S.scroll, isDesktop && SD.scroll]}>
 
                     {/* Layout 2 cột trên web */}
-                    <View style={S.body}>
+                    <View style={[S.body, isDesktop && SD.body]}>
 
                         {/* ── Cột trái: Avatar card ── */}
-                        <View style={S.leftCol}>
+                        <View style={[S.leftCol, isDesktop && SD.leftCol]}>
                             <View style={S.avatarCard}>
                                 <View style={[S.avatar, { backgroundColor: AVATAR_COLOR }]}>
                                     <Text style={S.avatarText}>{getInitials(userDetail?.name)}</Text>
@@ -390,7 +389,7 @@ export default function EditProfileScreen() {
                                         </TouchableOpacity>
                                     </View>
                                 </>) : (
-                                    <View style={S.infoGrid}>
+                                    <View style={[S.infoGrid, isDesktop && SD.row]}>
                                         <View style={S.infoCol}>
                                             <InfoField label="Họ và tên" value={userDetail?.name} />
                                             <InfoField label="Email" value={userDetail?.email} />
@@ -428,7 +427,7 @@ export default function EditProfileScreen() {
                                     <View style={S.cardHeader}>
                                         <Text style={S.cardTitle}>Mã giới thiệu</Text>
                                     </View>
-                                    <View style={S.infoGrid}>
+                                    <View style={[S.infoGrid, isDesktop && SD.row]}>
                                         {userDetail?.referralCode && (
                                             <View style={S.infoCol}>
                                                 <InfoField label="Mã giới thiệu của bạn" value={userDetail.referralCode} />
@@ -444,7 +443,7 @@ export default function EditProfileScreen() {
                             )}
 
                             {/* Bảo mật + Thông báo — 2 cột */}
-                            <View style={S.twoCol}>
+                            <View style={[S.twoCol, isDesktop && SD.row]}>
                                 <View style={[S.card, { flex: 1 }]}>
                                     <View style={S.sectionIconHeader}>
                                         <View style={S.sectionIcon}><Ionicons name="shield-checkmark-outline" size={18} color="#2563EB" /></View>
@@ -486,9 +485,9 @@ const S = StyleSheet.create({
     headerTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: '#0F172A' },
     editBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
     editBtnText: { fontSize: 13, fontWeight: '600', color: '#2563EB' },
-    scroll: { padding: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 32 : 16 },
-    body: { flexDirection: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 'row' : 'column', gap: 20, alignItems: 'flex-start' },
-    leftCol: { width: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 260 : '100%', flexShrink: 0 },
+    scroll: { padding: 16 },
+    body: { flexDirection: 'column', gap: 20, alignItems: 'flex-start' },
+    leftCol: { width: '100%', flexShrink: 0 },
     rightCol: { flex: 1, minWidth: 0, gap: 14 },
     avatarCard: { backgroundColor: '#fff', borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
     avatar: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
@@ -506,7 +505,7 @@ const S = StyleSheet.create({
     cardTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
     inlineEditBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#EFF6FF' },
     inlineEditText: { fontSize: 12, fontWeight: '600', color: '#2563EB' },
-    infoGrid: { flexDirection: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 'row' : 'column', flexWrap: 'wrap', gap: 0 },
+    infoGrid: { flexDirection: 'column', flexWrap: 'wrap', gap: 0 },
     infoCol: { flex: 1, minWidth: 180 },
     cancelBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, borderRadius: 10, backgroundColor: '#F1F5F9' },
     cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
@@ -518,18 +517,26 @@ const S = StyleSheet.create({
     secRowTitle: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
     secRowSub: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
     secDivider: { height: 0.5, backgroundColor: '#F1F5F9' },
-    twoCol: { flexDirection: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 'row' : 'column', gap: 14 },
-    sysGrid: { flexDirection: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 'row' : 'column', gap: 16 },
+    twoCol: { flexDirection: 'column', gap: 14 },
+    sysGrid: { flexDirection: 'column', gap: 16 },
     sysItem: { flex: 1 },
     sysLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.08, textTransform: 'uppercase', marginBottom: 10 },
     sysSelect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 11, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10 },
     sysSelectText: { fontSize: 14, color: '#0F172A', fontWeight: '500' },
     sysTz: { fontSize: 14, color: '#0F172A', fontWeight: '500', paddingVertical: 11 },
-    dangerCard: { flexDirection: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 'row' : 'column', alignItems: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 'center' : 'flex-start', gap: 16, backgroundColor: '#fff', borderRadius: 16, padding: 20, borderWidth: 1.5, borderColor: '#FCA5A5' },
+    dangerCard: { flexDirection: 'column', alignItems: 'flex-start', gap: 16, backgroundColor: '#fff', borderRadius: 16, padding: 20, borderWidth: 1.5, borderColor: '#FCA5A5' },
     dangerTitle: { fontSize: 15, fontWeight: '700', color: '#DC2626' },
     dangerSub: { fontSize: 12, color: '#64748B', marginTop: 4, lineHeight: 18 },
     dangerBtn: { paddingHorizontal: 20, paddingVertical: 12, backgroundColor: '#EF4444', borderRadius: 10, flexShrink: 0 },
     dangerBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+});
+
+// Ghi đè cho desktop — áp theo useLayout() để tự cập nhật khi đổi kích thước cửa sổ
+const SD = StyleSheet.create({
+    scroll: { padding: 32 },
+    body: { flexDirection: 'row' },
+    leftCol: { width: 260 },
+    row: { flexDirection: 'row' },
 });
 
 const BK = StyleSheet.create({

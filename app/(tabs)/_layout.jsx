@@ -12,11 +12,12 @@ import { signOut } from 'firebase/auth';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
-  Dimensions,
+  Animated, BackHandler,
   Image, Platform, Pressable, ScrollView,
   StyleSheet, Text, TouchableOpacity,
   View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import auth, { db } from '../../config/firebaseConfig';
 
 // ── Help imports ──────────────────────────────────────────────
@@ -27,6 +28,7 @@ import HelpModal from '../../components/Help/helpModal';
 const HELP_SEEN_KEY = '@swd_help_tooltip_seen';
 const BANNER_IMAGE = require('../../assets/images/layout-img.png');
 const MOBILE_TOPBAR_HEIGHT = 52;
+const DRAWER_WIDTH = 240;
 
 
 function getInitials(name) {
@@ -69,12 +71,18 @@ const NAV_SECTIONS = [
   },
 ];
 
+// visible: cùng quy tắc với NAV_SECTIONS — CTV không được xem Khách hàng/Dịch vụ
+// nên thay bằng tab Giới thiệu khách
 const MOBILE_BOTTOM_TABS = [
-  { key: 'home', link: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home' },
-  { key: 'order', link: '(tabs)/order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt' },
-  { key: 'customer', link: '(tabs)/customer', label: 'KHÁCH', icon: 'people-outline', activeIcon: 'people' },
-  { key: 'service', link: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build' },
+  { key: 'home', link: '(tabs)/home', label: 'TRANG CHỦ', icon: 'home-outline', activeIcon: 'home', visible: () => true },
+  { key: 'order', link: '(tabs)/order', label: 'ĐƠN HÀNG', icon: 'receipt-outline', activeIcon: 'receipt', visible: () => true },
+  { key: 'customer', link: '(tabs)/customer', label: 'KHÁCH', icon: 'people-outline', activeIcon: 'people', visible: (r) => r !== 'ctv' },
+  { key: 'consult', link: '(tabs)/customerctv', label: 'GIỚI THIỆU', icon: 'person-add-outline', activeIcon: 'person-add', visible: (r) => r === 'ctv' },
+  { key: 'service', link: '(tabs)/service', label: 'DỊCH VỤ', icon: 'build-outline', activeIcon: 'build', visible: (r) => r !== 'ctv' },
 ];
+
+// Màn tab mà CTV không được vào (sidebar/tab bar đã ẩn, chặn thêm khi vào thẳng bằng URL)
+const CTV_BLOCKED_TABS = ['customer', 'service'];
 
 // ── useHelpGuide hook ─────────────────────────────────────────
 // Quản lý toàn bộ state của hệ thống hướng dẫn
@@ -301,11 +309,28 @@ function DesktopSidebar({ activeTab, role, userDetail, collapsed, onToggle, isAd
 
 // ── Mobile Drawer ─────────────────────────────────────────────
 function MobileDrawer({ visible, activeTab, role, userDetail, onNavigate, isAdvisor, router, onClose }) {
+  const insets = useSafeAreaInsets();
+  const slideX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+
+  // Trượt vào từ trái mỗi lần mở
+  useEffect(() => {
+    if (!visible) return;
+    slideX.setValue(-DRAWER_WIDTH);
+    Animated.timing(slideX, { toValue: 0, duration: 200, useNativeDriver: Platform.OS !== 'web' }).start();
+  }, [visible, slideX]);
+
+  // Nút Back Android đóng drawer thay vì rời màn hiện tại
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => { onClose(); return true; });
+    return () => sub.remove();
+  }, [visible, onClose]);
+
   if (!visible) return null;
   return (
     <View style={[StyleSheet.absoluteFillObject, { zIndex: 100, flexDirection: 'row' }]}>
       <Pressable style={MD.overlay} onPress={onClose} />
-      <View style={MD.drawer}>
+      <Animated.View style={[MD.drawer, { paddingTop: insets.top, paddingBottom: insets.bottom, transform: [{ translateX: slideX }] }]}>
         <SidebarContent
           activeTab={activeTab}
           role={role}
@@ -316,7 +341,7 @@ function MobileDrawer({ visible, activeTab, role, userDetail, onNavigate, isAdvi
           router={router}
           onClose={onClose}
         />
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -325,7 +350,7 @@ const MD = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   drawer: {
     position: 'absolute', left: 0, top: 0, bottom: 0,
-    width: 240,
+    width: DRAWER_WIDTH,
     backgroundColor: '#2C5282',
     paddingHorizontal: 12,
     paddingTop: 0,
@@ -338,8 +363,10 @@ const MD = StyleSheet.create({
 // ── Mobile Top Bar ────────────────────────────────────────────
 // Không còn nút Help ở đây — Help Modal chỉ dành cho desktop
 function MobileTopBar({ pageLabel, userDetail, onMenuPress, router, role }) {
+  // Chừa vùng status bar / tai thỏ phía trên (native); web thường = 0
+  const insets = useSafeAreaInsets();
   return (
-    <View style={MB.topBar}>
+    <View style={[MB.topBar, { paddingTop: insets.top + 10, height: MOBILE_TOPBAR_HEIGHT + insets.top }]}>
       <Image source={BANNER_IMAGE} style={MB.topBarBanner} resizeMode="cover" />
       <View style={MB.topBarLeft}>
         <TouchableOpacity style={MB.menuBtn} onPress={onMenuPress}>
@@ -388,11 +415,13 @@ const MB = StyleSheet.create({
 });
 
 // ── Mobile Tab Bar ─────────────────────────────────────────────
-function MobileTabBar({ state, navigation, activeKey }) {
+function MobileTabBar({ state, navigation, activeKey, role }) {
+  // Chừa thanh home (iPhone) / thanh điều hướng Android (edge-to-edge)
+  const insets = useSafeAreaInsets();
   return (
-    <View style={BT.wrap}>
+    <View style={[BT.wrap, { paddingBottom: insets.bottom }]}>
       <View style={BT.bar}>
-        {MOBILE_BOTTOM_TABS.map((tab) => {
+        {MOBILE_BOTTOM_TABS.filter(tab => tab.visible(role)).map((tab) => {
           const route = state.routes.find(r => r.name === tab.key || r.name === tab.link.replace('(tabs)/', ''));
           const routeIndex = state.routes.findIndex(r => r.name === route?.name);
           const isFocused = activeKey === tab.key || state.index === routeIndex;
@@ -427,7 +456,7 @@ function MobileTabBar({ state, navigation, activeKey }) {
 }
 
 const BT = StyleSheet.create({
-  wrap: { backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: '#E2E8F0', paddingBottom: Platform.OS === 'ios' ? 16 : 0 },
+  wrap: { backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: '#E2E8F0' },
   bar: {
     flexDirection: 'row', marginHorizontal: 10, marginVertical: 6,
     backgroundColor: Colors.White || '#fff',
@@ -438,7 +467,7 @@ const BT = StyleSheet.create({
   item: { flex: 1, alignItems: 'center', paddingVertical: 5, borderRadius: 50 },
   itemActive: { borderWidth: 2, borderColor: Colors.Black || '#0F172A', backgroundColor: Colors.Black || '#0F172A' },
   icon: { marginBottom: 2 },
-  label: { color: Colors.LightGray || '#94A3B8', fontWeight: '600', textAlign: 'center', fontSize: 9, marginTop: 1, letterSpacing: 0.3 },
+  label: { color: Colors.LightGray || '#94A3B8', fontWeight: '600', textAlign: 'center', fontSize: 10, marginTop: 1, letterSpacing: 0.2 },
   labelActive: { color: '#F8FAFC' },
 });
 
@@ -464,13 +493,14 @@ export default function TabLayout() {
   const segments = useSegments();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const width = Dimensions.get('window').width;
-  const { isDesktop } = useLayout();
+  const { isDesktop, width } = useLayout();
   const role = getRole(userDetail);
 
   const rawTab = segments[segments.length - 1] || 'home';
   const activeTab = SEGMENT_KEY_MAP[rawTab] || rawTab;
-  const pageLabel = NAV_SECTIONS.flatMap(s => s.items).find(n => n.key === activeTab)?.label || 'Tổng quan';
+  // Mục "Danh sách người dùng" khai báo riêng ở khu QUẢN TRỊ (không nằm trong NAV_SECTIONS)
+  const pageLabel = NAV_SECTIONS.flatMap(s => s.items).find(n => n.key === activeTab)?.label
+    || (activeTab === 'user' ? 'Danh sách người dùng' : 'Tổng quan');
   const [isAdvisor, setIsAdvisor] = useState(false);
 
   // ── Help state ────────────────────────────────────────────────
@@ -488,6 +518,10 @@ export default function TabLayout() {
     const unsub = onSnapshot(q, (snap) => setIsAdvisor(!snap.empty));
     return () => unsub();
   }, [userDetail?.email]);
+
+  useEffect(() => {
+    if (role === 'ctv' && CTV_BLOCKED_TABS.includes(rawTab)) router.replace('/(tabs)/home');
+  }, [role, rawTab, router]);
 
   return (
     <View style={isDesktop ? S.root : { flex: 1 }}>
@@ -561,12 +595,13 @@ export default function TabLayout() {
         {/* Tabs */}
         <Tabs
           tabBar={(props) =>
-            isDesktop ? null : <MobileTabBar {...props} activeKey={activeTab} />
+            isDesktop ? null : <MobileTabBar {...props} activeKey={activeTab} role={role} />
           }
-          // Topbar mobile nổi (absolute) phía trên Tabs → chừa chỗ để không đè lên nội dung màn
+          // Topbar mobile nổi (absolute) phía trên Tabs → chừa chỗ để không đè lên nội dung màn.
+          // Phần status bar (insets.top) mỗi màn tự chừa qua TabScreenLayout / useSafeAreaInsets.
           screenOptions={{
             headerShown: false,
-            sceneStyle: { paddingTop: !isDesktop && Platform.OS === 'web' ? MOBILE_TOPBAR_HEIGHT : 0 },
+            sceneStyle: { paddingTop: !isDesktop ? MOBILE_TOPBAR_HEIGHT : 0 },
           }}
         >
           {tabScreens}

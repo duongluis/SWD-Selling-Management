@@ -153,7 +153,9 @@ export default function SignIn() {
 
 const styles = StyleSheet.create({
   container: {
-    width: 350,
+    // Màn hẹp (≤ 360px) chừa lề hai bên thay vì tràn mép
+    width: "92%",
+    maxWidth: 350,
     marginTop: 50,
     alignSelf: "center",
     padding: 20,

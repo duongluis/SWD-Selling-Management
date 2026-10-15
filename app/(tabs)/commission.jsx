@@ -14,14 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator, Dimensions, Platform,
+    ActivityIndicator,
     RefreshControl, ScrollView, StyleSheet,
     Text, TouchableOpacity, View,
 } from 'react-native';
 import { db } from '../../config/firebaseConfig';
-
-const width = Dimensions.get('window').width;
-const IS_DESKTOP = Platform.OS === 'web' && width >= 768;
 
 const fmt = n => (n || 0).toLocaleString('vi-VN') + ' đ';
 
@@ -43,17 +40,21 @@ const fmtShort = n => {
 
 // ── StatCard ──────────────────────────────────────────────────
 function StatCard({ label, value, color, borderColor }) {
+    const { isDesktop } = useLayout();
     return (
-        <View style={[SC.card, { borderTopColor: borderColor || color, borderTopWidth: 3 }]}>
-            <Text style={SC.label}>{label}</Text>
-            <Text style={[SC.value, { color }]}>{value}</Text>
+        <View style={[SC.card, isDesktop && SC.cardDesktop, { borderTopColor: borderColor || color, borderTopWidth: 3 }]}>
+            <Text style={[SC.label, isDesktop && SC.labelDesktop]}>{label}</Text>
+            <Text style={[SC.value, isDesktop && SC.valueDesktop, { color }]}>{value}</Text>
         </View>
     );
 }
 const SC = StyleSheet.create({
-    card: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: IS_DESKTOP ? 16 : 12, borderWidth: 1, borderColor: '#E2E8F0', minWidth: IS_DESKTOP ? 130 : 90 },
-    label: { fontSize: IS_DESKTOP ? 11 : 9, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 6 },
-    value: { fontSize: IS_DESKTOP ? 24 : 18, fontWeight: '900', letterSpacing: -0.5, marginBottom: 2 },
+    card: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0', minWidth: 90 },
+    cardDesktop: { padding: 16, minWidth: 130 },
+    label: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 6 },
+    labelDesktop: { fontSize: 11 },
+    value: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5, marginBottom: 2 },
+    valueDesktop: { fontSize: 24 },
 });
 
 // ── MiniBarChart ──────────────────────────────────────────────
@@ -108,7 +109,19 @@ const SB = StyleSheet.create({
 });
 
 // ── TypeBadge ─────────────────────────────────────────────────
+// Dòng hoa hồng giới thiệu (người ngoài, không có tài khoản) — xem commissionCalc.claimReferralForOrder
+const typeOf = (r) => (r.referral ? 'referral' : r.recordType);
+const referrerLabel = (r) => `${r.referral.name}${r.referral.phone ? ` · ${r.referral.phone}` : ''}`;
+
 function TypeBadge({ type }) {
+    if (type === 'referral') {
+        return (
+            <View style={[TB.wrap, { backgroundColor: '#ECFDF5' }]}>
+                <Ionicons name="people-outline" size={10} color="#059669" />
+                <Text style={[TB.text, { color: '#059669' }]}>Giới thiệu</Text>
+            </View>
+        );
+    }
     const isBonus = type === 'bonus';
     return (
         <View style={[TB.wrap, { backgroundColor: isBonus ? '#F5F3FF' : '#EFF6FF' }]}>
@@ -138,7 +151,7 @@ function CommCardMobile({ r, isAdmin, canPay, onApprove, onAdjust }) {
                 </View>
                 <View style={{ gap: 4, alignItems: 'flex-end' }}>
                     <StatusBadge status={r.status} />
-                    <TypeBadge type={r.recordType} />
+                    <TypeBadge type={typeOf(r)} />
                 </View>
             </View>
             <View style={MR.mid}>
@@ -163,6 +176,11 @@ function CommCardMobile({ r, isAdmin, canPay, onApprove, onAdjust }) {
                     {isAdmin && (isBonus ? r.collaboratorEmail : r.sellerEmail) && (
                         <Text style={[MR.infoLabel, { marginTop: 2, fontSize: 9 }]} numberOfLines={1}>
                             {(isBonus ? r.collaboratorEmail : r.sellerEmail).split('@')[0]}
+                        </Text>
+                    )}
+                    {isAdmin && !isBonus && r.referral && (
+                        <Text style={[MR.infoLabel, { marginTop: 2, fontSize: 9 }]} numberOfLines={1}>
+                            {referrerLabel(r)}
                         </Text>
                     )}
                 </View>
@@ -257,11 +275,13 @@ function CommRowDesktop({ r, isAdmin, canPay, onApprove, onAdjust, odd }) {
             </View>
             {isAdmin && (
                 <View style={COL.seller}>
-                    <Text style={DT.td} numberOfLines={1}>{(isBonus ? r.collaboratorEmail : r.sellerEmail) || '—'}</Text>
+                    <Text style={DT.td} numberOfLines={1}>
+                        {(!isBonus && r.referral) ? referrerLabel(r) : ((isBonus ? r.collaboratorEmail : r.sellerEmail) || '—')}
+                    </Text>
                 </View>
             )}
             <View style={COL.type}>
-                <TypeBadge type={r.recordType} />
+                <TypeBadge type={typeOf(r)} />
             </View>
             {isAdmin && (
                 <View style={COL.value}>
@@ -333,7 +353,7 @@ export default function CommissionScreen() {
     const role = getRole(userDetail);
     const isAdmin = isAdminOrGD(role);
     const canPay = role === 'admin';
-    const { isMobile } = useLayout();
+    const { isMobile, isDesktop } = useLayout();
 
     const [mainTab, setMainTab] = useState('commission'); // 'commission' | 'bonus'
     const [search, setSearch] = useState('');
@@ -410,9 +430,13 @@ export default function CommissionScreen() {
             showAlert('Bản ghi theo mô hình cũ', `Hoa hồng đơn #${r.id} đang tính theo mô hình 7/2/1 đã bỏ. Hãy bấm "Chuyển sang 8/2" ở đầu trang trước khi xác nhận trả.`);
             return;
         }
+        // Dòng giới thiệu: người nhận không có tài khoản → hiện thông tin chuyển khoản
+        const ref = !isBonus && r.referral;
         showAlert(
-            `Xác nhận thanh toán ${isBonus ? 'thưởng' : 'hoa hồng'}`,
-            `Trả ${fmt(amount)} cho ${targetEmail || '—'}?\n\nĐơn: #${r.id}\nKhách hàng: ${r.customer || '—'}`,
+            `Xác nhận thanh toán ${ref ? 'hoa hồng giới thiệu' : isBonus ? 'thưởng' : 'hoa hồng'}`,
+            ref
+                ? `Trả ${fmt(amount)} cho người giới thiệu ${referrerLabel(r)}?\n\nNgân hàng: ${ref.bankName || '—'}\nSố TK: ${ref.accountNo || '—'}\nChủ TK: ${ref.accountOwner || '—'}\n\nĐơn: #${r.id}\nKhách hàng: ${r.customer || '—'}`
+                : `Trả ${fmt(amount)} cho ${targetEmail || '—'}?\n\nĐơn: #${r.id}\nKhách hàng: ${r.customer || '—'}`,
             async () => {
                 try {
                     await updateDoc(doc(db, 'commissions', r.docId), { [statusField]: 'paid' });
@@ -450,6 +474,7 @@ export default function CommissionScreen() {
         });
         setAdjustTarget(null);
         refresh();
+        if (!r.sellerEmail) return; // dòng giới thiệu: người nhận không có tài khoản để nhắn
         try {
             await sendCommissionAdjustMessage({
                 userEmail: r.sellerEmail, orderId: r.id, direction, amount, reason, after,
@@ -498,7 +523,9 @@ export default function CommissionScreen() {
             const ms = !q || (
                 String(r.id || '').toLowerCase().includes(q) ||
                 String(r.customer || '').toLowerCase().includes(q) ||
-                String(r.sellerEmail || '').toLowerCase().includes(q)
+                String(r.sellerEmail || '').toLowerCase().includes(q) ||
+                String(r.referral?.name || '').toLowerCase().includes(q) ||
+                String(r.referral?.phone || '').includes(q)
             );
             return ms && (statusFilter === 'all' || r.status === statusFilter);
         });
@@ -572,13 +599,13 @@ export default function CommissionScreen() {
 
             <ScrollView
                 showsVerticalScrollIndicator={true}
-                contentContainerStyle={S.scroll}
+                contentContainerStyle={[S.scroll, isDesktop && S.scrollDesktop]}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
             >
                 {/* Nhãn là tiền nên giá trị phải là tiền — trước đây truyền pendingCount/paidCount
                     (số bản ghi) qua fmtShort, ra "3" dưới nhãn "Chờ giải ngân" rất dễ hiểu nhầm.
                     Số lượng vẫn hiển thị ở bộ lọc "Chờ trả / Đã trả" ngay bên dưới. */}
-                <View style={S.statsRow}>
+                <View style={[S.statsRow, isDesktop && S.statsRowDesktop]}>
                     <StatCard label="Chờ giải ngân" value={fmtShort(pending)} color="#D97706" borderColor="#FDE68A" />
                     <StatCard label="Đã thanh toán" value={fmtShort(paid)} color="#16A34A" borderColor="#86EFAC" />
                     <StatCard label="Tổng cộng" value={fmtShort(pending + paid)} color={accentColor} borderColor={mainTab === 'bonus' ? '#DDD6FE' : '#BFDBFE'} />
@@ -608,10 +635,10 @@ export default function CommissionScreen() {
                     </View>
                 )} */}
 
-                <View style={S.card}>
+                <View style={[S.card, isDesktop && S.cardDesktop]}>
                     <View style={S.cardHeader}>
                         <View style={{ flex: 1 }}>
-                            <Text style={S.cardTitle}>
+                            <Text style={[S.cardTitle, isDesktop && S.cardTitleDesktop]}>
                                 {mainTab === 'bonus' ? 'Xu hướng thưởng' : 'Xu hướng hoa hồng'}
                             </Text>
                             <Text style={S.cardSub}>6 tháng gần nhất</Text>
@@ -630,9 +657,9 @@ export default function CommissionScreen() {
                     onChange={setStatusFilter}
                 />
 
-                <View style={S.card}>
+                <View style={[S.card, isDesktop && S.cardDesktop]}>
                     <View style={S.cardHeader}>
-                        <Text style={S.cardTitle}>
+                        <Text style={[S.cardTitle, isDesktop && S.cardTitleDesktop]}>
                             {mainTab === 'bonus' ? 'Lịch sử thưởng' : 'Lịch sử hoa hồng'}
                         </Text>
                         <View style={S.countBadge}>
@@ -691,13 +718,17 @@ const MT = StyleSheet.create({
 });
 
 const S = StyleSheet.create({
-    scroll: { padding: IS_DESKTOP ? 32 : 16, paddingTop: IS_DESKTOP ? 16 : 12 },
-    statsRow: { flexDirection: 'row', gap: IS_DESKTOP ? 12 : 8, marginBottom: 14 },
+    scroll: { padding: 16, paddingTop: 12 },
+    scrollDesktop: { padding: 32, paddingTop: 16 },
+    statsRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+    statsRowDesktop: { gap: 12 },
     zeroWarn: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 10, padding: 12, marginBottom: 14 },
     zeroWarnText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 18 },
-    card: { backgroundColor: '#fff', borderRadius: 16, padding: IS_DESKTOP ? 20 : 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+    card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
     cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, flexWrap: 'wrap', gap: 8 },
-    cardTitle: { fontSize: IS_DESKTOP ? 15 : 14, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 },
+    cardDesktop: { padding: 20 },
+    cardTitle: { fontSize: 14, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 },
+    cardTitleDesktop: { fontSize: 15 },
     cardSub: { fontSize: 11, color: '#64748B', marginTop: 2 },
     countBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
     countText: { fontSize: 12, color: '#64748B', fontWeight: '600' },

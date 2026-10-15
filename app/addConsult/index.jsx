@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    ActivityIndicator, Dimensions, KeyboardAvoidingView, Platform, ScrollView,
+    ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
     StyleSheet, Text, TextInput, TouchableOpacity,
     View
 } from 'react-native';
@@ -21,7 +21,6 @@ import { db } from '../../config/firebaseConfig';
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import HelpButton from '@/components/Help/HelpButton';
 
-const width = Dimensions.get('window').width
 // ── Field component ───────────────────────────────────────────
 function Field({ label, value, onChange, multiline, keyboard, required, placeholder }) {
     return (
@@ -142,7 +141,7 @@ export default function AddConsultScreen() {
                 <ScrollView
                     showsVerticalScrollIndicator={true}
                     keyboardShouldPersistTaps="handled"
-                    contentContainerStyle={styles.scroll}
+                    contentContainerStyle={[styles.scroll, isDesktop && styles.scrollDesktop]}
                 >
                     <View style={isDesktop ? styles.gridWeb : undefined}>
 
@@ -242,7 +241,8 @@ const styles = StyleSheet.create({
     backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
     headerTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
     headerSub: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-    scroll: { paddingHorizontal: Platform.OS === 'web' && width >= 768 ? 32 : 16, paddingTop: 16 },
+    scroll: { paddingHorizontal: 16, paddingTop: 16 },
+    scrollDesktop: { paddingHorizontal: 32 },
     gridWeb: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },
     colLeft: { flex: 1.3 },
     colRight: { flex: 1 },

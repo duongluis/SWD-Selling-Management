@@ -10,6 +10,7 @@ import FilterChips from '@/components/UI/FilterChips';
 import ServiceDetail from '@/components/UI/ServiceDetail';
 import StatBar from '@/components/UI/StatBar';
 import { getSupportRoomId, sendSystemMessage } from '@/components/Utils/chatService';
+import { getDropdownPosition, MENU_ITEM_HEIGHT } from '@/components/Utils/dropdownPosition';
 import { fmtDateOnly } from '@/components/Utils/formatters';
 import { canAdd } from '@/components/Utils/roleHelper';
 import { isServiceStatusLocked, syncOrderStatusFromService } from '@/components/Utils/syncOrderStatus';
@@ -18,7 +19,7 @@ import { useRouter } from 'expo-router';
 import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Dimensions, FlatList, Modal,
+  FlatList, Modal,
   Pressable, RefreshControl,
   StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
@@ -136,9 +137,8 @@ function ServiceRow({ item, index, isActive, onPress, isAdmin, onStatusPress, ta
   const canQuick = isAdmin && !isServiceStatusLocked(item.status);
 
   const handleStatusPillPress = () => {
-    pillRef.current?.measure((_fx, _fy, w, h, pageX, pageY) => {
-      const sw = Dimensions.get('window').width;
-      onStatusPress?.(item, { top: pageY + h + 4, right: sw - pageX - w });
+    pillRef.current?.measure((_fx, _fy, width, height, pageX, pageY) => {
+      onStatusPress?.(item, getDropdownPosition({ pageX, pageY, width, height }, STATUS_OPTIONS.length * MENU_ITEM_HEIGHT));
     });
   };
 
@@ -410,7 +410,7 @@ export default function ServiceScreen() {
             <SvcQuickMenu
               status={quickMenu?.item?.status}
               onSelect={handleQuickStatusChange}
-              style={{ top: quickMenu?.pos?.top, right: quickMenu?.pos?.right }}
+              style={quickMenu?.pos}
             />
           </Pressable>
         </Pressable>

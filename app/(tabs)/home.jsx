@@ -477,7 +477,6 @@ export default function HomeView() {
                 <Text style={H.webBtnSecondaryText}>Xuất dữ liệu</Text>
               </TouchableOpacity>
             )}
-            {console.log("thong tin tai khoan", userDetail)}
             {canAdd(role) && (
               <TouchableOpacity style={H.webBtn} onPress={() => router.push('/addOrder')}>
                 <Ionicons name="add" size={16} color="#fff" />

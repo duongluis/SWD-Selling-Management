@@ -16,6 +16,21 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
     input, textarea { outline: none !important; }
   `;
   document.head.appendChild(style);
+
+  // iOS Safari tự zoom khi focus ô nhập có font < 16px và không tự thu lại → layout lệch.
+  // maximum-scale=1 chặn auto-zoom; iOS vẫn cho người dùng pinch-zoom nên chỉ áp cho iOS
+  // (Android Chrome sẽ khoá pinch-zoom nếu đặt thuộc tính này).
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIOS) {
+    let viewport = document.querySelector('meta[name="viewport"]');
+    if (!viewport) {
+      viewport = document.createElement('meta');
+      viewport.name = 'viewport';
+      document.head.appendChild(viewport);
+    }
+    viewport.content = 'width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no';
+  }
 }
 
 SplashScreen.preventAutoHideAsync();

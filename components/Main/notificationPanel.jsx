@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useContext, useEffect, useRef, useState } from 'react';
 import {
-    FlatList, Modal, Platform, Pressable,
+    Dimensions, FlatList, Modal, Pressable,
     StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import {
@@ -13,6 +13,7 @@ import {
 } from '../Utils/chatService';
 
 const PANEL_WIDTH = 340;
+const PANEL_EDGE = 8; // khoảng cách tối thiểu tới mép màn hình
 
 // ── Helpers ───────────────────────────────────────────────────
 const NOTIF_CONFIG = {
@@ -116,7 +117,7 @@ export default function NotificationPanel({ bellColor = '#0F172A', bellSize = 22
 
     const [open, setOpen] = useState(false);
     const [notifs, setNotifs] = useState([]);
-    const [panelPos, setPanelPos] = useState({ top: 60, right: 16 });
+    const [panelPos, setPanelPos] = useState({ top: 60, right: 16, width: PANEL_WIDTH });
 
     const email = userDetail?.email || null;
 
@@ -140,10 +141,15 @@ export default function NotificationPanel({ bellColor = '#0F172A', bellSize = 22
     const handleBellPress = () => {
         if (!email) return; // Không mở nếu đã đăng xuất
         bellRef.current?.measure((x, y, w, h, pageX, pageY) => {
-            const right = Platform.OS === 'web'
-                ? window.innerWidth - pageX - w
-                : 16;
-            setPanelPos({ top: pageY + h + 8, right });
+            // Màn hẹp (≤ 375px) không đủ chỗ cho panel 340px căn theo chuông → co panel
+            // và kẹp vị trí để không tràn ra mép trái/phải
+            const screenW = Dimensions.get('window').width;
+            const width = Math.min(PANEL_WIDTH, screenW - PANEL_EDGE * 2);
+            const right = Math.min(
+                Math.max(screenW - pageX - w, PANEL_EDGE),
+                screenW - width - PANEL_EDGE,
+            );
+            setPanelPos({ top: pageY + h + 8, right, width });
         });
         setOpen(p => !p);
     };
@@ -212,7 +218,7 @@ export default function NotificationPanel({ bellColor = '#0F172A', bellSize = 22
             >
                 <Pressable style={P.backdrop} onPress={() => setOpen(false)}>
                     <Pressable
-                        style={[P.panel, { top: panelPos.top, right: panelPos.right }]}
+                        style={[P.panel, { top: panelPos.top, right: panelPos.right, width: panelPos.width }]}
                         onPress={e => e.stopPropagation()}
                     >
                         {/* Header */}

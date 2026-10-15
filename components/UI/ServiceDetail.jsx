@@ -4,6 +4,7 @@ import { showAlert } from '@/components/Main/showAlert';
 import { createNotification, getSupportRoomId, sendSystemMessage } from '@/components/Utils/chatService';
 import { fmtCurrency, fmtDateOnly, fmtPhone } from '@/components/Utils/formatters';
 import { productItems } from '@/components/Utils/orderItems';
+import { getDropdownPosition, MENU_ITEM_HEIGHT } from '@/components/Utils/dropdownPosition';
 import { getRole } from '@/components/Utils/roleHelper';
 import { isServiceStatusLocked, syncOrderStatusFromService } from '@/components/Utils/syncOrderStatus';
 import { db } from '@/config/firebaseConfig';
@@ -13,8 +14,7 @@ import { useRouter } from 'expo-router';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useContext, useEffect, useRef, useState } from 'react';
 import {
-    Dimensions, Modal,
-    Platform,
+    Modal,
     Pressable,
     ScrollView, StyleSheet, Text, TouchableOpacity, View
 } from 'react-native';
@@ -116,9 +116,8 @@ export default function ServiceDetail({ service, typeName, onClose, onUpdated })
 
     const openMenu = () => {
         if (!canChange) return;
-        chipRef.current?.measure((_fx, _fy, w, h, pageX, pageY) => {
-            const sw = Dimensions.get('window').width;
-            setMenuPos({ top: pageY + h + 4, right: sw - pageX - w });
+        chipRef.current?.measure((_fx, _fy, width, height, pageX, pageY) => {
+            setMenuPos(getDropdownPosition({ pageX, pageY, width, height }, STATUS_OPTIONS.length * MENU_ITEM_HEIGHT));
             setMenuOpen(true);
         });
     };
@@ -297,7 +296,7 @@ export default function ServiceDetail({ service, typeName, onClose, onUpdated })
                             status={local.status}
                             onSelect={handleStatusChange}
                             onClose={() => setMenuOpen(false)}
-                            style={{ top: menuPos.top, right: menuPos.right }}
+                            style={menuPos}
                         />
                     </Pressable>
                 </Pressable>
@@ -307,7 +306,7 @@ export default function ServiceDetail({ service, typeName, onClose, onUpdated })
 }
 
 const S = StyleSheet.create({
-    panel: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', flexDirection: 'column', borderRadius: Platform.OS === 'web' && Dimensions.get('window').width >= 768 ? 12 : 0, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
+    panel: { width: 360, backgroundColor: '#fff', borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', flexDirection: 'column', borderRadius: 12, overflow: 'hidden', shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: -4, height: 0 }, elevation: 8 },
     header: { padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#F1F5F9', gap: 10 },
     headerTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
     closeBtn: { width: 26, height: 26, borderRadius: 7, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

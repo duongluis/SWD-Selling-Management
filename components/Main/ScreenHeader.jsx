@@ -1,9 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
-import { Dimensions, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useLayout } from './TabScreenLayout';
 
-const IS_WEB_DESKTOP = Platform.OS === 'web' && Dimensions.get('window').width >= 768;
-const STATUS_BAR_HEIGHT = Platform.OS !== 'web' ? (Constants.statusBarHeight || 0) : 0;
+// Vùng status bar đã được TabScreenLayout chừa (insets.top) nên header không cộng thêm
 
 export default function ScreenHeader({
     title,
@@ -20,13 +19,14 @@ export default function ScreenHeader({
     leftSlot,      // ← nút back hoặc bất kỳ element nào bên trái title
     canAccess,
 }) {
+    const { isDesktop } = useLayout();
     return (
-        <View style={S.wrap}>
+        <View style={[S.wrap, isDesktop && S.wrapDesktop]}>
             <View style={S.titleRow}>
                 {/* Left slot (back button...) */}
                 {leftSlot && <View style={S.leftSlot}>{leftSlot}</View>}
                 <View style={{ flex: 1 }}>
-                    <Text style={S.title}>{title}</Text>
+                    <Text style={[S.title, isDesktop && S.titleDesktop]}>{title}</Text>
                     {subtitle ? <Text style={S.subtitle}>{subtitle}</Text> : null}
                 </View>
                 <View style={S.rightRow}>
@@ -68,19 +68,22 @@ export default function ScreenHeader({
 
 const S = StyleSheet.create({
     wrap: {
-        paddingHorizontal: IS_WEB_DESKTOP ? 32 : 16,
-        paddingTop: IS_WEB_DESKTOP ? 20 : STATUS_BAR_HEIGHT + 16,
+        paddingHorizontal: 16,
+        paddingTop: 16,
         paddingBottom: 12,
         backgroundColor: '#FFFFFF',
         zIndex: 1,
     },
+    wrapDesktop: { paddingHorizontal: 32, paddingTop: 20 },
     title: {
-        fontSize: IS_WEB_DESKTOP ? 24 : 20,
+        fontSize: 20,
         fontWeight: '800',
         color: '#0F172A',
         letterSpacing: -0.5,
     },
+    titleDesktop: { fontSize: 24 },
     titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
+    rightRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     subtitle: { fontSize: 13, color: '#64748B', marginTop: 3 },
     leftSlot: { marginRight: 8 },
     actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },

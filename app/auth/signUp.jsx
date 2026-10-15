@@ -179,7 +179,9 @@ export default function SignUp() {
 
 const styles = StyleSheet.create({
   container: {
-    width: Math.min(380, Platform.OS === 'web' ? 400 : 9999),
+    // Màn hẹp (≤ 375px) chừa lề hai bên thay vì tràn ngang
+    width: '92%',
+    maxWidth: 380,
     alignSelf: 'center',
     marginTop: Platform.OS === 'web' ? 60 : 40,
     padding: 28,
