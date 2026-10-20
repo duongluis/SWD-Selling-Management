@@ -3,12 +3,11 @@ import { formatThousand, parseThousand } from '@/components/Utils/formatNumber';
 import { normalizePhone } from '@/components/Utils/formatters';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView, Modal, Platform, Pressable,
+  KeyboardAvoidingView, Platform,
   ScrollView, StatusBar, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from 'react-native';
@@ -22,6 +21,7 @@ import {
 import { showAlert } from '../../components/Main/showAlert';
 import { showSuccess } from '../../components/Main/showSuccess';
 import { useLayout } from '../../components/Main/TabScreenLayout';
+import DateField, { todayStr } from '../../components/UI/DateField';
 import { nextOrderId, nextServiceId } from '../../components/Utils/docId';
 import { db } from '../../config/firebaseConfig';
 
@@ -35,12 +35,6 @@ const PRICE_FIELD_TO_LABEL = {
   'price_s': 'Giá Sale'
 };
 
-// ── Date helpers ─────────────────────────────────────────────
-const toDateStr = (d) => {
-  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${dd}`;
-};
-const toDisplayStr = (s) => { if (!s) return ''; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
 // ── Role helpers ─────────────────────────────────────────────
@@ -77,64 +71,6 @@ const PAYMENT_OPTIONS = [
   { key: 'customer', label: 'Khách hàng thanh toán', icon: 'person-outline', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
   { key: 'company', label: 'Người bán thanh toán', icon: 'business-outline', color: '#8B5CF6', bg: '#F5F3FF', border: '#DDD6FE' },
 ];
-
-// ── DateField ─────────────────────────────────────────────────
-const DateField = React.memo(({ orderDate, setOrderDate, selectedDate, setSelectedDate, showDatePicker, setShowDatePicker }) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const minDate = today;
-  const { isDesktop } = useLayout();
-  const onChange = (_, date) => {
-    if (Platform.OS === 'android') setShowDatePicker(false);
-    if (date && date >= minDate) {
-      setSelectedDate(date);
-      setOrderDate(toDateStr(date));
-    } else if (date && date < minDate) {
-      showAlert('Ngày không hợp lệ', 'Không thể chọn ngày trong quá khứ');
-    }
-  };
-
-  return isDesktop ? (
-    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 9, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 8 }}>
-      {/* lang="sv-SE" ép thứ tự nhập yyyy/mm/dd (năm trước) thay vì dd/mm/yyyy theo locale máy,
-          tránh lỗi "ngày quá khứ" khi năm mới gõ 1-2 chữ số cuối cùng */}
-      <input
-        type="date"
-        lang="sv-SE"
-        value={orderDate || ''}
-        min={toDateStr(minDate)}
-        style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: '#0F172A', backgroundColor: 'transparent', fontWeight: '500', cursor: 'pointer', width: '100%' }}
-        onChange={e => {
-          if (!e.target.value) return;
-          const selected = new Date(e.target.value);
-          if (selected >= minDate) { setOrderDate(e.target.value); setSelectedDate(selected); }
-          else showAlert('Ngày không hợp lệ', 'Không thể chọn ngày trong quá khứ');
-        }}
-      />
-      <Ionicons name="calendar-outline" size={16} color="#94A3B8" />
-    </View>
-  ) :
-
-    (
-      <>
-        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: '#E5E7EB' }} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
-          <Text style={{ flex: 1, fontSize: 14, color: orderDate ? '#1A1A2E' : '#B0B0C8' }}>{orderDate ? toDisplayStr(orderDate) : 'Chọn ngày giao hàng...'}</Text>
-          <Ionicons name="calendar-outline" size={18} color="#B0B0C8" />
-        </TouchableOpacity>
-        {showDatePicker && Platform.OS === 'ios' && (
-          <Modal transparent animationType="slide">
-            <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setShowDatePicker(false)} />
-            <View style={{ backgroundColor: '#fff', padding: 16 }}>
-              <DateTimePicker value={selectedDate} mode="date" display="spinner" onChange={onChange} minimumDate={minDate} />
-              <Pressable onPress={() => setShowDatePicker(false)} style={{ alignItems: 'center', padding: 12 }}><Text style={{ color: '#2563EB', fontWeight: '600' }}>Xong</Text></Pressable>
-            </View>
-          </Modal>
-        )}
-        {showDatePicker && Platform.OS === 'android' && <DateTimePicker value={selectedDate} mode="date" display="default" onChange={onChange} minimumDate={minDate} />}
-      </>
-    );
-});
-DateField.displayName = 'DateField';
 
 // ── ProductDropdown ───────────────────────────────────────────
 const ProductDropdown = React.memo(({ catalog, onSelect }) => {
@@ -492,6 +428,7 @@ const ServicesSection = React.memo(({
   newService, setNewService, showServiceDrop, setShowServiceDrop,
   onAddService, onCancelAddService, onRemoveService, onToggleIncluded,
   serviceNote, onServiceNoteChange, deliveryAddress, onAddressChange,
+  serviceDate, onServiceDateChange,
 }) => {
   if (!catalogServices || catalogServices.length === 0) return null;
 
@@ -565,6 +502,19 @@ const ServicesSection = React.memo(({
           </View>
         ))} */}
       </View>
+
+      {orderServices.length > 0 && (
+        <View style={[ws ? W.inputGroup : styles.inputGroup, { marginTop: 12, ...(ws ? {} : { paddingHorizontal: 14 }) }]}>
+          <Text style={ws ? W.svcLabel : styles.svcLabel}>Ngày thực hiện dịch vụ</Text>
+          <DateField
+            value={serviceDate}
+            onChange={onServiceDateChange}
+            minDate={todayStr()}
+            placeholder="Chọn ngày thực hiện..."
+            boxStyle={ws ? W.inputBox : styles.inputBox}
+          />
+        </View>
+      )}
 
       {hasDelivery && (
         <View style={[ws ? W.inputGroup : styles.inputGroup, { marginTop: 12, ...(ws ? {} : { paddingHorizontal: 14 }) }]}>
@@ -684,9 +634,8 @@ export default function AddOrder() {
   const [showAddService, setShowAddService] = useState(false);
   const [showServiceDrop, setShowServiceDrop] = useState(false);
   const [newService, setNewService] = useState({ type: '', name: '', qty: '1', price: '', included: false, unit: 'Gói' });
-  const [orderDate, setOrderDate] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [orderDate, setOrderDate] = useState(todayStr);   // ngày tạo đơn — mặc định hôm nay
+  const [serviceDate, setServiceDate] = useState('');     // ngày thực hiện các dịch vụ kèm đơn
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -1127,7 +1076,7 @@ export default function AddOrder() {
       return;
     }
     if (!orderDate) {
-      showAlert('Thông báo', 'Vui lòng chọn ngày giao hàng');
+      showAlert('Thông báo', 'Vui lòng chọn ngày tạo đơn');
       return;
     }
 
@@ -1188,7 +1137,7 @@ export default function AddOrder() {
         customerId: selectedCustomer?.docId || '',
         items: products,
         totalAmount,                     // tổng tiền sản phẩm — không gồm dịch vụ
-        createdAt: orderDate,
+        createdAt: orderDate,            // ngày tạo đơn (YYYY-MM-DD, người tạo chọn được)
         address: deliveryAddress || userDetail?.address || '',
         note: notes,
         status: initialOrderStatus,
@@ -1228,6 +1177,7 @@ export default function AddOrder() {
           phone: finalCustomerPhone,
           address: deliveryAddress || userDetail?.address || '',
           note: serviceNote,
+          serviceDate,                   // ngày thực hiện dịch vụ ('' = chưa hẹn)
           status: svcStatusMap[sv.type],
           // Phải là chủ đơn (người được hỗ trợ khi admin tạo hộ), không phải admin —
           // màn Dịch vụ lọc theo createdBy nên ghi sai là đối tác không thấy dịch vụ của mình.
@@ -1284,8 +1234,8 @@ export default function AddOrder() {
                   <View style={W.inputBox}><Text style={W.inputReadonly}>{orderIdPlaceholder}</Text><Ionicons name="lock-closed-outline" size={14} color="#CBD5E1" /></View>
                 </View>
                 <View style={[W.inputGroup, { flex: 1 }]}>
-                  <Text style={W.label}>Ngày giao hàng <Text style={W.req}>*</Text></Text>
-                  <DateField orderDate={orderDate} setOrderDate={setOrderDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} showDatePicker={showDatePicker} setShowDatePicker={setShowDatePicker} />
+                  <Text style={W.label}>Ngày tạo đơn <Text style={W.req}>*</Text></Text>
+                  <DateField value={orderDate} onChange={setOrderDate} maxDate={todayStr()} boxStyle={W.inputBox} />
                 </View>
               </View>
 
@@ -1477,6 +1427,8 @@ export default function AddOrder() {
               onServiceNoteChange={handleServiceNoteChange}
               deliveryAddress={deliveryAddress}
               onAddressChange={handleAddressChange}
+              serviceDate={serviceDate}
+              onServiceDateChange={setServiceDate}
             />
 
             {orderServices.length > 0 && (
@@ -1526,8 +1478,8 @@ export default function AddOrder() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Ngày giao hàng <Text style={{ color: '#EF4444' }}>*</Text></Text>
-                <DateField orderDate={orderDate} setOrderDate={setOrderDate} selectedDate={selectedDate} setSelectedDate={setSelectedDate} showDatePicker={showDatePicker} setShowDatePicker={setShowDatePicker} />
+                <Text style={styles.inputLabel}>Ngày tạo đơn <Text style={{ color: '#EF4444' }}>*</Text></Text>
+                <DateField value={orderDate} onChange={setOrderDate} maxDate={todayStr()} boxStyle={styles.inputBox} />
               </View>
 
               <View style={styles.inputGroup}>
@@ -1674,6 +1626,8 @@ export default function AddOrder() {
                 onServiceNoteChange={handleServiceNoteChange}
                 deliveryAddress={deliveryAddress}
                 onAddressChange={handleAddressChange}
+                serviceDate={serviceDate}
+                onServiceDateChange={setServiceDate}
               />
 
               {orderServices.length > 0 && (

@@ -12,6 +12,7 @@ import StatBar from '@/components/UI/StatBar';
 import { getSupportRoomId, sendSystemMessage } from '@/components/Utils/chatService';
 import { getDropdownPosition, MENU_ITEM_HEIGHT } from '@/components/Utils/dropdownPosition';
 import { fmtDateOnly } from '@/components/Utils/formatters';
+import { completionFields, serviceDateOf } from '@/components/Utils/serviceDate';
 import { canAdd } from '@/components/Utils/roleHelper';
 import { isServiceStatusLocked, syncOrderStatusFromService } from '@/components/Utils/syncOrderStatus';
 import { Ionicons } from '@expo/vector-icons';
@@ -115,7 +116,7 @@ function TableHead({ tableStyles, isDesktop }) {
         <Text style={tableStyles.th}>Loại</Text>
       </View>
       <View style={{ flex: 0.8, paddingHorizontal: 4 }}>
-        <Text style={tableStyles.thCenter}>Ngày tạo</Text>
+        <Text style={tableStyles.thCenter}>Ngày hẹn</Text>
       </View>
       <View style={{ flex: 0.9, paddingHorizontal: 4 }}>
         <Text style={tableStyles.thCenter}> Hoàn thành</Text>
@@ -177,10 +178,10 @@ function ServiceRow({ item, index, isActive, onPress, isAdmin, onStatusPress, ta
         </View>
       )}
 
-      {/* Ngày tạo */}
+      {/* Ngày thực hiện */}
       {isDesktop && (
         <View style={[R.col, { flex: 0.8 }]}>
-          <Text style={R.colSub}>{fmtDateOnly(item.createdAt)}</Text>
+          <Text style={R.colSub}>{serviceDateOf(item) ? fmtDateOnly(serviceDateOf(item)) : 'Chưa hẹn'}</Text>
         </View>
       )}
 
@@ -312,7 +313,7 @@ export default function ServiceScreen() {
       try {
         await updateDoc(doc(db, 'service', item.docId), {
           status: newStatus,
-          ...(newStatus === 'Hoàn thành' && { completedDate: new Date().toISOString() }),
+          ...(newStatus === 'Hoàn thành' && completionFields()),
         });
         syncOrderStatusFromService({ type: item.type, orderId: item.orderId, phone: item.phone }, newStatus);
         const creatorEmail = item.createdBy;

@@ -5,6 +5,7 @@
 import { db } from '@/config/firebaseConfig';
 import { collection, getDocs } from 'firebase/firestore';
 import { productItems } from './orderItems';
+import { serviceDateOf } from './serviceDate';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -135,6 +136,7 @@ function formatServices(services) {
             'Sản phẩm': items.map(p => `${p.name || ''}×${fmtNum(p.qty)}`).join('; '),
             'Ghi chú': s.note || '',
             'Tạo bởi': s.createdBy || '',
+            'Ngày thực hiện': fmtDate(serviceDateOf(s)),
             'Ngày tạo': fmtDate(s.createdAt),
             'Ngày hoàn thành': fmtDate(s.completedDate),
         };

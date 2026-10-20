@@ -22,7 +22,7 @@ import { db } from '@/config/firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
 const PARSE = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
-// Ngày giao đơn không hợp lệ (thiếu/sai định dạng) → coi như cũ nhất (0),
+// Ngày tạo đơn không hợp lệ (thiếu/sai định dạng) → coi như cũ nhất (0),
 // tránh NaN làm Array.sort xếp lệch vị trí ngẫu nhiên
 const toOrderTime = (createdAt) => {
   const t = new Date(createdAt || 0).getTime();
@@ -108,7 +108,7 @@ function TableHeader({ role, showCost, showCreator, tableStyles }) {
     <View style={tableStyles.head}>
       <View style={COL.lead} />
       <View style={COL.order}><Text style={tableStyles.th}>Đơn hàng</Text></View>
-      <View style={COL.date}><Text style={tableStyles.thCenter}>Ngày</Text></View>
+      <View style={COL.date}><Text style={tableStyles.thCenter}>Ngày tạo đơn</Text></View>
       {showCreator && <View style={COL.creator}><Text style={tableStyles.thCenter}>Người tạo</Text></View>}
       <View style={COL.sub}><Text style={tableStyles.thCenter}>Hình thức thanh toán</Text></View>
       {showCost && <View style={COL.cost}><Text style={tableStyles.thCenter}>{isAdminOrGD(role) ? 'Doanh thu' : 'Tiền nhập'}</Text></View>}
@@ -531,7 +531,7 @@ export default function OrderScreen() {
             />
           </TouchableOpacity>
 
-          {/* Nút Sắp xếp theo ngày giao đơn */}
+          {/* Nút Sắp xếp theo ngày tạo đơn */}
           <View style={{ position: 'relative' }}>
             <TouchableOpacity
               style={FF.filterBtn}
@@ -548,8 +548,8 @@ export default function OrderScreen() {
             {showSort && (
               <View style={[FF.dropdown, { position: 'absolute', top: '100%', left: 0, minWidth: 200 }]}>
                 {[
-                  { key: 'asc', label: 'Ngày giao gần nhất → xa nhất', icon: 'arrow-down-outline' },
-                  { key: 'desc', label: 'Ngày giao xa nhất → gần nhất', icon: 'arrow-up-outline' },
+                  { key: 'asc', label: 'Ngày tạo gần nhất → xa nhất', icon: 'arrow-down-outline' },
+                  { key: 'desc', label: 'Ngày tạo xa nhất → gần nhất', icon: 'arrow-up-outline' },
                 ].map(opt => (
                   <TouchableOpacity
                     key={opt.key}

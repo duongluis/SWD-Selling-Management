@@ -22,6 +22,7 @@ import { db } from '../../../config/firebaseConfig';
 
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import HelpButton from '@/components/Help/HelpButton';
+import DateField from '@/components/UI/DateField';
 
 const SERVICE_TYPES = [
     { key: 'MAINTENANCE', label: 'Bảo dưỡng', icon: 'construct-outline', color: '#F59E0B', bg: '#FFFBEB' },
@@ -83,6 +84,8 @@ export default function EditService() {
     const [customerPhone, setCustomerPhone] = useState(existingService.phone || '');
     const [address, setAddress] = useState(existingService.address || '');
     const [note, setNote] = useState(existingService.note || '');
+    // Ngày thực hiện dịch vụ — không chặn ngày quá khứ để ghi lại được ngày đã làm thực tế
+    const [serviceDate, setServiceDate] = useState(existingService.serviceDate || '');
     const [submitting, setSubmitting] = useState(false);
 
     // ── Order picker ──────────────────────────────────────────
@@ -151,6 +154,7 @@ export default function EditService() {
                 phone: normalizePhone(customerPhone),
                 address: address.trim(),
                 note: note.trim(),
+                serviceDate,
                 updatedBy: userDetail?.email || '',
                 updatedAt: new Date().toISOString(),
             };
@@ -368,6 +372,10 @@ export default function EditService() {
                                 <View style={W.inputBox}><Ionicons name="location-outline" size={15} color="#94A3B8" /><TextInput style={W.input} placeholder="Quận/Huyện, TP..." placeholderTextColor="#94A3B8" value={address} onChangeText={setAddress} /></View>
                             </View>
                             <View style={W.inputGroup}>
+                                <Text style={W.label}>Ngày thực hiện</Text>
+                                <DateField value={serviceDate} onChange={setServiceDate} placeholder="Chọn ngày thực hiện..." boxStyle={W.inputBox} />
+                            </View>
+                            <View style={W.inputGroup}>
                                 <Text style={W.label}>Ghi chú</Text>
                                 <View style={[W.inputBox, { alignItems: 'flex-start' }]}><TextInput style={[W.input, { textAlignVertical: 'top', minHeight: 120 }]} placeholder="Yêu cầu cụ thể..." placeholderTextColor="#94A3B8" multiline value={note} onChangeText={setNote} /></View>
                             </View>
@@ -491,6 +499,8 @@ export default function EditService() {
                             <View style={M.inputBox}><Ionicons name="call-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="0901234567" placeholderTextColor="#94A3B8" keyboardType="phone-pad" value={customerPhone} onChangeText={v => setCustomerPhone(normalizePhone(v))} maxLength={11} /></View>
                             <Text style={M.fieldLabel}>ĐỊA CHỈ</Text>
                             <View style={M.inputBox}><Ionicons name="location-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} /><TextInput style={M.input} placeholder="Quận/Huyện, TP..." placeholderTextColor="#94A3B8" value={address} onChangeText={setAddress} /></View>
+                            <Text style={M.fieldLabel}>NGÀY THỰC HIỆN</Text>
+                            <DateField value={serviceDate} onChange={setServiceDate} placeholder="Chọn ngày thực hiện..." boxStyle={M.inputBox} />
                             <Text style={M.fieldLabel}>GHI CHÚ</Text>
                             <View style={[M.inputBox, { alignItems: 'flex-start' }]}><TextInput style={[M.input, { textAlignVertical: 'top', paddingTop: 2, minHeight: 120 }]} placeholder="Yêu cầu cụ thể..." placeholderTextColor="#94A3B8" multiline value={note} onChangeText={setNote} /></View>
                         </View>

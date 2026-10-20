@@ -92,8 +92,8 @@ export default function OrderDetailView() {
             <Ionicons name="calendar-outline" size={16} color={Colors.Gray} />
             <Text style={styles.infoText}>
               {order.createdAt
-                ? new Date(order.createdAt).toLocaleDateString("vi-VN")
-                : "Chưa có ngày"}
+                ? `Ngày tạo đơn: ${new Date(order.createdAt).toLocaleDateString("vi-VN")}`
+                : "Chưa có ngày tạo đơn"}
             </Text>
           </View>
           <View style={styles.infoRow}>

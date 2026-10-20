@@ -33,8 +33,8 @@ const ROLE_LABEL = { daily: 'Đại lý', phantan: 'Đối tác', ctv: 'Cộng t
 
 function inPeriod(order, period) {
   if (period === 'all') return true;
-  // Xếp hạng theo ngày đơn được thanh toán. `createdAt` là ngày giao hàng người tạo đơn
-  // chọn (luôn từ hôm nay trở đi) nên đơn trả tiền tháng này có thể mang ngày tháng khác.
+  // Xếp hạng theo ngày đơn được thanh toán. `createdAt` là ngày tạo đơn (người tạo chọn,
+  // sửa được) nên đơn trả tiền tháng này có thể mang ngày tháng khác.
   // Đơn cũ chưa có paymentDate thì lùi về createdAt.
   const ts = order.paymentDate || order.createdAt;
   if (!ts) return false;

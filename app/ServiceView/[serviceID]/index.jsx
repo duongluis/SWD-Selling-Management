@@ -1,5 +1,6 @@
 import BgWatermark from '@/components/Main/BgWatermark';
 import { fmtDateOnly } from '@/components/Utils/formatters';
+import { completionFields, serviceDateOf } from '@/components/Utils/serviceDate';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -152,11 +153,12 @@ export default function ServiceDetailScreen() {
             async () => {
                 setUpdating(true);
                 try {
+                    const doneFields = newStatus === 'Hoàn thành' ? completionFields() : {};
                     await updateDoc(doc(db, 'service', service.id), {
                         status: newStatus,
-                        ...(newStatus === 'Hoàn thành' && { completedDate: new Date().toISOString() }),
+                        ...doneFields,
                     });
-                    setService(prev => ({ ...prev, status: newStatus }));
+                    setService(prev => ({ ...prev, status: newStatus, ...doneFields }));
                     const newOrderStatus = await syncOrderStatusFromService(service, newStatus);
                     if (newOrderStatus) {
                         showAlert('✅ Đã đồng bộ', `Đơn hàng #${service.orderId} tự động chuyển sang "${newOrderStatus}"`);
@@ -346,7 +348,9 @@ export default function ServiceDetailScreen() {
                                             <Ionicons name={typeCfg.icon} size={12} color={typeCfg.color} />
                                             <Text style={[styles.typePillText, { color: typeCfg.color }]}>{typeCfg.label}</Text>
                                         </View>
-                                        <Text style={styles.createdAt}>{fmtDateOnly(service.createdAt)}</Text>
+                                        <Text style={styles.createdAt}>
+                                            Thực hiện: {serviceDateOf(service) ? fmtDateOnly(serviceDateOf(service)) : 'Chưa hẹn'} · Tạo: {fmtDateOnly(service.createdAt)}
+                                        </Text>
                                     </View>
                                 </View>
                             </View>

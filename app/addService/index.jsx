@@ -2,6 +2,7 @@
 import BgWatermark from '@/components/Main/BgWatermark';
 import { useLayout } from '@/components/Main/TabScreenLayout';
 import HelpButton from '@/components/Help/HelpButton';
+import DateField, { todayStr } from '@/components/UI/DateField';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -190,6 +191,7 @@ export default function AddService() {
     const [customerPhone, setCustomerPhone] = useState('');
     const [address, setAddress] = useState('');
     const [note, setNote] = useState('');
+    const [serviceDate, setServiceDate] = useState('');   // ngày thực hiện dịch vụ
     const [submitting, setSubmitting] = useState(false);
 
     const [selectedOrder, setSelectedOrder] = useState(null);
@@ -400,6 +402,7 @@ export default function AddService() {
                 phone: normalizePhone(customerPhone),
                 address: address.trim(),
                 note: note.trim(),
+                serviceDate,                  // ngày thực hiện ('' = chưa hẹn)
                 status: initialStatus,
                 createdBy: userDetail?.email || '',
                 createdAt: new Date().toISOString(),
@@ -575,6 +578,11 @@ export default function AddService() {
                         </TouchableOpacity>
                         )}
 
+                        <View style={W.inputGroup}>
+                            <Text style={W.label}>Ngày thực hiện</Text>
+                            <DateField value={serviceDate} onChange={setServiceDate} minDate={todayStr()} placeholder="Chọn ngày thực hiện..." boxStyle={W.inputBox} />
+                        </View>
+
                         <NotesInput value={note} onChange={setNote} label="Ghi chú" />
 
 
@@ -745,6 +753,8 @@ export default function AddService() {
                                 <Ionicons name="location-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
                                 <TextInput style={M.input} placeholder="Quận/Huyện, TP..." placeholderTextColor="#94A3B8" value={address} onChangeText={setAddress} />
                             </View>
+                            <Text style={M.fieldLabel}>NGÀY THỰC HIỆN</Text>
+                            <DateField value={serviceDate} onChange={setServiceDate} minDate={todayStr()} placeholder="Chọn ngày thực hiện..." boxStyle={M.inputBox} />
                             <NotesInputMobile value={note} onChange={setNote} />
 
                             {customerExists === false && (

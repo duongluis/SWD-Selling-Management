@@ -6,12 +6,11 @@ import { getRoleFromUserData, getRolePriceField } from '@/components/Utils/commi
 import { productItems } from '@/components/Utils/orderItems';
 import { UserDetailContext } from '@/context/UserDetailContext';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { useContext, useEffect, useState } from 'react';
 import {
-    KeyboardAvoidingView, Modal, Platform, Pressable,
+    KeyboardAvoidingView, Platform,
     ScrollView, StatusBar, StyleSheet, Text, TextInput,
     TouchableOpacity, View,
 } from 'react-native';
@@ -22,12 +21,8 @@ import { db } from '../../../config/firebaseConfig';
 
 import HelpButton from '@/components/Help/HelpButton';
 import { useLayout } from '@/components/Main/TabScreenLayout';
+import DateField, { todayStr } from '@/components/UI/DateField';
 
-const toDateStr = (d) => {
-    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${dd}`;
-};
-const toDisplayStr = (s) => { if (!s) return ''; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
 const fmt = (n) => (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
 const ORDER_TYPE_CONFIG = {
@@ -41,55 +36,6 @@ const STATUS_CONFIG = {
     CONFIRMED: { label: 'Đã thanh toán', color: '#8B5CF6', bg: '#F5F3FF' },
     COMPLETED: { label: 'Hoàn thành', color: '#10B981', bg: '#ECFDF5' },
 };
-
-// ── Date Field ────────────────────────────────────────────────
-function DateField({ value, onChange, webStyle }) {
-    const [show, setShow] = useState(false);
-    const [sel, setSel] = useState(new Date());
-    const { isDesktop } = useLayout();
-
-    const onNative = (_, date) => {
-        if (Platform.OS === 'android') setShow(false);
-        if (date) { setSel(date); onChange(toDateStr(date)); }
-    };
-    return isDesktop ? (
-        <View style={webStyle || S.inputBox}>
-            {/* lang="sv-SE" ép thứ tự nhập yyyy/mm/dd (năm trước) thay vì dd/mm/yyyy theo locale máy */}
-            <input
-                type="date"
-                lang="sv-SE"
-                value={value || ''}
-                style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: '#0F172A', backgroundColor: 'transparent', fontWeight: '500', cursor: 'pointer', width: '100%' }}
-                onChange={e => { if (e.target.value) onChange(e.target.value); }}
-            />
-            <Ionicons name="calendar-outline" size={15} color="#94A3B8" />
-        </View>
-    ) :
-        (
-            <>
-                <TouchableOpacity style={S.inputBox} onPress={() => setShow(true)} activeOpacity={0.8}>
-                    <Text style={{ flex: 1, fontSize: 14, color: value ? '#0F172A' : '#B0B0C8' }}>
-                        {value ? toDisplayStr(value) : 'Chọn ngày...'}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={16} color="#B0B0C8" />
-                </TouchableOpacity>
-                {show && Platform.OS === 'ios' && (
-                    <Modal transparent animationType="slide">
-                        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setShow(false)} />
-                        <View style={{ backgroundColor: '#fff', padding: 16 }}>
-                            <DateTimePicker value={sel} mode="date" display="spinner" onChange={onNative} />
-                            <Pressable onPress={() => setShow(false)} style={{ alignItems: 'center', padding: 12 }}>
-                                <Text style={{ color: '#2563EB', fontWeight: '600' }}>Xong</Text>
-                            </Pressable>
-                        </View>
-                    </Modal>
-                )}
-                {show && Platform.OS === 'android' && (
-                    <DateTimePicker value={sel} mode="date" display="default" onChange={onNative} />
-                )}
-            </>
-        );
-}
 
 // Trường giá bán áp cho sản phẩm thêm mới — phải khớp quy tắc ở app/addOrder (priceField):
 // khách hàng tự thanh toán → giá niêm yết; người bán thanh toán → giá vai trò của người
@@ -399,8 +345,8 @@ export default function EditOrder() {
             </View>
 
             <View style={S.group}>
-                <Text style={S.label}>Ngày giao hàng</Text>
-                <DateField value={orderDate} onChange={setOrderDate} />
+                <Text style={S.label}>Ngày tạo đơn</Text>
+                <DateField value={orderDate} onChange={setOrderDate} maxDate={todayStr()} boxStyle={S.inputBox} />
             </View>
 
             <View style={S.group}>
@@ -563,11 +509,12 @@ export default function EditOrder() {
                             {/* Row: date + address */}
                             <View style={W.row2}>
                                 <View style={[W.inputGroup, { flex: 1 }]}>
-                                    <Text style={W.label}>Ngày giao hàng</Text>
+                                    <Text style={W.label}>Ngày tạo đơn</Text>
                                     <DateField
                                         value={orderDate}
                                         onChange={setOrderDate}
-                                        webStyle={W.inputBox}
+                                        maxDate={todayStr()}
+                                        boxStyle={W.inputBox}
                                     />
                                 </View>
                             </View>

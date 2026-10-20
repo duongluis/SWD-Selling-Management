@@ -6,6 +6,7 @@ import { createNotification, getSupportRoomId, sendStatusUpdateMessage } from '@
 import { buildAdminShareRecord, claimReferralForOrder, computeOrderCommission } from '@/components/Utils/commissionCalc';
 import { getDropdownPosition, MENU_ITEM_HEIGHT } from '@/components/Utils/dropdownPosition';
 import { fmtCurrency } from '@/components/Utils/formatters';
+import { serviceDateOf } from '@/components/Utils/serviceDate';
 import { linesTotal, productItems, productTotal } from '@/components/Utils/orderItems';
 import { isAdmin as checkAdmin } from '@/components/Utils/roleHelper';
 import { syncServiceStatusFromOrder } from '@/components/Utils/syncOrderStatus';
@@ -759,7 +760,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
             {/* ── Header ── */}
             <View style={DP.header}>
                 <View style={DP.headerTop}>
-                    {date && <Text style={DP.date}>Ngày giao đơn: {date}</Text>}
+                    {date && <Text style={DP.date}>Ngày tạo đơn: {date}</Text>}
                     <TouchableOpacity style={DP.closeBtn} onPress={onClose}>
                         <Ionicons name="close" size={15} color="#64748B" />
                     </TouchableOpacity>
@@ -937,6 +938,7 @@ export default function OrderDetail({ order, onClose, onUpdated, role }) {
                                                 </Text>
                                                 <Text style={DP.svPrice}>
                                                     x{svQty} · {sv.included ? 'Bao gồm' : fmtCurrency(svLineTotal)}
+                                                    {serviceDateOf(sv) ? ` · Thực hiện ${new Date(serviceDateOf(sv)).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : ''}
                                                 </Text>
                                             </View>
                                             <View style={[DP.svStatus, { backgroundColor: c.bg }]}>

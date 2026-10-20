@@ -3,6 +3,7 @@
 import { showAlert } from '@/components/Main/showAlert';
 import { createNotification, getSupportRoomId, sendSystemMessage } from '@/components/Utils/chatService';
 import { fmtCurrency, fmtDateOnly, fmtPhone } from '@/components/Utils/formatters';
+import { completionFields, serviceDateOf } from '@/components/Utils/serviceDate';
 import { productItems } from '@/components/Utils/orderItems';
 import { getDropdownPosition, MENU_ITEM_HEIGHT } from '@/components/Utils/dropdownPosition';
 import { getRole } from '@/components/Utils/roleHelper';
@@ -129,9 +130,7 @@ export default function ServiceDetail({ service, typeName, onClose, onUpdated })
             try {
                 const updatePayload = {
                     status: newStatus,
-                    ...(newStatus === 'Hoàn thành' && {
-                        completedDate: new Date().toISOString(),
-                    }),
+                    ...(newStatus === 'Hoàn thành' && completionFields()),
                 };
 
                 await updateDoc(doc(db, 'service', local.docId), updatePayload);
@@ -166,7 +165,7 @@ export default function ServiceDetail({ service, typeName, onClose, onUpdated })
                     });
                 }
 
-                const next = { ...local, status: newStatus };
+                const next = { ...local, ...updatePayload };
                 setLocal(next);
                 onUpdated?.(next);
             } catch (e) { showAlert('Lỗi', e.message); }
@@ -250,7 +249,8 @@ export default function ServiceDetail({ service, typeName, onClose, onUpdated })
                                 : `x${Number(local.qty) || 1} · ${fmtCurrency((Number(local.price) || 0) * (Number(local.qty) || 1))}`}
                         />
                     )}
-                    <InfoRow icon="calendar-outline" label="Ngày tạo" value={fmtDateOnly(local.createdAt)} />
+                    <InfoRow icon="calendar-outline" label="Ngày thực hiện" value={serviceDateOf(local) ? fmtDateOnly(serviceDateOf(local)) : 'Chưa hẹn'} />
+                    <InfoRow icon="time-outline" label="Ngày tạo" value={fmtDateOnly(local.createdAt)} />
                     {local.note && <InfoRow icon="document-text-outline" label="Ghi chú" value={local.note} />}
                 </View>
 
